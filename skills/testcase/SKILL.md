@@ -1,5 +1,5 @@
 ---
-name: supertest
+name: testcase
 description: Generate comprehensive manual test cases from requirements, specifications, user stories, tickets, UI descriptions, API specs, or code changes. Use this skill whenever the user asks to write, create, generate, review, improve, or check test cases. The primary goal is to prevent missed test cases by systematically analyzing positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios. Always perform a separate missing-test-case review before finalizing the result.
 ---
 

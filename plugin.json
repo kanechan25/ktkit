@@ -1,12 +1,12 @@
 {
-  "name": "supertest",
+  "name": "testcase",
   "description": "Test-case generator skill for Claude Code: systematically covers positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios, with a mandatory missing-test-case review pass.",
   "version": "1.0.0",
   "author": {
-    "name": "supertest"
+    "name": "xtieume"
   },
-  "homepage": "https://github.com/yourname/supertest",
-  "repository": "https://github.com/yourname/supertest",
+  "homepage": "https://github.com/xtieume/testcase",
+  "repository": "https://github.com/xtieume/testcase",
   "license": "MIT",
   "keywords": [
     "skills",

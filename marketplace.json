@@ -1,17 +1,17 @@
 {
-  "name": "supertest-marketplace",
-  "description": "Marketplace for the supertest skill",
+  "name": "testcase-marketplace",
+  "description": "Marketplace for the testcase skill",
   "owner": {
-    "name": "supertest"
+    "name": "xtieume"
   },
   "plugins": [
     {
-      "name": "supertest",
+      "name": "testcase",
       "description": "Test-case generator skill for Claude Code: systematically covers positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios, with a mandatory missing-test-case review pass.",
       "version": "1.0.0",
       "source": "./",
       "author": {
-        "name": "supertest"
+        "name": "xtieume"
       }
     }
   ]
