@@ -22,7 +22,7 @@ Investigates documentation on one principle: **what the spec requires vs what th
 - **Investigation mode** — no spec? the checklist comes from the question instead, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`
 - **Review loop** — an independent subagent re-derives the checklist from the spec alone and attacks the report; repeats until a round finds nothing, max 3 rounds. Earlier rounds' notes are stripped before the next round, so each reviewer stays independent
 - **Large sets** — over ~15 documents it switches workflow: index the documents first (their vocabulary, not the spec's), shard the audit by spec chapter, sweep for doc-vs-doc conflicts separately, and require a per-document coverage declaration before a review round counts as clean
-- **`--fix`** — after the review loop, applies the fixes it can prove: `Missing` / `Partial` / `Stale` rows the spec states in full, as minimal in-place edits traced to a requirement ID, then re-verifies each edited section. `Contradict`, `Conflict` and `Undecided` are proposed, never applied — a doc contradicting the spec may be the one describing reality
+- **`--fix`** — edits the audited document (the output artifact, never the spec) after the review loop: `Missing` / `Partial` / `Stale` rows the spec states in full, as minimal in-place edits traced to a requirement ID, then re-verifies each edited section. In a deliverable still being drafted, `Contradict` is fixed too. In documentation of a running system it is only proposed — a doc contradicting the spec may be the one describing reality
 - **Lint** — a script checks every row for a valid verdict, a citation, unique IDs, a source inventory, and that the loop actually ran
 
 ```text

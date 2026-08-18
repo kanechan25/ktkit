@@ -7,6 +7,25 @@ when it starts changing their documentation.
 **Fix mode runs after the full audit, including the review loop.** Fixing findings from an
 unreviewed pass means editing documents based on the gaps you happened to notice first.
 
+## What fix mode edits
+
+It edits **the documents that were audited** — the output artifact the audit was run against.
+Never the spec: the spec is the standard being checked against, and a fix that edits the
+standard to match the output makes every verdict trivially `Covered`. A genuine problem in the
+spec is an `Undecided` row and a question for its owner.
+
+Which document that is depends on what the audit was run on, and the difference changes what
+may be applied:
+
+| The audited document is… | Then |
+| ------------------------ | ---- |
+| **A deliverable being produced** — a design doc, a spec write-up, a report, a handover document that the team is still drafting from the requirement | The requirement is authoritative. Apply `Missing`, `Partial`, `Stale` **and** `Contradict` fixes: the document is supposed to say what the requirement says, and nothing about it describes a shipped system yet. |
+| **Documentation of a running system** — a user manual, a runbook, an API reference for something already deployed | Apply only `Missing`, `Partial`, `Stale`. `Contradict` about behavior gets proposed, not applied — see the trap below. |
+
+If you cannot tell which case you are in, ask. The answer decides whether a `Contradict` row
+gets rewritten or escalated, and getting it wrong in the second case puts a false statement
+into the documentation of a live system.
+
 ## What may be fixed automatically
 
 The audit says what is wrong. It does not always say what is true. Only the first group is
@@ -17,12 +36,12 @@ safe to edit:
 | `Missing` | Add the missing statement to the document the audit names, **only if the spec states the content in full**. If the spec is vague about it, it is not a fix — it is authorship. |
 | `Partial` | Complete the existing statement with the condition, value, or case the spec names. Edit the sentence in place; do not rewrite the section. |
 | `Stale` | Update the superseded value or name to the spec's current one, and update the document's revision line. |
-| `Contradict` | **Propose, do not apply** — unless the contradiction is a documented value that the spec unambiguously owns (a limit, format, ID pattern, cutoff time). |
+| `Contradict` | In a deliverable being drafted: apply — the requirement is authoritative. In documentation of a running system: **propose, do not apply**, unless the contradiction is a value the spec unambiguously owns (a limit, format, ID pattern, cutoff time). |
 | `Conflict` | **Propose, do not apply.** Two documents disagreeing means someone has to decide which is right; the spec may be the stale one. |
 | `Undecided` | Never fix. The spec is ambiguous — that is a question for its owner. |
 
-**The trap in `Contradict`:** a document describing behavior the spec puts out of scope may be
-describing what the system actually does. Deleting that paragraph makes the documentation match
+**The trap in `Contradict`, for documentation of a running system:** a document describing
+behavior the spec puts out of scope may be describing what the system actually does. Deleting that paragraph makes the documentation match
 the spec and stop matching reality. When a `Contradict` row is about behavior rather than a
 stated value, write the proposed edit into the report and stop.
 

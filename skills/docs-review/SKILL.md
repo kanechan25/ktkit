@@ -179,9 +179,13 @@ user asks otherwise. Same rule in Mode B, keyed to the question's language.
 ### 7. Fix mode — only if asked
 
 The audit changes nothing by default. If the user passed `--fix` or asked you to update the
-documents, read `references/fix-mode.md` now and follow it. Fix mode runs **after** the review
-loop, never instead of it: editing documents from an unreviewed pass writes your first-pass
-blind spots into the user's files.
+documents, read `references/fix-mode.md` now and follow it. It edits **the documents that were
+audited** — the output artifact the audit ran against — never the spec. Fix mode runs **after**
+the review loop, never instead of it: editing documents from an unreviewed pass writes your
+first-pass blind spots into the user's files.
+
+Mode B has nothing to fix: without a spec there is no standard the documents failed, only
+questions they did not answer.
 
 Without `--fix`, deliver the report and stop. Do not edit a document because the fix looks
 obvious.
