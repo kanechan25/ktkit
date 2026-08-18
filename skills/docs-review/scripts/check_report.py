@@ -46,6 +46,8 @@ def main():
     text = open(path, encoding="utf-8").read()
     if "## Round findings" not in text:
         problems.append(f"{path}: no '## Round findings' section — was the review loop run?")
+    if "## Round log" not in text:
+        problems.append(f"{path}: no '## Round log' table — convergence is asserted, not shown")
     if not re.search(r"^#+ .*(Source inventory|Inventory)", text, re.M | re.I):
         problems.append(f"{path}: no source inventory — which documents were read, and which were not?")
     if re.search(r"\bshard|not-accessed\b", text, re.I) and "coverage" not in text.lower():

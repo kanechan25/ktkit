@@ -110,7 +110,8 @@ Never paraphrase a document into agreement with the spec. Quote it and let the g
 
 ### 4. MANDATORY: independent review loop
 
-Repeat until clean, max 3 rounds:
+Repeat until a round converges. The number of rounds is not fixed — what ends the loop is what
+the last round found, not how many you have run.
 
 1. Spawn a subagent (`Agent` / `Task`, `general-purpose`) and give it **only**:
    * the spec text
@@ -138,14 +139,32 @@ Repeat until clean, max 3 rounds:
    Why missed: ...
    ```
 
-4. If the round returned findings, run another round. **Only two stop conditions exist: a
-   round that returns nothing, or the end of round 3.** A deadline is not one of them — the
-   rounds cost minutes, and the round you skip is where the finding you have not thought of
-   lives. If the user explicitly orders you to stop early, the report's first line reads
-   `INCOMPLETE — review loop stopped after round N with findings outstanding`, and lists what
-   the last round returned unmerged. Never end early on your own judgement that it is enough.
+4. Log the round in a `## Round log` table before deciding anything — convergence has to be
+   visible to the reader, not asserted:
 
-   State in the report which condition ended the loop and what the last round found.
+   | Round | New rows | Verdict changes | Citations rejected | Nits |
+
+   A **material** finding is one that adds a row, changes a verdict, or rejects a citation.
+   Wording and formatting nits are not material and never justify another round.
+
+5. Decide by what the round returned:
+
+   * **No material findings** → the loop converged. Stop. Say which round converged.
+   * **Material findings** → run another round. This holds at round 3, 4, and 5 — a round that
+     is still changing verdicts is a round that proves more remain.
+   * **A verdict that has flipped twice across rounds** → stop spending rounds on it. Freeze it
+     as `Undecided`, and put both readings and the disagreement in `## Open Questions`. A row
+     that oscillates is an ambiguous spec, not an unfinished audit.
+   * **Round 5 still returning material findings** → stop, and report it as a finding of its own:
+     `Loop did not converge in 5 rounds` plus what kept changing. That means the spec is
+     ambiguous or the checklist is not atomic — not that the audit is done. Never let the
+     ceiling read like a clean exit.
+
+   A deadline is not a stop condition. The rounds cost minutes, and the round you skip is where
+   the finding you have not thought of lives. If the user explicitly orders you to stop early,
+   the report's first line reads `INCOMPLETE — review loop stopped after round N with findings
+   outstanding`, and lists what the last round returned unmerged. Never end early on your own
+   judgement that it is enough.
 
 If the subagent tool genuinely errors, say so in the report by name and quote the error, then
 run the rounds inline — re-deriving the checklist from the spec alone, before looking at the
@@ -218,7 +237,8 @@ not check. Completeness cannot be proven.
 | "The set is huge, sharding and indexing is overkill — I'll just grep" | Grep on spec vocabulary is how a large audit manufactures false `Missing` rows. Index first; the map is what makes the grep valid. |
 | "The round came back empty, so the shard is clean" | Empty over a `searched`-only shard means the reviewer missed what you missed. Clean requires coverage, not silence. |
 | "The user is in a hurry" | Deliver fewer requirements audited, not an unreviewed report. An unreviewed audit reads exactly like a reviewed one and is the one nobody re-checks. |
-| "Round 2 found only minor things, close enough — the meeting starts now" | A round that returns findings is a round that proves more exist. Stopping there is the skip, dressed as a judgement call. Run round 3 or mark the report `INCOMPLETE`. |
+| "Round 3 came back with real findings, but three rounds is the limit" | There is no round limit, only convergence. Material findings at round 3 mean round 4 exists. |
+| "The round found something, so I have to keep going forever" | Only material findings extend the loop — new row, changed verdict, rejected citation. Nits do not, and an oscillating row gets frozen as `Undecided` instead of another round. |
 | "They asked for `--fix`, so the audit is just overhead on the way to the edits" | `--fix` widens the blast radius of a wrong verdict from a report nobody acts on to a document everybody reads. The loop matters more in fix mode, not less. |
 
 ## Red flags — stop and run the loop
@@ -228,7 +248,9 @@ not check. Completeness cannot be proven.
 - About to paste your checklist reasoning into the subagent prompt
 - About to mark a requirement `Covered` with no quote
 - About to call the subagent tool "unavailable" without having called it
-- About to stop the loop on a round that returned findings, for any reason other than the user ordering it
+- About to stop the loop on a round with material findings, for any reason other than the user ordering it
+- About to report a converged loop with no `## Round log` showing the counts
+- About to present a 5-round non-convergence as a finished audit
 - About to write `Missing` from a grep of the spec's own wording only
 - About to report a large set audited without an index pass or a coverage declaration
 - About to edit a document without `--fix`, or before the review loop finished

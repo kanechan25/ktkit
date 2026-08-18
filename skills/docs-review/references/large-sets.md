@@ -75,6 +75,11 @@ says nothing about, which are exactly the ones no requirement row would ever hav
 Run the `SKILL.md` step 4 loop **per shard**, on the shard's own rows and chapter. Rules unchanged:
 the reviewer gets no reasoning and no prior round notes.
 
+Shard rounds cap at **2 per shard** — sharding already buys independent eyes, and a third round
+inside one chapter costs more than the cross-shard round that follows. Shard rounds do not count
+toward the 5-round ceiling in `SKILL.md`; the cross-shard rounds do. A shard whose round 2 still
+returns material findings is reported by name as unconverged rather than merged silently.
+
 Then run **one cross-shard round** over the merged report, looking only for what shard
 boundaries hide:
 
