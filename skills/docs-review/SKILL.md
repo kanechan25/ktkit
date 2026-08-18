@@ -1,6 +1,6 @@
 ---
 name: docs-review
-description: Use when the user asks to review or audit documentation, check whether docs cover a spec, build a requirements traceability matrix, find gaps, stale sections or contradictions between a spec and its documents, or investigate a question across a document set.
+description: Use when the user asks to review or audit documentation, check whether docs cover a spec, build a requirements traceability matrix, find gaps, stale sections or contradictions between a spec and its documents, investigate a question across a document set, or fix and update documents to match a spec (--fix).
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, Agent
 ---
 
@@ -22,6 +22,7 @@ Read each one **when the workflow tells you to** — not upfront.
 | ---- | --------- |
 | `references/dimensions.md` | Always, at step 2. The requirement dimensions used to build the checklist. |
 | `references/large-sets.md` | The measurement in step 1 says the set is large. Replaces steps 2–4 with a sharded workflow. |
+| `references/fix-mode.md` | The user passed `--fix` or asked you to update the documents. Read it at step 7, never earlier. |
 | `references/i18n-jp.md` | The spec or documents are Japanese. |
 | `references/investigation-mode.md` | Mode B — documents and a question, no spec to audit against. |
 | `scripts/check_report.py` | At step 5, to lint the finished report. |
@@ -175,6 +176,16 @@ Write it to a file (`docs-review.md` unless the user names one), not only to cha
 **Output language** — match the spec's language (Japanese spec → Japanese report), unless the
 user asks otherwise. Same rule in Mode B, keyed to the question's language.
 
+### 7. Fix mode — only if asked
+
+The audit changes nothing by default. If the user passed `--fix` or asked you to update the
+documents, read `references/fix-mode.md` now and follow it. Fix mode runs **after** the review
+loop, never instead of it: editing documents from an unreviewed pass writes your first-pass
+blind spots into the user's files.
+
+Without `--fix`, deliver the report and stop. Do not edit a document because the fix looks
+obvious.
+
 ---
 
 ## Rules
@@ -204,6 +215,7 @@ not check. Completeness cannot be proven.
 | "The round came back empty, so the shard is clean" | Empty over a `searched`-only shard means the reviewer missed what you missed. Clean requires coverage, not silence. |
 | "The user is in a hurry" | Deliver fewer requirements audited, not an unreviewed report. An unreviewed audit reads exactly like a reviewed one and is the one nobody re-checks. |
 | "Round 2 found only minor things, close enough — the meeting starts now" | A round that returns findings is a round that proves more exist. Stopping there is the skip, dressed as a judgement call. Run round 3 or mark the report `INCOMPLETE`. |
+| "They asked for `--fix`, so the audit is just overhead on the way to the edits" | `--fix` widens the blast radius of a wrong verdict from a report nobody acts on to a document everybody reads. The loop matters more in fix mode, not less. |
 
 ## Red flags — stop and run the loop
 
@@ -215,5 +227,7 @@ not check. Completeness cannot be proven.
 - About to stop the loop on a round that returned findings, for any reason other than the user ordering it
 - About to write `Missing` from a grep of the spec's own wording only
 - About to report a large set audited without an index pass or a coverage declaration
+- About to edit a document without `--fix`, or before the review loop finished
+- About to write a value into a document that the spec does not state
 
 **All of these mean: run step 4 as written.**
