@@ -1,7 +1,7 @@
 {
   "name": "testcase",
-  "description": "Test-case generator skill for Claude Code: systematically covers positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios, with a mandatory missing-test-case review pass.",
-  "version": "1.1.0",
+  "description": "QA skills for Claude Code: a test-case generator covering positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios, plus a docs-review skill auditing documentation against a spec. Both run a mandatory independent review pass before returning.",
+  "version": "1.2.0",
   "author": {
     "name": "xtieume"
   },
