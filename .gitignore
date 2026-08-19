@@ -1,2 +1,6 @@
 .code-review-graph/
 .DS_Store
+
+# playwright-notion skill: local deps + downloaded docs
+skills/playwright-notion/scripts/node_modules/
+skills/playwright-notion/scripts/package-lock.json

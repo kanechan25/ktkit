@@ -1,7 +1,7 @@
 {
   "name": "testcase",
-  "description": "QA skills for Claude Code: a test-case generator covering positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios, plus a docs-review skill auditing documentation against a spec. Both run a mandatory independent review pass before returning.",
-  "version": "1.3.0",
+  "description": "QA and docs skills for Claude Code: a test-case generator covering positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios; a docs-review skill auditing documentation against a spec; and a playwright-notion skill downloading Notion pages to markdown through an already-logged-in browser when no API token or Export button is available.",
+  "version": "1.4.0",
   "author": {
     "name": "xtieume"
   },
@@ -13,6 +13,13 @@
     "testing",
     "test-cases",
     "qa",
-    "quality-assurance"
+    "quality-assurance",
+    "docs-review",
+    "documentation",
+    "notion",
+    "markdown",
+    "export",
+    "playwright",
+    "browser-automation"
   ]
 }

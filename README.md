@@ -1,6 +1,6 @@
 # testcase
 
-Two Claude Code skills for QA work — `testcase` generates manual test cases, `docs-review` audits documentation against a spec. Both end with a mandatory review pass run in an independent subagent.
+Three Claude Code skills — `testcase` generates manual test cases, `docs-review` audits documentation against a spec, `playwright-notion` pulls Notion pages down to markdown when the API and the Export button are both unavailable. The two QA skills end with a mandatory review pass run in an independent subagent.
 
 ## testcase
 
@@ -30,6 +30,21 @@ Review the docs in ./docs against spec.md
 Review the docs in ./docs against spec.md --fix
 ```
 
+## playwright-notion
+
+For the common corporate lockout: the workspace won't issue an integration token, the Export button is greyed out by permission, and the only access you have is a browser tab you're already logged into.
+
+The skill attaches to your **running** Brave/Chrome/Edge over the Chrome DevTools Protocol and calls Notion's own endpoints from inside that tab. Read-only — nothing in Notion is created, edited, or deleted.
+
+- **Export first** — a greyed-out Export button is often only a client-side role check, so it enqueues Notion's native markdown export (`enqueueTask`). Where that passes, output is Notion's own markdown: person mentions resolved to real names, page mentions to titles plus URLs, embedded images downloaded alongside
+- **Converter fallback** — when a workspace really did disable export server-side, it converts `loadPageChunk` / `queryCollection` block JSON itself: properties, nested lists, to-do checkboxes, callouts, code blocks with language tags, and tables with correct columns including embedded database views
+- **Two dead ends it refuses to walk into** — copying the browser profile cannot carry the session (Chromium 127+ App-Bound Encryption binds the cookie key to the original profile, so a copy lands on the login screen), and DOM scraping emits every table ~3x with cells doubled while losing all page properties
+- **Batch-safe** — recycles the browser tab every few pages because Notion leaks memory and crashes the renderer, retries crashed pages, and logs per-page results to grep for verification
+
+```text
+Tôi không có Notion API token, Export bị disable. Tải các trang này về markdown: <links>
+```
+
 ## Install
 
 ### Option A — Plugin marketplace (recommended)
@@ -56,6 +71,7 @@ Copy the whole skill folder into your local skills folder:
 ```bash
 cp -R skills/testcase ~/.claude/skills/testcase
 cp -R skills/docs-review ~/.claude/skills/docs-review
+cp -R skills/playwright-notion ~/.claude/skills/playwright-notion
 ```
 
 ## Usage
@@ -77,6 +93,27 @@ python3 skills/testcase/scripts/summarize.py testcases.md --csv out.csv
 
 The CSV is UTF-8 with BOM, so Excel opens Japanese text correctly.
 
+For `playwright-notion`, install the script deps once, then it drives the browser for you:
+
+```bash
+cd skills/playwright-notion/scripts && npm install
+```
+
+Run manually if you prefer:
+
+```bash
+# start (or verify) the browser with CDP — closes a running instance first
+skills/playwright-notion/scripts/start-browser.sh brave 9222
+
+# one URL per line, then export (preferred) or download (fallback)
+node skills/playwright-notion/scripts/export.mjs   urls.txt ./notion-docs 9222
+node skills/playwright-notion/scripts/download.mjs urls.txt ./notion-docs 9222
+
+grep -c OK /tmp/notion_export.log
+```
+
+Brave commonly accepts CDP on its default profile dir where Chrome refuses.
+
 ## Layout
 
 ```text
@@ -94,6 +131,12 @@ skills/docs-review/
   references/fix-mode.md          — what --fix may edit, and what it may only propose
   references/investigation-mode.md — auditing without a spec
   scripts/check_report.py         — lint verdicts, citations, duplicate IDs (stdlib only)
+skills/playwright-notion/
+  SKILL.md                        — workflow, the two dead ends, verification
+  scripts/start-browser.sh        — launch Brave/Chrome/Edge with CDP on the real profile
+  scripts/export.mjs              — Notion's native markdown export via enqueueTask (preferred)
+  scripts/download.mjs            — block JSON → markdown converter (fallback)
+  scripts/package.json            — playwright dependency
 .claude-plugin/plugin.json        — Claude Code plugin manifest
 .claude-plugin/marketplace.json   — plugin marketplace manifest
 ```
