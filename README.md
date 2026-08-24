@@ -86,26 +86,144 @@ cp -R skills/playwright-notion ~/.claude/skills/playwright-notion
 
 Copying skips `agents/`, so `docs-review` falls back to a single generic reviewer. It still runs and still says so — the report's first line reads `DEGRADED` and `## Review team` marks the rows — but the roles no longer see the documents independently, and the generic agent has no structured search tools. Prefer Option A for `docs-review`.
 
-## Usage
+## Using `testcase`
 
-Ask for test cases in natural language:
+Ask in natural language, or invoke it as `/ktkit:testcase`. It triggers on any request to write,
+create, generate, review, improve or check test cases.
+
+### Generating cases
 
 ```text
-Write test cases for: user can change 工種コード via a dropdown, value reflected immediately in L1.
+Write test cases for: the user changes 工種コード from a dropdown, and the value is
+reflected in L1 immediately without a save.
 ```
 
-The skill triggers automatically on any request to write / create / generate / review test cases, or invoke it directly with `/testcase`.
+You get a table written to `testcases.md` (or the file you name), one row per case, with an ID,
+preconditions, steps, expected result and priority. The generation pass walks eleven scenario
+families — positive, negative, boundary, validation, state, permission, error, data, UI, integration,
+regression — and then a **second pass in an independent agent** goes looking for what the first pass
+missed. That second pass is not optional and not a formality: it is the step that catches the
+boundary case you did not think to ask for.
 
-Test cases are written to a file, so they can be linted and exported:
+The more the request pins down, the less the skill has to assume. Compare:
+
+```text
+# thin — the skill will have to guess the limits, and will say so
+Write test cases for the amount field.
+
+# useful — every constant here becomes a boundary case
+Write test cases for the amount field: integer yen, 0 to 1,000,000 inclusive,
+rejected values show 金額が不正です, and the field is disabled once the claim is approved.
+```
+
+### Reviewing cases somebody else wrote
+
+Hand it an existing list and it switches to review mode — auditing the cases against the
+**requirement**, not against themselves, which is the only way a missing case can surface:
+
+```text
+Review these test cases against the spec in docs/spec.md and tell me what is not covered:
+<paste the table, or give the file path>
+```
+
+### Linting and exporting
+
+The output is a file on purpose, so a script can check it:
 
 ```bash
-python3 skills/testcase/scripts/summarize.py testcases.md
-python3 skills/testcase/scripts/summarize.py testcases.md --csv out.csv
+python3 skills/testcase/scripts/summarize.py testcases.md            # counts + lint findings
+python3 skills/testcase/scripts/summarize.py testcases.md --csv out.csv   # export for TestRail/Excel
+python3 skills/testcase/scripts/summarize.py --selfcheck             # verify the script itself
 ```
 
-The CSV is UTF-8 with BOM, so Excel opens Japanese text correctly.
+The lint flags duplicate IDs, missing expected results, invalid priorities and vague steps
+("check it works" is not a step). The CSV is UTF-8 with BOM, so Excel opens Japanese text without
+mojibake.
 
-For `playwright-notion`, install the script deps once, then it drives the browser for you:
+Japanese features get their own coverage — 全角/半角 pairs, surrogate pairs, Unicode normalization,
+byte-versus-character length limits, and export/search round-trips — because a field that accepts
+20 characters and a field that accepts 20 bytes fail differently and only one of them is tested by
+ASCII input.
+
+## Using `docs-review`
+
+Give it a spec and the documents that are supposed to describe it:
+
+```text
+Review the docs in ./docs against spec.md
+```
+
+The report lands in `docs-review.md`, and the conversation gets a short status summary — counts and
+state, not the findings. The findings belong in the file next to their citations, because a verdict
+repeated in prose without its quote is how `Partial` turns into "the docs are basically fine".
+
+### What comes back
+
+One row per requirement, each with a verdict and a citation you can check:
+
+| Verdict | Means |
+| ------- | ----- |
+| `Covered` | The documents state it, matching the spec |
+| `Partial` | Stated but incomplete — a condition, case or value from the spec is absent |
+| `Missing` | No document states it. The row records the search terms, so you can see where it looked |
+| `Contradict` | A document states something the spec contradicts |
+| `Conflict` | Two documents disagree with each other — both are cited, no winner is picked silently |
+| `Stale` | Superseded behaviour: an old field name, a removed flow, a changed value |
+| `Undecided` | The spec itself is ambiguous, or an external fact could not be verified |
+
+`Missing` and `Conflict` are the rows worth your time. `Conflict` in particular is found by a
+dedicated sweep over every value the documents assert, because two documents that disagree rarely
+land under the same requirement — nothing in a per-requirement lookup would ever have caught it.
+
+### Controlling cost and depth
+
+```text
+docs-review 2 spec.md ./docs                 # cap the review at 2 waves
+docs-review spec.md ./docs --max-questions 1 # at most one question may reach you
+docs-review spec.md ./docs --out audit.md    # name the report
+docs-review spec.md ./docs --silent          # print the path and nothing else
+```
+
+The bare integer is the wave ceiling — `2` means "at most two review waves", not "exactly two". A
+wave that finds nothing material ends the loop earlier; a ceiling reached with findings still
+outstanding says so on the report's first line rather than reading like a clean pass.
+
+Waves are not passes over the same checklist. Wave 1 finds what a fresh reader notices; wave 2 finds
+what everyone in wave 1 assumed. Two waves is usually enough because the roles look for different
+things and then attack each other's findings.
+
+### Fixing the documents
+
+```text
+Review the docs in ./docs against spec.md --fix
+```
+
+`--fix` edits **the documents**, never the spec, and only after the review loop has finished. It
+applies `Missing`, `Partial` and `Stale` rows the spec states in full, as minimal in-place edits
+traced to a requirement ID. Every edit passes a safety review before it is written, and the edited
+sections are re-verified by a different role than the one that wrote them.
+
+Two things it will not do quietly: it never invents a value the spec does not state, and in
+documentation of a running system it only *proposes* a fix for a document that contradicts the spec —
+because that document may be the one describing what the system actually does. Those land in
+`## Proposed, not applied`, which is as much the deliverable as the applied edits.
+
+### Asking a question instead of auditing
+
+With no spec, it switches to investigation mode: the checklist comes from your **question**, not from
+the documents, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`.
+
+```text
+Read ./docs and tell me: what happens to an in-flight claim when the approver leaves the company?
+```
+
+The section you actually want there is `## What the documents do not say` — the `Absent` and
+`Conflicting` rows collected together. That is the part you cannot get by reading the documents
+yourself.
+
+## Using `playwright-notion`
+
+Install the script deps once, then it drives the browser for you:
 
 ```bash
 cd skills/playwright-notion/scripts && npm install
