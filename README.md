@@ -147,15 +147,96 @@ ASCII input.
 
 ## Using `docs-review`
 
-Give it a spec and the documents that are supposed to describe it:
+Everything it does starts from one question: **what is the document being measured against?** There
+is always a standard; naming it is what turns "read my doc" into something with an answer you can
+check.
+
+### The three shapes
+
+| You give it | Mode | What you get |
+| ----------- | ---- | ------------ |
+| A **standard** and the **documents** | **A — gap analysis** | One row per requirement: where the documents cover it, the verdict, the quote |
+| Documents and a **question**, no standard | **B — investigation** | Answers marked `Stated` / `Inferred` / `Conflicting` / `Absent`, and a section for what the documents never say |
+| Documents alone | — | It asks what the audit is for. It will not summarize them: a summary is the one output that hides the gaps |
+
+The third row is deliberate. A summary of a document always reads fine, including when the document
+is missing half of what it should say.
+
+### Auditing one document
+
+Say you want `.claude/claude/specs/billing/retry/abc.md` reviewed. Which of these you mean changes
+the whole run:
+
+**It is a deliverable, and something upstream defines what it should contain.** The upstream thing is
+the standard — a ticket, an issue, a requirement note, a design brief:
 
 ```text
-Review the docs in ./docs against spec.md
+Review .claude/claude/specs/billing/retry/abc.md against docs/req-1234.md
 ```
 
-The report lands in `docs-review.md`, and the conversation gets a short status summary — counts and
-state, not the findings. The findings belong in the file next to their citations, because a verdict
-repeated in prose without its quote is how `Partial` turns into "the docs are basically fine".
+Now `abc.md` is the document and `req-1234.md` is the standard. Every requirement in the ticket
+becomes a row, and anything `abc.md` fails to say is `Missing` — which is the point, because a
+deliverable being drafted is exactly where a silent omission is still cheap to fix.
+
+**It is itself the standard, and other documents are supposed to follow it:**
+
+```text
+Review ./docs and ./api-design against .claude/claude/specs/billing/retry/abc.md
+```
+
+Same skill, opposite direction. Now `abc.md` supplies the requirements and the other files are
+checked for `Stale` and `Contradict` — the wording that fell behind after `abc.md` changed.
+
+**You have no upstream document, only a question.** That is Mode B, and you must ask something
+answerable:
+
+```text
+Read .claude/claude/specs/billing/retry/abc.md and tell me: what happens to an
+in-flight retry when the payment provider returns 409?
+```
+
+**Two documents that should agree, and no standard at all.** Name one as the standard and audit the
+other; the `Conflict` rows come out either way, and you find out which document is behind:
+
+```text
+Review docs/runbook.md against .claude/claude/specs/billing/retry/abc.md
+```
+
+### What happens when you run it
+
+The audit is a small pipeline of agents, not one long read. In order:
+
+1. **It measures the set** — file count and word count — and echoes back one line of what it parsed,
+   so a mistyped path or a flag it did not understand surfaces before any work happens.
+2. **It records each document's recent commits** to `docs-history.md`. The reviewer agents have no
+   shell, so this file is how the audit can see that a paragraph was last touched two years ago.
+3. **It decomposes the standard into atomic requirements** — before opening any document, because a
+   checklist derived from the documents can only find what the documents already thought of. This is
+   the step that decides the size of the run: a dense standard yields a lot of rows.
+4. **Mappers read the documents in parallel**, one per slice of the checklist, each searching the
+   documents' own vocabulary rather than the standard's — "second approver" in a spec will never
+   match "dual sign-off" in a manual. Each ends by declaring, per document, whether it read it in
+   full or only searched it.
+5. **The review wave runs.** Four roles work at once and see different things, then a fifth opens the
+   cited files and decides which findings survive. Only what survives is merged; what was refuted
+   stays in the report with the evidence that killed it.
+6. **It lints the report** — a script, not a re-read — and fixes what the lint names. A report that
+   claims the loop converged while its own log still shows changes fails that check.
+7. **It writes the report and tells you almost nothing.** Counts, which wave converged, how many
+   documents went unread, how many questions are waiting.
+
+What ends up on disk, all beside the report so you can delete the lot in one gesture:
+
+```text
+docs-review.md          the report
+checklist.md            the requirements it derived, and the ID registry
+docs-history.md         recent commits per document
+shard-1.md, shard-2.md  what each mapper found, before merging
+```
+
+What you see in the conversation is two lines. The findings are not repeated there on purpose: a
+verdict restated in prose loses its citation, and that is exactly where a `Partial` becomes "the docs
+are basically fine".
 
 ### What comes back
 

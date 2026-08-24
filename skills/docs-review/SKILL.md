@@ -118,6 +118,11 @@ unread document is a hole in the audit, and hiding it makes the report worse tha
 **Check for a previous report** (`--out` or `docs-review.md`) and note its path. You do not mine it
 for IDs yourself — the checklist builder does that in step 2.
 
+**Working files go beside the report.** `checklist.md`, `docs-history.md`, `shard-<n>.md`, the
+stripped copy, and `pending.diff` are written to the report's own directory, so the reader can see
+what the audit was built from and delete the lot in one gesture. Say in the closing summary that they
+are there. Never scatter them into the directory being audited.
+
 **Write `docs-history.md`** — for each document, the last few commits that touched it:
 
 ```bash
