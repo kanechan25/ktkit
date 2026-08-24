@@ -1,6 +1,6 @@
-# testcase
+# ktkit
 
-Three Claude Code skills — `testcase` generates manual test cases, `docs-review` audits documentation against a spec, `playwright-notion` pulls Notion pages down to markdown when the API and the Export button are both unavailable. The two QA skills end with a mandatory review pass run in an independent subagent.
+Three Claude Code skills — `testcase` generates manual test cases, `docs-review` audits documentation against a spec, `playwright-notion` pulls Notion pages down to markdown when the API and the Export button are both unavailable. The two QA skills end with a mandatory review pass that runs in agents with their own context, not in the session that produced the work.
 
 ## testcase
 
@@ -20,14 +20,20 @@ Investigates documentation on one principle: **what the spec requires vs what th
 
 - **Gap analysis mode** — decomposes the spec into atomic requirements *before* reading the docs, then maps each one to `Covered` / `Partial` / `Missing` / `Contradict` / `Conflict` / `Stale` / `Undecided` with a mandatory citation and quote
 - **Investigation mode** — no spec? the checklist comes from the question instead, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`
-- **Review loop** — an independent subagent re-derives the checklist from the spec alone and attacks the report; repeats until a round converges — no new row, no changed verdict, no rejected citation. Rounds are not capped at a fixed number: material findings at round 4 mean round 5, an oscillating verdict is frozen as `Undecided` instead of burning rounds, and a loop still moving at round 5 is reported as unconverged rather than finished. Earlier rounds' notes are stripped before the next round, so each reviewer stays independent
-- **Large sets** — over ~15 documents it switches workflow: index the documents first (their vocabulary, not the spec's), shard the audit by spec chapter, sweep for doc-vs-doc conflicts separately, and require a per-document coverage declaration before a review round counts as clean
-- **`--fix`** — edits the audited document (the output artifact, never the spec) after the review loop: `Missing` / `Partial` / `Stale` rows the spec states in full, as minimal in-place edits traced to a requirement ID, then re-verifies each edited section. In a deliverable still being drafted, `Contradict` is fixed too. In documentation of a running system it is only proposed — a doc contradicting the spec may be the one describing reality
-- **Lint** — a script checks every row for a valid verdict, a citation, unique IDs, a source inventory, and that the loop actually ran
+- **A team of eight agents, not one reviewer** — a generic reviewer run once per round covers one or two of its checks per pass, which is why that shape needs four or five rounds. Here the work is split into roles that run concurrently and then challenge each other: `checklist` and `mapper` produce, `requirement` re-derives from the spec **without being shown the report**, `evidence` verifies every quote character by character, `coverage` attacks `Missing` rows in the documents' own vocabulary and sweeps for doc-vs-doc conflicts, `failure` attacks the audit itself, `adjudicator` upholds or refutes each finding against the files, and `fix-safety` gates edits. One or two waves instead of four or five rounds
+- **Independence where it matters** — reviewers derive alone (no lead reasoning, no peer findings, no earlier wave's notes), then challenge with evidence. Only findings that survive the challenge are merged; refuted ones stay in the report with the evidence that killed them
+- **The lead never reads the documents** — in an agentic loop the session's context is re-sent every turn, so documents read once are paid for repeatedly. The orchestrating session holds paths, IDs and finding lists; mappers read, shards are concatenated, findings are merged with targeted edits
+- **Self-clarify ladder** — an unknown is classified before it is acted on: search the documents' vocabulary, the code and the file's history; challenge a disagreement once; look up an external fact from an authoritative source; assume the better-evidenced reading **with a falsifier written down**; and only then ask. A question reaching you needs six preconditions, a recommendation and a default, and must first survive a challenge by two reviewers
+- **Convergence is computed, not claimed** — every wave logs its counts, and a report claiming convergence while the last row still shows new rows, changed verdicts or rejected citations fails the lint. `--rounds N` caps the waves; a cap reached with findings outstanding is reported on line 1, never as a clean exit
+- **Large sets** — index the documents first (their vocabulary, not the spec's), shard the audit, sweep for doc-vs-doc conflicts separately, and require a per-document coverage declaration before a wave counts as clean
+- **`--fix`** — edits the audited document (the output artifact, never the spec) after the review loop: `Missing` / `Partial` / `Stale` rows the spec states in full, as minimal in-place edits traced to a requirement ID. Every edit passes `fix-safety` first, and re-verification is done by `evidence` against the edited files rather than by the session that wrote them. In a deliverable still being drafted, `Contradict` is fixed too. In documentation of a running system it is only proposed — a doc contradicting the spec may be the one describing reality
+- **Lint with named checks** — `references/report-schema.md` owns every heading, column and ID format, and `scripts/check_report.py` implements exactly its twenty checks: false convergence, unregistered IDs, missing citations, gates without a default, assumptions without a falsifier, coverage weaker than the verdicts imply, and a degraded run that did not announce itself
+- **Quiet by default** — the audit writes the report to a file and prints a short status summary. A table printed into the conversation is billed again on every later turn and arrives without its citations
 
 ```text
 Review the docs in ./docs against spec.md
 Review the docs in ./docs against spec.md --fix
+docs-review 3 spec.md ./docs          # cap the review at 3 waves
 ```
 
 ## playwright-notion
@@ -51,28 +57,34 @@ Tôi không có Notion API token, Export bị disable. Tải các trang này v�
 
 ```bash
 # one-time: register this repo as a marketplace
-claude plugin marketplace add xtieume/testcase
+claude plugin marketplace add kanechan25/ktkit
 
 # then install
-claude plugin install testcase@testcase-marketplace
+claude plugin install ktkit@ktkit-marketplace
 ```
 
 Or via the interactive UI:
 
 ```text
-/plugin marketplace add xtieume/testcase
-/plugin install testcase@testcase-marketplace
+/plugin marketplace add kanechan25/ktkit
+/plugin install ktkit@ktkit-marketplace
+```
+
+Installing as a plugin is what registers the eight `docs-review` agents. Verify them after install:
+
+```text
+/context          # Custom agents should list ktkit:docs-review-*
 ```
 
 ### Option B — Manual (copy the skill)
-
-Copy the whole skill folder into your local skills folder:
 
 ```bash
 cp -R skills/testcase ~/.claude/skills/testcase
 cp -R skills/docs-review ~/.claude/skills/docs-review
 cp -R skills/playwright-notion ~/.claude/skills/playwright-notion
 ```
+
+Copying skips `agents/`, so `docs-review` falls back to a single generic reviewer. It still runs and still says so — the report's first line reads `DEGRADED` and `## Review team` marks the rows — but the roles no longer see the documents independently, and the generic agent has no structured search tools. Prefer Option A for `docs-review`.
 
 ## Usage
 
@@ -124,13 +136,27 @@ skills/testcase/
   references/review-mode.md       — auditing an existing test case list
   scripts/summarize.py            — count, lint, export CSV (stdlib only)
 skills/docs-review/
-  SKILL.md                        — mode selection, gap workflow, review loop, rules
+  SKILL.md                        — arguments, orchestration, the review wave, rules
+  references/report-schema.md     — every heading, column, ID format and lint check id
+  references/review-team.md       — dispatch contract + the eight role prompts
+  references/self-clarify.md      — the five-tier ladder for unknowns
   references/dimensions.md        — requirement dimensions + how to make a row atomic
   references/i18n-jp.md           — Japanese term-variant + 全角/半角 checks
   references/large-sets.md        — index / shard / conflict-sweep workflow for big doc sets
   references/fix-mode.md          — what --fix may edit, and what it may only propose
   references/investigation-mode.md — auditing without a spec
-  scripts/check_report.py         — lint verdicts, citations, duplicate IDs (stdlib only)
+  scripts/check_report.py         — the twenty schema checks (stdlib only)
+  scripts/strip_rounds.py         — reviewer copy of the report, minus earlier findings
+  tests/fixtures/                 — one clean report plus six, each tripping one check
+agents/                           — the eight docs-review roles, registered by the plugin
+  docs-review-checklist.md          owns Req ID allocation
+  docs-review-mapper.md             maps documents onto a checklist slice
+  docs-review-requirement.md        re-derives from the spec, never shown the report
+  docs-review-evidence.md           verifies every citation against the file
+  docs-review-coverage.md           attacks Missing rows; sweeps for conflicts
+  docs-review-failure.md            attacks the audit itself
+  docs-review-adjudicator.md        upholds or refutes each finding
+  docs-review-fix-safety.md         gates document edits before they are applied
 skills/playwright-notion/
   SKILL.md                        — workflow, the two dead ends, verification
   scripts/start-browser.sh        — launch Brave/Chrome/Edge with CDP on the real profile
