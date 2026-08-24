@@ -1,101 +1,92 @@
-# Large Document Sets — Index, Shard, Sweep
+# Large Document Sets — what changes when the set is big
 
-Read this when the measurement in `SKILL.md` step 1 says the set is large. The single-pass
-workflow does not degrade gracefully at this size: it produces `Missing` verdicts that are
-really search failures, and review rounds that return nothing because the reviewer silently
-sampled. Both read exactly like a clean audit. This file replaces steps 2–4 of `SKILL.md`
-with a sharded version; steps 1, 5 and 6 stay as written.
+Read this when the measurement in `SKILL.md` step 1 says the set is large: more than 15 documents,
+more than ~100,000 words, a document no single agent can read in full, or formats you can only
+search.
 
-## 1. Index pass — build the document map first
+**This file no longer replaces the workflow.** Index-then-shard used to be the large-set exception;
+it is now the standard pipeline at every size, because the lead does not read documents at all and
+mappers work on slices regardless. A set of eight documents already runs one checklist builder and
+several mappers. Document count changes **how many agents** run, not **which** ones.
 
-Before any checklist work, map what the documents actually contain. Split the set across
-subagents (roughly 10 documents each) and have each return one row per document:
+What genuinely changes above the threshold is the four things below. Everything else in `SKILL.md`
+stays as written.
+
+## 1. The document map becomes mandatory
+
+Below the threshold a mapper rebuilds a document's vocabulary as it reads — with a handful of small
+documents that is cheap and accurate. Above it, no single agent sees enough of the set for that to
+work, so the vocabulary has to exist as an artifact first.
+
+Split the set across agents (roughly ten documents each) and have each return one row per document:
 
 | Doc ID | Path | Sections (headings) | Key terms used | Values asserted | Version / date |
 
-* **Key terms used** — the vocabulary *the document* uses, not the spec's. This column is the
-  whole point of the pass.
-* **Values asserted** — every number, limit, threshold, state name, role name, time, format,
-  and ID pattern the document states. Copy them verbatim with their section.
+* **Key terms used** — the vocabulary *the document* uses, not the spec's. This column is the whole
+  point of the pass.
+* **Values asserted** — every number, limit, threshold, state name, role name, time, format, and ID
+  pattern the document states. Copy them verbatim with their section.
 
-Write the map to `docs-index.md`. It is an input to every later step and to the conflict sweep.
+Write it to `docs-index.md`. It is an input to every mapper, to the `coverage` reviewer, and to the
+conflict sweep.
 
-**Why this comes first:** a requirement written as "second approver" in the spec and
-"dual sign-off" in the manual is invisible to a spec-term grep. Without the index, that
-becomes a confident `Missing`.
+**Why it comes first:** a requirement written as "second approver" in the spec and "dual sign-off" in
+the manual is invisible to a spec-term grep. Without the index, that becomes a confident `Missing`.
 
-## 2. Expand search terms before every `Missing`
+## 2. Shard by spec chapter instead of by dimension
 
-For each requirement, the search term set is: the spec's wording **plus** every synonym,
-abbreviation, and field name for the same concept that appears in `docs-index.md`'s Key terms
-column. Search all of them. A `Missing` verdict records the full expanded term list in its
-Note — not just the spec's phrase.
+Below the threshold, slicing the checklist by dimension keeps related requirements together. Above
+it, slice by **spec chapter** instead: a chapter's requirements tend to land in the same documents,
+so each mapper reads a smaller part of the set.
 
-If the index shows a document section whose topic matches the requirement but whose wording
-does not, read that section rather than trusting the grep.
+Each mapper gets its chapter's slice, `docs-index.md` in full — cross-references live outside the
+shard — the documents its rows point at, and permission to open any other document the index
+suggests. It writes `shard-<chapter>.md` and ends with the coverage declaration `report-schema.md`
+requires.
 
-## 3. Shard by spec section
+The lead concatenates the shards. Concatenation, not hand-editing: a 200-row table edited by hand
+loses rows, and pulling it through the lead's context costs it on every later turn.
 
-Build the requirement checklist per spec chapter (`references/dimensions.md` applies
-unchanged), then dispatch one subagent per shard. Each shard subagent gets:
+## 3. The conflict sweep becomes a separate pass
 
-* its chapter of the spec
-* its slice of the checklist
-* `docs-index.md` (the whole map — cross-references live outside the shard)
-* the candidate document paths its rows point at, plus permission to open any other document
-  the index suggests
+With two or three documents, the `coverage` reviewer finds doc-versus-doc disagreement while it works
+— it holds the whole set. At forty documents it cannot, because the two documents that disagree
+rarely land under the same requirement row.
 
-Each shard returns two things:
+So run one dedicated pass over the **Values asserted** column of `docs-index.md`: group every
+asserted value by what it describes (batch limit, retry count, state name, role, cutoff time,
+format), then flag every group whose members disagree.
 
-1. Its verdict rows, in the standard `SKILL.md` step 3 format, written to its own file
-   (`shard-<chapter>.md`). Never have shards edit one shared table.
-2. A **coverage declaration**:
+Each disagreement becomes a `Conflict` row citing both documents — including the ones the spec says
+nothing about, which are exactly the ones no requirement row would ever have caught.
 
-   | Doc ID | Read | What was read |
-   | ------ | ---- | ------------- |
+## 4. Review waves run per shard, then once across them
 
-   `Read` is `full`, `searched` (grep hits plus surrounding sections), or `not-accessed`.
+Run the `SKILL.md` step 4 wave **per shard**, on that shard's rows and chapter. The rules do not
+change: reviewers get no lead reasoning and no prior wave's notes.
 
-The main agent concatenates the shard files into the report. Concatenation, not hand-editing —
-a 200-row table edited by hand loses rows.
+Shard waves cap at **2 per shard** — sharding already buys independent eyes, and a third wave inside
+one chapter costs more than the cross-shard wave that follows. **Shard waves do not count toward the
+`--rounds` ceiling; the cross-shard waves do.** A shard whose second wave still returns material
+findings is named in the report as unconverged rather than merged silently.
 
-## 4. Conflict sweep — a separate pass
-
-Doc-vs-doc disagreement does not surface from per-requirement lookup at this scale, because
-the two documents rarely land under the same row. Run one dedicated pass over the
-**Values asserted** column of `docs-index.md`: group every asserted value by what it describes
-(batch limit, retry count, state name, role, cutoff time, format), then flag every group whose
-members disagree.
-
-Each disagreement becomes a `Conflict` row citing both documents — including the ones the spec
-says nothing about, which are exactly the ones no requirement row would ever have caught.
-
-## 5. Review loop, sharded
-
-Run the `SKILL.md` step 4 loop **per shard**, on the shard's own rows and chapter. Rules unchanged:
-the reviewer gets no reasoning and no prior round notes.
-
-Shard rounds cap at **2 per shard** — sharding already buys independent eyes, and a third round
-inside one chapter costs more than the cross-shard round that follows. Shard rounds do not count
-toward the 5-round ceiling in `SKILL.md`; the cross-shard rounds do. A shard whose round 2 still
-returns material findings is reported by name as unconverged rather than merged silently.
-
-Then run **one cross-shard round** over the merged report, looking only for what shard
-boundaries hide:
+Then run **one cross-shard wave** over the merged report, looking only for what shard boundaries
+hide:
 
 1. Requirements that fall between chapters and landed in no shard
 2. The same requirement audited twice with different verdicts
 3. `Conflict` rows the sweep found that no shard reflected
 4. Shards whose coverage declaration is weaker than their verdicts imply
 
-**An empty round only counts as clean if the shard's coverage declaration is `full` for the
-documents its verdicts depend on.** An empty round over a `searched`-only shard means the
-reviewer searched the same way you did and missed the same things. Say that in the report
-rather than calling the shard clean.
+**An empty wave only counts as clean if the shard's coverage declaration is `full` for the documents
+its verdicts depend on.** An empty wave over a `searched`-only shard means the reviewer searched the
+same way the mapper did and missed the same things. Say that in the report rather than calling the
+shard clean — the lint's `R2 coverage-too-weak` catches the strongest version of this, a verdict
+citing a document nobody opened, but not the weaker one.
 
-## 6. When the budget runs out
+## When the budget runs out
 
-Deliver fewer shards audited completely. Never audit every shard partially — a report where
-each chapter is half-checked cannot be distinguished from a finished one by the person reading
-it. Unaudited shards are listed in the source inventory as `NOT AUDITED`, by name, with the
-chapters they cover.
+Deliver fewer shards audited completely. Never audit every shard partially — a report where each
+chapter is half-checked cannot be distinguished from a finished one by the person reading it.
+Unaudited shards are listed in `## Source inventory` as `not-accessed`, by name, with the chapters
+they cover, and the report's first line says the run was capped.
