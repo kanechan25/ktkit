@@ -30,10 +30,7 @@
 
 ## Round findings
 
-REQ-AMT-002
-Round 1 finding: verdict was Covered on a quote that does not exist in DOC-01.
-Why missed: quote paraphrased from the spec, not copied from the document.
-Challenge: UPHELD — grep for the sentence over docs/ returns nothing.
+The mapping pass produced the table above.
 
 ## Self-resolved
 

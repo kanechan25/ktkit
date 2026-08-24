@@ -16,11 +16,14 @@ Extras:
 
 ## docs-review
 
-Investigates documentation on one principle: **what the spec requires vs what the documents actually contain**.
+Reviews documentation in whichever of three shapes your situation has: **critique one file** against
+the repository and itself, **check documents against a standard**, or **ask a question of a document
+set**. See [Using `docs-review`](#using-docs-review) for which is which.
 
-- **Gap analysis mode** — decomposes the spec into atomic requirements *before* reading the docs, then maps each one to `Covered` / `Partial` / `Missing` / `Contradict` / `Conflict` / `Stale` / `Undecided` with a mandatory citation and quote
-- **Investigation mode** — no spec? the checklist comes from the question instead, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`
-- **A team of eight agents, not one reviewer** — a generic reviewer run once per round covers one or two of its checks per pass, which is why that shape needs four or five rounds. Here the work is split into roles that run concurrently and then challenge each other: `checklist` and `mapper` produce, `requirement` re-derives from the spec **without being shown the report**, `evidence` verifies every quote character by character, `coverage` attacks `Missing` rows in the documents' own vocabulary and sweeps for doc-vs-doc conflicts, `failure` attacks the audit itself, `adjudicator` upholds or refutes each finding against the files, and `fix-safety` gates edits. One or two waves instead of four or five rounds
+- **Critique mode** — one file, nothing to compare it against. Its claims are verified against the repository, its open questions answered where the repo already answers them, its self-contradictions and unsupported conclusions named, and the consequences it committed to but never wrote down surfaced as `Implication`. Verdicts are `Verified` / `Refuted` / `Unverifiable` / `Contradict` / `Unsupported` / `Answerable` / `Open` / `Implication`
+- **Gap analysis mode** — decomposes the standard into atomic requirements *before* reading the docs, then maps each one to `Covered` / `Partial` / `Missing` / `Contradict` / `Conflict` / `Stale` / `Undecided` with a mandatory citation and quote
+- **Investigation mode** — no standard? the checklist comes from the question instead, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`
+- **A team of agents, not one reviewer** — a generic reviewer run once per round covers one or two of its checks per pass, which is why that shape needs four or five rounds. Here the work is split into roles that run concurrently and then challenge each other. Producers: `checklist` and `mapper` in gap analysis, `claims` in critique. Reviewers: `requirement` re-derives from the standard **without being shown the report**, `evidence` verifies every quote character by character, `coverage` attacks `Missing` rows in the documents' own vocabulary, `verify` settles a file's claims against the repository **without being shown the file**, `implication` finds what follows and was never said, `failure` attacks the review itself, `adjudicator` upholds or refutes each finding against the files, `fix-safety` gates edits. One or two rounds instead of four or five
 - **Independence where it matters** — reviewers derive alone (no lead reasoning, no peer findings, no earlier wave's notes), then challenge with evidence. Only findings that survive the challenge are merged; refuted ones stay in the report with the evidence that killed them
 - **The lead never reads the documents** — in an agentic loop the session's context is re-sent every turn, so documents read once are paid for repeatedly. The orchestrating session holds paths, IDs and finding lists; mappers read, shards are concatenated, findings are merged with targeted edits
 - **Self-clarify ladder** — an unknown is classified before it is acted on: search the documents' vocabulary, the code and the file's history; challenge a disagreement once; look up an external fact from an authoritative source; assume the better-evidenced reading **with a falsifier written down**; and only then ask. A question reaching you needs six preconditions, a recommendation and a default, and must first survive a challenge by two reviewers
@@ -31,9 +34,10 @@ Investigates documentation on one principle: **what the spec requires vs what th
 - **Quiet by default** — the audit writes the report to a file and prints a short status summary. A table printed into the conversation is billed again on every later turn and arrives without its citations
 
 ```text
-Review the docs in ./docs against spec.md
-Review the docs in ./docs against spec.md --fix
-docs-review 3 spec.md ./docs          # cap the review at 3 waves
+ktkit:docs-review 3 notes/analysis.md          # one file → critique it, 3 self-review rounds
+ktkit:docs-review 3 spec.md ./docs             # standard + documents → gap analysis
+ktkit:docs-review 3 spec.md ./docs --fix       # …and apply the fixable rows
+Read ./docs and tell me what happens when the provider returns 409
 ```
 
 ## playwright-notion
@@ -70,7 +74,7 @@ Or via the interactive UI:
 /plugin install ktkit@ktkit
 ```
 
-Installing as a plugin is what registers the eight `docs-review` agents. Verify them after install:
+Installing as a plugin is what registers the eleven `docs-review` agents. Verify them after install:
 
 ```text
 /context          # Custom agents should list ktkit:docs-review-*
@@ -147,161 +151,191 @@ ASCII input.
 
 ## Using `docs-review`
 
-Everything it does starts from one question: **what is the document being measured against?** There
-is always a standard; naming it is what turns "read my doc" into something with an answer you can
-check.
+There are three ways to point this at a document, and the skill picks between them from **what you
+give it**, not from a flag:
 
-### The three shapes
+| You give it | Mode | The question it answers |
+| ----------- | ---- | ----------------------- |
+| **One file, nothing else** | **C — critique** | "What in this file is wrong, unsupported, self-contradicting, or already answered elsewhere?" |
+| A **standard** plus the **documents** meant to describe it | **A — gap analysis** | "Do these documents say what the standard requires?" |
+| Documents plus a **question** | **B — investigation** | "What do these documents say about X, and what do they never say?" |
 
-| You give it | Mode | What you get |
-| ----------- | ---- | ------------ |
-| A **standard** and the **documents** | **A — gap analysis** | One row per requirement: where the documents cover it, the verdict, the quote |
-| Documents and a **question**, no standard | **B — investigation** | Answers marked `Stated` / `Inferred` / `Conflicting` / `Absent`, and a section for what the documents never say |
-| Documents alone | — | It asks what the audit is for. It will not summarize them: a summary is the one output that hides the gaps |
+Several files with no standard and no question is the one case it will not guess at: it asks which
+file is the standard, or what the question is. It will not summarize them instead — a summary reads
+fine even when the document is missing half of what it should say, which is the failure this skill
+exists to prevent.
 
-The third row is deliberate. A summary of a document always reads fine, including when the document
-is missing half of what it should say.
+---
 
-### Auditing one document
+### Mode C — critique one file
 
-Say you want `.claude/claude/specs/billing/retry/abc.md` reviewed. Which of these you mean changes
-the whole run:
-
-**It is a deliverable, and something upstream defines what it should contain.** The upstream thing is
-the standard — a ticket, an issue, a requirement note, a design brief:
-
-```text
-Review .claude/claude/specs/billing/retry/abc.md against docs/req-1234.md
-```
-
-Now `abc.md` is the document and `req-1234.md` is the standard. Every requirement in the ticket
-becomes a row, and anything `abc.md` fails to say is `Missing` — which is the point, because a
-deliverable being drafted is exactly where a silent omission is still cheap to fix.
-
-**It is itself the standard, and other documents are supposed to follow it:**
+For the file you wrote yourself: a design note, an analysis, a spec draft, a hand-over document. The
+kind of file that has correct claims, wrong claims, open questions and conclusions all mixed
+together.
 
 ```text
-Review ./docs and ./api-design against .claude/claude/specs/billing/retry/abc.md
+ktkit:docs-review 3 .claude/claude/specs/billing/retry/abc.md
 ```
 
-Same skill, opposite direction. Now `abc.md` supplies the requirements and the other files are
-checked for `Stale` and `Contradict` — the wording that fell behind after `abc.md` changed.
+`3` is the number of **self-review rounds**. Round 1 reviews the file. **Round 2 reviews round 1's own
+output** — which verdicts cite evidence that does not support them, which refutations are wrong, and
+above all where the review argued with something you never wrote. Round 3 does the same to round 2. A
+round that finds nothing material ends it early; `3` is a ceiling, not a quota.
 
-**You have no upstream document, only a question.** That is Mode B, and you must ask something
-answerable:
+There is no second file to compare against, and it will not ask you for one. Four standards live
+inside the situation, and all four are checkable:
 
-```text
-Read .claude/claude/specs/billing/retry/abc.md and tell me: what happens to an
-in-flight retry when the payment provider returns 409?
-```
+| It checks | How |
+| --------- | --- |
+| **Is the claim true?** | Opens the repository — source, config, docs, `git log` — and looks |
+| **Does the file contradict itself?** | Two statements that cannot both hold, both quoted with line numbers |
+| **Is that open question really open?** | Searches the repo and the history first. Most "TBD" notes are already answered somewhere in the tree |
+| **Does the conclusion follow?** | Against the evidence the file itself supplies, not against outside knowledge |
 
-**Two documents that should agree, and no standard at all.** Name one as the standard and audit the
-other; the `Conflict` rows come out either way, and you find out which document is behind:
+Plus two passes that go beyond the text:
 
-```text
-Review docs/runbook.md against .claude/claude/specs/billing/retry/abc.md
-```
+* **Knock-on** — a statement is true, something follows from it, and the file never says it. A
+  decision written down without its consequence is the expensive kind of gap, because you will act on
+  the decision.
+* **Widening** — the file addresses A; A belongs to a class that also holds B and C it never mentions.
+  The class is named, so the omission is arguable instead of a matter of taste.
 
-### What happens when you run it
-
-The audit is a small pipeline of agents, not one long read. In order:
-
-1. **It measures the set** — file count and word count — and echoes back one line of what it parsed,
-   so a mistyped path or a flag it did not understand surfaces before any work happens.
-2. **It records each document's recent commits** to `docs-history.md`. The reviewer agents have no
-   shell, so this file is how the audit can see that a paragraph was last touched two years ago.
-3. **It decomposes the standard into atomic requirements** — before opening any document, because a
-   checklist derived from the documents can only find what the documents already thought of. This is
-   the step that decides the size of the run: a dense standard yields a lot of rows.
-4. **Mappers read the documents in parallel**, one per slice of the checklist, each searching the
-   documents' own vocabulary rather than the standard's — "second approver" in a spec will never
-   match "dual sign-off" in a manual. Each ends by declaring, per document, whether it read it in
-   full or only searched it.
-5. **The review wave runs.** Four roles work at once and see different things, then a fifth opens the
-   cited files and decides which findings survive. Only what survives is merged; what was refuted
-   stays in the report with the evidence that killed it.
-6. **It lints the report** — a script, not a re-read — and fixes what the lint names. A report that
-   claims the loop converged while its own log still shows changes fails that check.
-7. **It writes the report and tells you almost nothing.** Counts, which wave converged, how many
-   documents went unread, how many questions are waiting.
-
-What ends up on disk, all beside the report so you can delete the lot in one gesture:
-
-```text
-docs-review.md          the report
-checklist.md            the requirements it derived, and the ID registry
-docs-history.md         recent commits per document
-shard-1.md, shard-2.md  what each mapper found, before merging
-```
-
-What you see in the conversation is two lines. The findings are not repeated there on purpose: a
-verdict restated in prose loses its citation, and that is exactly where a `Partial` becomes "the docs
-are basically fine".
-
-### What comes back
-
-One row per requirement, each with a verdict and a citation you can check:
+What you read in the report:
 
 | Verdict | Means |
 | ------- | ----- |
-| `Covered` | The documents state it, matching the spec |
-| `Partial` | Stated but incomplete — a condition, case or value from the spec is absent |
-| `Missing` | No document states it. The row records the search terms, so you can see where it looked |
-| `Contradict` | A document states something the spec contradicts |
-| `Conflict` | Two documents disagree with each other — both are cited, no winner is picked silently |
-| `Stale` | Superseded behaviour: an old field name, a removed flow, a changed value |
-| `Undecided` | The spec itself is ambiguous, or an external fact could not be verified |
+| `Refuted` | The claim is false, with the line in the repo that says otherwise. The row that earns the run |
+| `Answerable` | You marked it as an open question; the repo answers it. **The answer is in the row** |
+| `Verified` | Checked and true, with `path:line` |
+| `Contradict` | Another statement in the same file disagrees, and both are cited |
+| `Unsupported` | An assertion the file's own evidence does not carry |
+| `Implication` | Follows from something you wrote, and you did not write it |
+| `Open` | Genuinely undecided, with the searches that establish that |
+| `Unverifiable` | Nothing could settle it, with everything that was tried |
 
-`Missing` and `Conflict` are the rows worth your time. `Conflict` in particular is found by a
-dedicated sweep over every value the documents assert, because two documents that disagree rarely
-land under the same requirement — nothing in a per-requirement lookup would ever have caught it.
+**Your file is never edited.** The review lands beside it; what to change is your call, and a file
+full of your own reasoning is the last place for automated edits.
 
-### Controlling cost and depth
+---
 
-```text
-docs-review 2 spec.md ./docs                 # cap the review at 2 waves
-docs-review spec.md ./docs --max-questions 1 # at most one question may reach you
-docs-review spec.md ./docs --out audit.md    # name the report
-docs-review spec.md ./docs --silent          # print the path and nothing else
-```
+### Mode A — do the docs match the standard?
 
-The bare integer is the wave ceiling — `2` means "at most two review waves", not "exactly two". A
-wave that finds nothing material ends the loop earlier; a ceiling reached with findings still
-outstanding says so on the report's first line rather than reading like a clean pass.
-
-Waves are not passes over the same checklist. Wave 1 finds what a fresh reader notices; wave 2 finds
-what everyone in wave 1 assumed. Two waves is usually enough because the roles look for different
-things and then attack each other's findings.
-
-### Fixing the documents
+Two sides: one is authoritative, the other has to describe it.
 
 ```text
-Review the docs in ./docs against spec.md --fix
+ktkit:docs-review 3 docs/req-1234.md ./docs
 ```
 
-`--fix` edits **the documents**, never the spec, and only after the review loop has finished. It
-applies `Missing`, `Partial` and `Stale` rows the spec states in full, as minimal in-place edits
-traced to a requirement ID. Every edit passes a safety review before it is written, and the edited
-sections are re-verified by a different role than the one that wrote them.
-
-Two things it will not do quietly: it never invents a value the spec does not state, and in
-documentation of a running system it only *proposes* a fix for a document that contradicts the spec —
-because that document may be the one describing what the system actually does. Those land in
-`## Proposed, not applied`, which is as much the deliverable as the applied edits.
-
-### Asking a question instead of auditing
-
-With no spec, it switches to investigation mode: the checklist comes from your **question**, not from
-the documents, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`.
+The first path is the standard, the rest are the documents. Which way round matters, and both
+directions are useful:
 
 ```text
-Read ./docs and tell me: what happens to an in-flight claim when the approver leaves the company?
+# the ticket is the standard; the draft has to say what it requires
+ktkit:docs-review 3 docs/req-1234.md .claude/claude/specs/billing/retry/abc.md
+
+# abc.md is settled; the other docs have to keep up with it
+ktkit:docs-review 3 .claude/claude/specs/billing/retry/abc.md ./docs ./api-design
 ```
 
-The section you actually want there is `## What the documents do not say` — the `Absent` and
-`Conflicting` rows collected together. That is the part you cannot get by reading the documents
-yourself.
+You get one row per requirement in the standard:
 
+| Verdict | Means |
+| ------- | ----- |
+| `Covered` | The documents state it, matching the standard |
+| `Partial` | Stated but incomplete — a condition, case or value is absent |
+| `Missing` | No document states it. The row records the terms it searched, so you can see where it looked |
+| `Contradict` | A document states something the standard contradicts |
+| `Conflict` | Two documents disagree with each other — both cited, no winner picked silently |
+| `Stale` | Superseded: an old field name, a removed flow, a changed value |
+| `Undecided` | The standard itself is ambiguous, or an external fact could not be verified |
+
+`Conflict` is found by a separate sweep over every value the documents assert, because two documents
+that disagree rarely land under the same requirement — a per-requirement lookup would never have
+caught it.
+
+Mode A is the only mode that can edit:
+
+```text
+ktkit:docs-review 3 docs/req-1234.md ./docs --fix
+```
+
+`--fix` edits **the documents**, never the standard, and only after the review has finished. It
+applies `Missing`, `Partial` and `Stale` rows the standard states in full, as minimal in-place edits
+each traced to a requirement ID. Every edit is reviewed before it is written, and the edited sections
+are re-checked by a different role than the one that wrote them. Two things it will not do quietly:
+it never invents a value the standard does not state, and for documentation of a running system it
+only *proposes* a fix where a document contradicts the standard — that document may be the one
+describing what the system actually does. Those land in `## Proposed, not applied`.
+
+---
+
+### Mode B — ask a question of a document set
+
+```text
+Read ./docs and tell me: what happens to an in-flight retry when the provider returns 409?
+```
+
+The question is decomposed into sub-questions **before** the documents are opened — a checklist built
+from the documents can only find what the documents already thought of. Each answer is marked
+`Stated` / `Inferred` / `Conflicting` / `Absent`.
+
+The section to read is `## What the documents do not say`: the `Absent` and `Conflicting` rows
+together. That is the part you cannot get by reading the documents yourself.
+
+---
+
+### Flags
+
+| Flag | Effect |
+| ---- | ------ |
+| `<N>` (bare integer) | Same as `--rounds N` |
+| `--rounds N` | Ceiling on review rounds. Convergence can end it earlier; the ceiling never forces an extra round |
+| `--max-questions N` | At most N rows may reach you as questions. Default 3 |
+| `--out <path>` | Where the report goes. Default `docs-review.md` |
+| `--fix` | Mode A only: apply the fixable rows |
+| `--silent` | Print the report path and nothing else |
+| `--team off` | Run without the agent team. Emergency fallback; the report says it ran degraded |
+
+A ceiling reached with findings still outstanding is not a clean pass: the report's first line says
+`BUDGET-CAPPED` and lists what was left unmerged.
+
+---
+
+### What actually happens when you run it
+
+Not one long read — a short pipeline of agents, each with its own context:
+
+1. **Parses and echoes** what it understood in one line, so a mistyped path or an unrecognised flag
+   surfaces before any work starts.
+2. **Records each document's recent commits** to `docs-history.md`. The reviewer agents have no shell,
+   so this file is how the audit can tell that a paragraph has not been touched in two years.
+3. **Inventories what is to be checked** — requirements from the standard in Mode A, the file's own
+   statements in Mode C — before opening anything else. In Mode C this is also where your open
+   questions and conclusions are picked out as separate kinds.
+4. **Reads in parallel.** In Mode A one agent per slice of the checklist, searching the documents'
+   own vocabulary rather than the standard's — "second approver" never matches "dual sign-off". In
+   Mode C the verifying agent gets your claims and the repository but **not your file**, so a claim
+   cannot be confirmed by the argument you made for it.
+5. **Reviews the review.** Several roles look for different things at once, then one more opens the
+   cited files and decides which findings survive. Only survivors are merged; refuted findings stay
+   in the report with the evidence that killed them.
+6. **Lints the report** with a script rather than a re-read. A report claiming the loop converged
+   while its own log still shows changes fails that check.
+7. **Writes the report and tells you almost nothing** — counts, which round converged, how many
+   documents went unread, how many questions are waiting.
+
+Working files land beside the report so you can delete the lot in one gesture:
+
+```text
+docs-review.md          the report
+checklist.md            Mode A — the requirements it derived, and the ID registry
+claims.md               Mode C — your statements, classified, and the ID registry
+docs-history.md         recent commits per document
+shard-1.md, shard-2.md  what each reading agent found, before merging
+```
+
+The findings are not repeated in the conversation on purpose: a verdict restated in prose loses its
+citation, and that is exactly where a `Partial` becomes "the docs are basically fine".
 ## Using `playwright-notion`
 
 Install the script deps once, then it drives the browser for you:
@@ -335,7 +369,8 @@ skills/testcase/
   references/review-mode.md       — auditing an existing test case list
   scripts/summarize.py            — count, lint, export CSV (stdlib only)
 skills/docs-review/
-  SKILL.md                        — arguments, orchestration, the review wave, rules
+  SKILL.md                        — mode selection, arguments, orchestration, rules
+  references/critique-mode.md     — Mode C: one file, no standard
   references/report-schema.md     — every heading, column, ID format and lint check id
   references/review-team.md       — dispatch contract + the eight role prompts
   references/self-clarify.md      — the five-tier ladder for unknowns
@@ -356,6 +391,9 @@ agents/                           — the eight docs-review roles, registered by
   docs-review-failure.md            attacks the audit itself
   docs-review-adjudicator.md        upholds or refutes each finding
   docs-review-fix-safety.md         gates document edits before they are applied
+  docs-review-claims.md             Mode C: inventories a file's own statements
+  docs-review-verify.md             Mode C: settles them against the repository
+  docs-review-implication.md        Mode C: what follows, and what contradicts
 skills/playwright-notion/
   SKILL.md                        — workflow, the two dead ends, verification
   scripts/start-browser.sh        — launch Brave/Chrome/Edge with CDP on the real profile

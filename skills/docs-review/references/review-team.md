@@ -71,6 +71,9 @@ a producer before the wave starts. The report handed to reviewers is always the 
 | `failure` | stripped report, `## Source inventory`, `## Round log`, T4 candidate list, **the spec** | — |
 | `adjudicator` | the finding lists, document paths | **the report** — reading it anchors it to what the four roles just attacked |
 | `fix-safety` | proposed edits, `pending.diff`, `fix-mode.md`, spec | — |
+| `claims` (Mode C) | the document only | the repository — forming a verdict now would leak into how the row is written |
+| `verify` (Mode C) | `claims.md`, the repository root | **the document** — a claim handed over with the author's argument for it gets confirmed by that argument instead of by the files |
+| `implication` (Mode C) | the document, `claims.md` | — |
 
 ## 3. The requirement reviewer never sees the report
 
@@ -385,6 +388,10 @@ fix instead of rewriting all eight.
 | A user-facing question that tier 1 could have answered | `failure` |
 | Convergence claimed while the round log still shows material | `failure` |
 | An applied fix that invents a value | `fix-safety` |
+| A claim about the code that is not true | `verify` (Mode C) |
+| An open question the repository already answers | `verify` (Mode C) |
+| A consequence the document committed to and never stated | `implication` (Mode C) |
+| Two statements in one document that cannot both hold | `implication` (Mode C) |
 
 ## 8. Roles, models, tools
 
@@ -398,6 +405,9 @@ fix instead of rewriting all eight.
 | failure | `ktkit:docs-review-failure` | `Read, Grep, Glob` | inherit |
 | adjudicator | `ktkit:docs-review-adjudicator` | `Read, Grep, Glob` | inherit |
 | fix-safety | `ktkit:docs-review-fix-safety` | `Read, Grep, Glob` | inherit |
+| claims (Mode C) | `ktkit:docs-review-claims` | `Read, Write, Grep, Glob` | inherit |
+| verify (Mode C) | `ktkit:docs-review-verify` | `Read, Grep, Glob` | sonnet |
+| implication (Mode C) | `ktkit:docs-review-implication` | `Read, Grep, Glob` | inherit |
 
 No role has `Bash`, `Edit`, `WebFetch`, MCP tools or `Skill`. Granting `Bash` **removes** `Grep` and
 `Glob` from an agent in this harness, which would silently blind the roles that live by search — so

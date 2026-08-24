@@ -26,7 +26,8 @@ Read each one **when the workflow tells you to** — not upfront.
 | File | Read when |
 | ---- | --------- |
 | `references/report-schema.md` | Before writing anything into the report. It owns every heading, column, field label and ID rule the lint checks. |
-| `references/review-team.md` | At step 2. The dispatch contract and the eight role prompts. |
+| `references/critique-mode.md` | Mode C — one document and no standard. It replaces steps 2–4 below; steps 1, 5 and 6 stay as written. |
+| `references/review-team.md` | At step 2. The dispatch contract and the role prompts. |
 | `references/self-clarify.md` | The moment anything is unknown — a term you cannot find, two documents disagreeing, an ambiguous sentence. It decides whether you search, challenge, look it up, assume, or ask. |
 | `references/dimensions.md` | Passed to the checklist builder and the requirement reviewer. You do not need to read it yourself. |
 | `references/large-sets.md` | The measurement in step 1 says the set is large. Adds the index pass and the conflict sweep. |
@@ -70,10 +71,19 @@ formats are in `report-schema.md`.
 
 | Input | Mode | What you produce |
 | ----- | ---- | ---------------- |
+| **One document, nothing to measure it against** | **C — Critique** | The document's own claims, verified against the repository; its open questions answered where the repo answers them; its contradictions, unsupported conclusions, and the consequences it left unstated. Read `references/critique-mode.md` and follow it. |
 | A spec **and** documents | **A — Gap analysis** | Traceability table: each requirement → where the docs cover it → verdict |
 | Documents and a question, no spec | **B — Investigation** | Sourced findings report. Read `references/investigation-mode.md`, then return here at step 4. |
-| Documents, no spec and no question | Ask what the audit is for. Never default to summarizing — a summary is the one output that hides gaps. |
+| Several documents, no spec and no question | Ask which is the standard, or what the question is. Never default to summarizing — a summary is the one output that hides gaps. |
 | A spec, no documents named | Search the workspace for candidate documents and list them for confirmation. Do not audit an empty set. |
+
+**One path and no question means Mode C.** Do not ask what to compare it against; the standards are
+the repository, the document's own internal consistency, and whether its conclusions follow — all
+four are in `critique-mode.md` §1. Asking here is the failure that makes the mode useless, because
+the answer is "there is nothing else, that is why I gave you this file".
+
+In Mode C, `N` counts **self-review rounds**: round 1 reviews the document, round 2 reviews round 1's
+output, and so on. Same ceiling semantics, different subject.
 
 ---
 

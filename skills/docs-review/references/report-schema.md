@@ -28,6 +28,11 @@ is a privilege held by exactly one writer per ID type.
 | `ASM ID` | `ASM-<3 digits>` | `^ASM-\d{3}$` | **lead**, when recording a T3.5 assumption | consume only |
 | `D ID` | `D<1–2 digits>` | `^D\d{1,2}$` | **lead**, when opening a decision gate | consume only |
 | `Q ID` (Mode B) | `Q-<3 digits>` | `^Q-\d{3}$` | **lead**, at sub-question decomposition | consume only |
+| `CLM ID` (Mode C) | `CLM-<3 digits>` | `^CLM-\d{3}$` | **claims agent**, only | consume only |
+
+`CLM ID` follows the same rule as `Req ID` and for the same reason: `claims.md` is the registry, one
+file with one writer, so the agents that verify and challenge in parallel cannot mint colliding ids.
+A `CLM ID` in the report that is absent from `claims.md` fails `I3 unregistered-id`.
 
 ### 1.1 The checklist builder owns `Req ID`
 
@@ -119,6 +124,35 @@ marked `searched` cannot be reported as a clean pass.
 ```markdown
 | Q ID | Sub-question | Answer | Confidence | Evidence | Quote |
 ```
+
+### `## Claims` (Mode C only)
+
+```markdown
+| CLM ID | Statement | Kind | Verdict | Evidence | Quote | Note |
+```
+
+* `Statement` — the author's own wording, quoted, not paraphrased. A paraphrase is where a claim
+  becomes the claim the reviewer expected, and every verdict after that argues with something the
+  author never wrote.
+* `Kind` — one of `fact`, `assertion`, `question`, `conclusion`.
+* `Verdict` — one of `Verified` `Refuted` `Unverifiable` `Contradict` `Unsupported` `Answerable`
+  `Open` `Implication`.
+* `Evidence` + `Quote` — mandatory for every verdict except `Unverifiable` and `Open`, which instead
+  record in `Note` every search that was run: terms, files, git commands.
+* `Note` — for `Answerable`, **the answer itself** with its citation. For `Contradict`, the other
+  statement's `CLM ID`. For `Refuted`, nothing extra: the quote already carries what is actually
+  there.
+
+### `## Knock-on and widening` (Mode C only)
+
+```markdown
+| CLM ID | Kind | What follows, or what the class is missing | Evidence | Severity |
+```
+
+`Kind` is `knock-on` or `widening`. `Severity` is `material` when it would change a decision the
+document makes, `nit` otherwise. Every row names the `CLM ID` it derives from — a consequence that
+traces to no statement is the reviewer's own opinion, and belongs to the author's judgement, not the
+report's table.
 
 ### `## Review team`
 

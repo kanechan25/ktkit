@@ -16,7 +16,10 @@ from collections import Counter
 
 VERDICTS_A = {"Covered", "Partial", "Missing", "Contradict", "Conflict", "Stale", "Undecided"}
 VERDICTS_B = {"Stated", "Inferred", "Conflicting", "Absent"}
-NO_EVIDENCE = {"Missing", "Undecided", "Absent"}
+VERDICTS_C = {"Verified", "Refuted", "Unverifiable", "Contradict", "Unsupported",
+              "Answerable", "Open", "Implication"}
+NO_EVIDENCE = {"Missing", "Undecided", "Absent", "Unverifiable", "Open"}
+KINDS_C = {"fact", "assertion", "question", "conclusion"}
 TIERS = {"T1", "T2", "T3", "T3.5", "T4", "-"}
 READ_VALUES = {"full", "searched", "not-accessed"}
 
@@ -25,12 +28,16 @@ ID_RE = {
     "Req ID": re.compile(r"^REQ-[A-Z0-9]{2,8}-\d{3}$"),
     "ASM ID": re.compile(r"^ASM-\d{3}$"),
     "Q ID": re.compile(r"^Q-\d{3}$"),
+    "CLM ID": re.compile(r"^CLM-\d{3}$"),
 }
 
 HEADERS = {
     "## Source inventory": ["Doc ID", "Path", "What it is", "Version", "Read"],
     "## Requirements": ["Req ID", "Requirement", "Tier", "Verdict", "Evidence", "Quote", "Note"],
     "## Findings": ["Q ID", "Sub-question", "Answer", "Confidence", "Evidence", "Quote"],
+    "## Claims": ["CLM ID", "Statement", "Kind", "Verdict", "Evidence", "Quote", "Note"],
+    "## Knock-on and widening": ["CLM ID", "Kind",
+                                 "What follows, or what the class is missing", "Evidence", "Severity"],
     "## Review team": ["Wave", "Role", "Agent", "Model", "Mode"],
     "## Round log": ["Round", "Reviewer", "Raised", "Upheld", "Refuted",
                      "New rows", "Verdict changes", "Citations rejected", "Nits"],
@@ -46,6 +53,8 @@ REQUIRED = {
     "a": ["## Source inventory", "## Requirements", "## Review team", "## Round log",
           "## Round findings", "## Self-resolved"],
     "b": ["## Source inventory", "## Findings", "## Review team", "## Round log",
+          "## Round findings", "## Self-resolved"],
+    "c": ["## Source inventory", "## Claims", "## Review team", "## Round log",
           "## Round findings", "## Self-resolved"],
 }
 
@@ -100,16 +109,17 @@ def as_int(v):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("report")
-    ap.add_argument("--mode", choices=["a", "b"], default="a")
+    ap.add_argument("--mode", choices=["a", "b", "c"], default="a")
     ap.add_argument("--max-questions", type=int, default=3)
     ap.add_argument("--rounds-cap", type=int, default=None)
-    ap.add_argument("--checklist", default=None)
+    ap.add_argument("--checklist", default=None,
+                    help="registry file: checklist.md in mode a, claims.md in mode c")
     args = ap.parse_args()
 
     text = open(args.report, encoding="utf-8").read()
     sections = split_sections(text)
     fails, warns = [], []
-    verdicts = VERDICTS_B if args.mode == "b" else VERDICTS_A
+    verdicts = {"a": VERDICTS_A, "b": VERDICTS_B, "c": VERDICTS_C}[args.mode]
 
     def fail(cid, msg):
         fails.append(f"{cid}: {msg}")
@@ -153,17 +163,19 @@ def main():
     # --- requirements / findings: I1, I2, I3, V1, V2, V3, R2 ------------------
     seen = Counter()
     counts = Counter()
-    key = "## Findings" if args.mode == "b" else "## Requirements"
-    id_col = "Q ID" if args.mode == "b" else "Req ID"
+    key = {"a": "## Requirements", "b": "## Findings", "c": "## Claims"}[args.mode]
+    id_col = {"a": "Req ID", "b": "Q ID", "c": "CLM ID"}[args.mode]
     registry = None
-    if args.mode == "a":
+    if args.mode in ("a", "c"):
+        default_name = "checklist.md" if args.mode == "a" else "claims.md"
+        pattern = r"REQ-[A-Z0-9]{2,8}-\d{3}" if args.mode == "a" else r"CLM-\d{3}"
         path = args.checklist
         if path is None:
             import os
-            cand = os.path.join(os.path.dirname(os.path.abspath(args.report)), "checklist.md")
+            cand = os.path.join(os.path.dirname(os.path.abspath(args.report)), default_name)
             path = cand if os.path.exists(cand) else None
         if path:
-            registry = set(re.findall(r"REQ-[A-Z0-9]{2,8}-\d{3}", open(path, encoding="utf-8").read()))
+            registry = set(re.findall(pattern, open(path, encoding="utf-8").read()))
 
     if key in sections:
         hdr, data = table(sections[key])
@@ -186,14 +198,18 @@ def main():
             counts[verdict] += 1
             if args.mode == "a" and row["Tier"] not in TIERS:
                 fail("V1 bad-verdict", f"{rid} has tier {row['Tier']!r}")
+            if args.mode == "c" and row["Kind"] not in KINDS_C:
+                fail("V1 bad-verdict", f"{rid} has kind {row['Kind']!r}")
             if verdict not in NO_EVIDENCE:
                 if not row["Evidence"] or not row["Quote"]:
                     fail("V2 missing-evidence", f"{rid} is {verdict} with no evidence or no quote")
                 for did in re.findall(r"DOC-\d{2}", row["Evidence"]):
                     if doc_read.get(did) == "not-accessed":
                         fail("R2 coverage-too-weak", f"{rid} cites {did}, declared not-accessed")
-            if verdict == "Missing" and not row.get("Note", "").strip(" -"):
-                fail("V3 missing-search-terms", f"{rid} is Missing without the search terms checked")
+            if verdict in ("Missing", "Unverifiable", "Open") and not row.get("Note", "").strip(" -"):
+                fail("V3 missing-search-terms", f"{rid} is {verdict} without the searches it ran")
+            if verdict == "Answerable" and not row.get("Note", "").strip(" -"):
+                fail("V3 missing-search-terms", f"{rid} is Answerable without the answer in Note")
     for rid, n in seen.items():
         if n > 1:
             fail("I1 duplicate-id", f"{rid} appears on {n} rows")
@@ -279,9 +295,15 @@ def main():
     if ratio < 0.7:
         warn("M1 escalation-heavy", f"self_resolve_ratio={ratio:.2f} — tiers 1–3 likely unexhausted")
     verdict_moves = sum(as_int(t.get("Verdict changes")) for t in totals)
-    if denom and ratio == 1.0 and assumptions == 0 and verdict_moves:
+    accounted = len(re.findall(r"^(?:REQ-[A-Z0-9]{2,8}|ASM|CLM|Q)-\d{3}\s*$",
+                               "\n".join(sections.get("## Round findings", [])), re.M))
+    if verdict_moves > accounted:
         warn("M2 zero-escalation-unstable",
-             "no questions and no assumptions, but the round log shows verdict changes")
+             f"{verdict_moves} verdict changes but only {accounted} accounted for in "
+             "## Round findings — a verdict that moved without a recorded reason is a decision "
+             "nobody can audit")
+    elif denom and ratio == 1.0 and assumptions == 0 and verdict_moves:
+        pass  # every move is explained in Round findings; self-review rounds are meant to move verdicts
 
     # --- output ---------------------------------------------------------------
     print(f"{sum(counts.values())} rows: " + ", ".join(f"{v}={c}" for v, c in counts.most_common()))
