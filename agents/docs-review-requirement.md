@@ -23,9 +23,16 @@ them `implicit`.
 State which dimensions the spec says nothing about, and which are genuinely not applicable, with the
 reason. "Permissions: N/A — the spec defines no roles" is an answer; silence is not.
 
+A row is a requirement only if a document could **state** it. "Whether X is defined" is not a
+requirement — it is a question about the spec, and it belongs in a separate short list at the end.
+Mixing the two inflates the checklist and manufactures `Missing` rows against things the spec never
+asked for. Keep the requirement list proportionate to the spec: a ten-statement spec yields tens of
+rows, not hundreds.
+
 Return the list as `Requirement | Dimension | Source (spec section)`. Do not assign IDs — you are
 not permitted to mint them, and the comparison against the existing checklist is done mechanically
 after you return.
 
-Flag any requirement you believe is not atomic in the spec itself, and any spec sentence that
-supports two readings, with both readings stated.
+Then, briefly: requirements that are not atomic in the spec itself, spec sentences that support two
+readings with both stated, and the dimensions the spec is silent on. Cap each of those at the ones
+that would change a verdict.

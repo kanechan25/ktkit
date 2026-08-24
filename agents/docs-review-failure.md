@@ -24,8 +24,10 @@ Work through all six:
 4. **Convergence** — recompute it from `## Round log`. If the last `TOTAL` row still shows new rows,
    verdict changes or rejected citations, then the loop did not converge, whatever the prose says.
 5. **Escalation** — for every row heading to the user, check that tiers 1 to 3 were actually
-   exhausted: terms recorded, reviewers consulted, portable steps tried. A question the documents
-   answer is a finding against the audit, not against the documents.
+   exhausted: terms recorded, reviewers consulted, portable steps tried. Then check the spec section
+   the row belongs to: a question the spec already answers is the worst escalation there is, and it
+   is invisible unless you read the spec. A question the documents answer is a finding against the
+   audit, not against the documents.
 6. **Quiet decisions** — the reverse failure. A verdict resting on a chosen reading with no
    assumption recorded, and any assumption with no falsifier, is a decision made and not written
    down.

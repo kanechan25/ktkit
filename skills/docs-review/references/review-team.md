@@ -68,7 +68,7 @@ a producer before the wave starts. The report handed to reviewers is always the 
 | `requirement` | spec, `dimensions.md` | **the report and `checklist.md`** — see §3 |
 | `evidence` | stripped report, document paths | **the spec** — so it cannot argue a verdict is right in principle instead of checking the quote |
 | `coverage` | stripped report, document paths, `docs-index.md`, `docs-history.md` | the spec, for the same reason |
-| `failure` | stripped report, `## Source inventory`, `## Round log`, T4 candidate list | — |
+| `failure` | stripped report, `## Source inventory`, `## Round log`, T4 candidate list, **the spec** | — |
 | `adjudicator` | the finding lists, document paths | **the report** — reading it anchors it to what the four roles just attacked |
 | `fix-safety` | proposed edits, `pending.diff`, `fix-mode.md`, spec | — |
 
@@ -202,10 +202,16 @@ them `implicit`.
 State which dimensions the spec says nothing about, and which are genuinely not applicable, with the
 reason. "Permissions: N/A — the spec defines no roles" is an answer; silence is not.
 
+A row is a requirement only if a document could state it. "Whether X is defined" is not a
+requirement — it is a question about the spec, and it belongs in a separate short list at the end.
+Mixing the two inflates the checklist and manufactures Missing rows against things the spec never
+asked for. Keep the list proportionate: a ten-statement spec yields tens of rows, not hundreds.
+
 Return the list as `Requirement | Dimension | Source (spec section)`. Do not assign IDs — you are
 not permitted to mint them, and the comparison against the existing checklist is done mechanically
-after you return. Flag any requirement you believe is not atomic in the spec itself, and any spec
-sentence that supports two readings, with both readings stated.
+after you return. Then, briefly: requirements that are not atomic in the spec itself, spec sentences
+supporting two readings with both stated, and the dimensions the spec is silent on — capped at the
+ones that would change a verdict.
 ```
 
 ### `evidence` — reviewer, tools `Read, Grep, Glob`
@@ -278,8 +284,10 @@ Work through all six:
 4. Convergence — recompute it from `## Round log`. If the last TOTAL row still shows new rows,
    verdict changes or rejected citations, then the loop did not converge, whatever the prose says.
 5. Escalation — for every row heading to the user, check that tiers 1 to 3 were actually exhausted:
-   terms recorded, reviewers consulted, portable steps tried. A question the documents answer is a
-   finding against the audit, not against the documents.
+   terms recorded, reviewers consulted, portable steps tried. Then check the spec section the row
+   belongs to: a question the spec already answers is the worst escalation there is, and it is
+   invisible unless you read the spec. A question the documents answer is a finding against the
+   audit, not against the documents.
 6. Quiet decisions — the reverse failure. A verdict that rests on a chosen reading with no
    assumption recorded, and any assumption with no falsifier, is a decision made and not written
    down.
