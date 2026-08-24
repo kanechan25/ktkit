@@ -59,15 +59,15 @@ Tôi không có Notion API token, Export bị disable. Tải các trang này v�
 # one-time: register this repo as a marketplace
 claude plugin marketplace add kanechan25/ktkit
 
-# then install
-claude plugin install ktkit@ktkit-marketplace
+# then install — plugin@marketplace, both named ktkit
+claude plugin install ktkit@ktkit
 ```
 
 Or via the interactive UI:
 
 ```text
 /plugin marketplace add kanechan25/ktkit
-/plugin install ktkit@ktkit-marketplace
+/plugin install ktkit@ktkit
 ```
 
 Installing as a plugin is what registers the eight `docs-review` agents. Verify them after install:

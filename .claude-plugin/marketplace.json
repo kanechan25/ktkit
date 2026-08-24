@@ -7,12 +7,16 @@
   "plugins": [
     {
       "name": "ktkit",
-      "description": "QA and docs skills for Claude Code. testcase generates manual test cases across positive, negative, boundary, validation, state, permission, error, data, UI, integration and regression scenarios, then reviews its own output for missed cases. docs-review audits documentation against a spec with a team of eight agents that run concurrently and challenge each other's findings — separate roles for deriving requirements, verifying every citation, attacking Missing verdicts, attacking the audit itself, adjudicating, and gating edits — plus a five-tier ladder that resolves unknowns from the repository before asking you, and a lint that recomputes convergence instead of trusting the report. playwright-notion downloads Notion pages to markdown through an already-logged-in browser when no API token or Export button is available.",
-      "version": "1.5.0",
       "source": "./",
-      "author": {
-        "name": "kanechan25"
-      }
+      "description": "Manual test-case generation, spec-versus-documentation auditing with a reviewer agent team, and Notion-to-markdown export through a logged-in browser.",
+      "category": "development",
+      "tags": [
+        "qa",
+        "testing",
+        "documentation",
+        "agents",
+        "notion"
+      ]
     }
   ]
 }
