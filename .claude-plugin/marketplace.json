@@ -1,17 +1,17 @@
 {
-  "name": "testcase-marketplace",
+  "name": "ktkit-marketplace",
   "description": "Marketplace for the testcase, docs-review and playwright-notion skills",
   "owner": {
-    "name": "xtieume"
+    "name": "kanechan25"
   },
   "plugins": [
     {
-      "name": "testcase",
+      "name": "ktkit",
       "description": "QA and docs skills for Claude Code: a test-case generator covering positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios; a docs-review skill auditing documentation against a spec; and a playwright-notion skill downloading Notion pages to markdown through an already-logged-in browser when no API token or Export button is available.",
       "version": "1.4.0",
       "source": "./",
       "author": {
-        "name": "xtieume"
+        "name": "kanechan25"
       }
     }
   ]

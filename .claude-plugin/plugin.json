@@ -1,12 +1,12 @@
 {
-  "name": "testcase",
+  "name": "ktkit",
   "description": "QA and docs skills for Claude Code: a test-case generator covering positive, negative, boundary, validation, state, permission, error, data, UI, integration, and regression scenarios; a docs-review skill auditing documentation against a spec; and a playwright-notion skill downloading Notion pages to markdown through an already-logged-in browser when no API token or Export button is available.",
   "version": "1.4.0",
   "author": {
-    "name": "xtieume"
+    "name": "kanechan25"
   },
-  "homepage": "https://github.com/xtieume/testcase",
-  "repository": "https://github.com/xtieume/testcase",
+  "homepage": "https://github.com/kanechan25/ktkit",
+  "repository": "https://github.com/kanechan25/ktkit",
   "license": "MIT",
   "keywords": [
     "skills",
