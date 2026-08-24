@@ -213,6 +213,19 @@ What you read in the report:
 | `Open` | Genuinely undecided, with the searches that establish that |
 | `Unverifiable` | Nothing could settle it, with everything that was tried |
 
+What the rows look like, from a real run:
+
+```markdown
+| CLM ID  | Statement | Kind | Verdict | Evidence | Quote | Note |
+| CLM-001 | "granting Bash to an agent removes Grep and Glob" | fact | Verified | harness-probe.md:41 | "probe-set-b declared Read, Grep, Glob, Bash and received Read, Bash" | - |
+| CLM-002 | "the plugin registers eight agents" | fact | Refuted | agents/:1 | "eleven files match agents/docs-review-*.md" | three roles were added after the note was written |
+| CLM-004 | "open question: does .claude/agents hot-load?" | question | Answerable | .claude/agents:1 | "Agent type 'probe-set-a' not found" | Yes, with a delay: the first spawn after writing fails, a later one in the same session succeeds. No restart needed |
+```
+
+`CLM-002` is the shape worth having: a sentence that was true when it was written and is not any
+more. `CLM-004` is the other one — you wrote down a question, and the answer was in the repository
+the whole time.
+
 **Your file is never edited.** The review lands beside it; what to change is your call, and a file
 full of your own reasoning is the last place for automated edits.
 
@@ -253,6 +266,20 @@ You get one row per requirement in the standard:
 that disagree rarely land under the same requirement — a per-requirement lookup would never have
 caught it.
 
+What the rows look like, from a real run:
+
+```markdown
+| Req ID      | Requirement | Tier | Verdict | Evidence | Quote | Note |
+| REQ-AMT-001 | Amount rejects values below 0 | - | Covered | docs/manual.md:42 | "values below zero are rejected" | - |
+| REQ-AMT-002 | Amount rejects values above 1,000,000 | T1 | Missing | | | searched "1,000,000", "upper limit", "上限" across docs/*.md |
+| REQ-AMT-003 | Rounding mode for partial units | T4 | Undecided | | | escalated as D1 |
+```
+
+A `Missing` row carries the terms it searched, so you can tell a real gap from a search that stopped
+too early — the two are indistinguishable otherwise, and only one of them is the documents' fault.
+The `Tier` column says how the row was settled: `T1` means the answer was found by searching, `T4`
+means it became a question for you.
+
 Mode A is the only mode that can edit:
 
 ```text
@@ -271,9 +298,16 @@ describing what the system actually does. Those land in `## Proposed, not applie
 
 ### Mode B — ask a question of a document set
 
+Two ways in — plain language, or the skill name with the question after the paths:
+
 ```text
 Read ./docs and tell me: what happens to an in-flight retry when the provider returns 409?
+
+ktkit:docs-review ./docs — what happens to an in-flight retry when the provider returns 409?
 ```
+
+What makes it Mode B is that there is a **question** and no standard. Drop the question and you are
+back in the case it will not guess at.
 
 The question is decomposed into sub-questions **before** the documents are opened — a checklist built
 from the documents can only find what the documents already thought of. Each answer is marked
@@ -295,9 +329,30 @@ together. That is the part you cannot get by reading the documents yourself.
 | `--fix` | Mode A only: apply the fixable rows |
 | `--silent` | Print the report path and nothing else |
 | `--team off` | Run without the agent team. Emergency fallback; the report says it ran degraded |
+| `--ask-only` | Diagnostic: skip the searching and surface every unknown as a question. Shows you what the ladder was absorbing. Never leave it on |
 
 A ceiling reached with findings still outstanding is not a clean pass: the report's first line says
 `BUDGET-CAPPED` and lists what was left unmerged.
+
+### If something looks wrong
+
+| Line 1 of the report says | What happened |
+| ------------------------- | ------------- |
+| `DEGRADED — ran without the agent team` | The agents are not registered. Install as a plugin (Option A) rather than copying the skill, and run `/reload-plugins` after installing or updating |
+| `BUDGET-CAPPED — stopped at round N of N` | The round ceiling was hit while findings were still moving. Re-run with a higher `<N>`, or read the outstanding list under that line |
+| `INCOMPLETE — review loop stopped after round N` | Something ended the run early. The unmerged findings are listed under it |
+
+Other things worth knowing:
+
+* **It asked you what to compare against.** You gave it several files with no standard and no
+  question. Name the standard first, or ask a question — see the table at the top.
+* **A lot of `Missing` rows.** Check their Note: if the search terms are all the standard's own
+  wording, the documents probably use different words and the rows are search failures rather than
+  gaps. That is a bug worth reporting.
+* **`## Needs user decision` is long.** It should be at most three rows, and each one has to prove
+  the repository could not answer it. More than that means the searching gave up early.
+* **The report claims it converged but the log disagrees.** The lint fails that case
+  (`C1 false-convergence`); if you see it, the lint was not run.
 
 ---
 
