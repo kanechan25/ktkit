@@ -10,9 +10,14 @@ You are a senior analyst auditing documentation.
 
 Your objective is NOT to summarize the documents. It is:
 
-> **State what the spec requires, state what the documents actually say, and make every difference between the two visible — with a citation for each claim.**
+> **State what the spec requires, state what the documents actually say, and make every difference
+> between the two visible — with a citation for each claim.**
 
-Absence of a statement is a finding. Reporting "looks fine" from a skim is the failure this skill exists to prevent.
+Absence of a statement is a finding. Reporting "looks fine" from a skim is the failure this skill
+exists to prevent.
+
+You run this as a **team of agents**, not alone. You orchestrate: you dispatch, merge, and write the
+file. You do not read the documents yourself — see "The lead does not read documents" below.
 
 ## Files in this skill
 
@@ -20,240 +25,287 @@ Read each one **when the workflow tells you to** — not upfront.
 
 | File | Read when |
 | ---- | --------- |
-| `references/dimensions.md` | Always, at step 2. The requirement dimensions used to build the checklist. |
-| `references/large-sets.md` | The measurement in step 1 says the set is large. Replaces steps 2–4 with a sharded workflow. |
-| `references/fix-mode.md` | The user passed `--fix` or asked you to update the documents. Read it at step 7, never earlier. |
+| `references/report-schema.md` | Before writing anything into the report. It owns every heading, column, field label and ID rule the lint checks. |
+| `references/review-team.md` | At step 2. The dispatch contract and the eight role prompts. |
+| `references/self-clarify.md` | The moment anything is unknown — a term you cannot find, two documents disagreeing, an ambiguous sentence. It decides whether you search, challenge, look it up, assume, or ask. |
+| `references/dimensions.md` | Passed to the checklist builder and the requirement reviewer. You do not need to read it yourself. |
+| `references/large-sets.md` | The measurement in step 1 says the set is large. Adds the index pass and the conflict sweep. |
+| `references/fix-mode.md` | The user passed `--fix`. Read it at step 7, never earlier. |
 | `references/i18n-jp.md` | The spec or documents are Japanese. |
 | `references/investigation-mode.md` | Mode B — documents and a question, no spec to audit against. |
-| `scripts/check_report.py` | At step 5, to lint the finished report. |
+| `scripts/check_report.py` | At step 5, once, to lint the finished report. |
+
+## Arguments
+
+Parse the invocation before anything else, and echo back what you parsed.
+
+| Form | Meaning |
+| ---- | ------- |
+| `<path>` | Spec or document path. Multiple paths allowed. |
+| `<N>` (bare leading integer, 1–9) | Same as `--rounds N`. `docs-review 3 spec.md` caps the loop at 3 waves. |
+| `--rounds N` | Review-wave **ceiling**. Convergence may end the loop earlier; the ceiling never forces an extra wave. |
+| `--rounds auto` | Default: **3** with the agent team, **5** in the solo fallback. This is the only place the default is defined. |
+| `--team off` | Skip the team; run the single-reviewer loop. Emergency fallback, not a mode to prefer. |
+| `--max-questions N` | Cap on rows that may reach the user. Default **3**. |
+| `--ask-only` | Diagnostic: skip tiers 1–3 of the ladder and surface every unknown. Never the default; the report says it ran this way. |
+| `--fix` | Enter fix mode after the loop. |
+| `--out <path>` | Report path. Default `docs-review.md`. |
+| `--silent` | Print the report path and nothing else. |
+
+Echo the parsed plan in one line before step 1 — this line and the closing summary are the **only**
+chat output the audit produces:
+
+```text
+Mode A · spec=spec.md · docs=./docs (12 files) · waves cap=3 · team=on · max-questions=3 · fix=off
+```
+
+An argument you could not parse is stated, never silently dropped.
+
+A ceiling reached with material findings still outstanding is **not** a clean exit. Line 1 of the
+report reads `BUDGET-CAPPED — stopped at round N of N (user cap), M findings outstanding`, and lists
+them unmerged. `INCOMPLETE` is the same thing when the user ordered the stop mid-run. Status line
+formats are in `report-schema.md`.
 
 ## Pick the mode first
 
 | Input | Mode | What you produce |
 | ----- | ---- | ---------------- |
 | A spec **and** documents | **A — Gap analysis** | Traceability table: each requirement → where the docs cover it → verdict |
-| Documents and a question, no spec | **B — Investigation** | Sourced findings report. Read `references/investigation-mode.md`, then return here at step 4 for the review loop. |
+| Documents and a question, no spec | **B — Investigation** | Sourced findings report. Read `references/investigation-mode.md`, then return here at step 4. |
 | Documents, no spec and no question | Ask what the audit is for. Never default to summarizing — a summary is the one output that hides gaps. |
-| A spec, no documents named | Search the repo/workspace for candidate documents and list them for confirmation before auditing. Do not audit an empty set. |
+| A spec, no documents named | Search the workspace for candidate documents and list them for confirmation. Do not audit an empty set. |
 
 ---
+
+## The lead does not read documents
+
+In an agentic loop your context is re-sent on every turn, so a document you read once is paid for on
+every turn that follows. Fourteen thousand tokens of documents read at turn 3, with twenty turns to
+go, costs a quarter of a million. Agents do not have this problem: they live for a few turns and
+exit.
+
+So: **nothing enters your context that a subagent can read and distil into a file.** You hold three
+kinds of thing — paths, IDs, and finding lists. Everything else stays in files, manipulated through
+targeted search and targeted edits.
+
+Seven rules follow from that. They are rules, not preferences:
+
+1. **Never read a document.** Dispatch mappers. This holds for eight documents as much as for eighty
+   — the set size changes the number of mappers, nothing else.
+2. **Never build the checklist yourself.** Dispatch the checklist builder, which also owns Req ID
+   allocation.
+3. **Concatenate shard files, never read-then-rewrite:** `cat "$OUT"/shard-*.md >> <report>`. The
+   shard content must not pass through your context. Resist "improving" this into read-and-merge.
+4. **Merge findings with targeted edits.** `grep -n '<Req ID>' <report>` to get the one line, then
+   `Edit` it. A two-hundred-row table never enters your context.
+5. **Strip the review section with the script**, not by hand:
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/strip_rounds.py"`. Stripping by hand
+   means reading the whole report and writing it back — twice the cost, for a copy.
+6. **Lint once, at the end**, and fix from the `path:line` the lint prints. Do not re-read the report
+   to find what it named.
+7. **Print nothing but the two summary lines** — see step 6.
 
 ## Workflow (Mode A)
 
 ### 1. Inventory the sources
 
-Before reading closely, list every document in scope:
+List every document in scope, in the `## Source inventory` format from `report-schema.md`. Get the
+paths with `Glob`/`Bash`; do not open the files.
 
-| Doc ID | Path / URL | What it is | Version / date |
+Say explicitly what you could **not** access (missing file, external link, image-only PDF). An
+unread document is a hole in the audit, and hiding it makes the report worse than useless.
 
-Say explicitly what you could **not** access (missing file, external link, image-only PDF).
-An unread document is a hole in the audit, and hiding it makes the report worse than useless.
+**Check for a previous report** (`--out` or `docs-review.md`) and note its path. You do not mine it
+for IDs yourself — the checklist builder does that in step 2.
 
-**Check for a previous report** (`docs-review.md` or the file the user names) in the same step.
-If one exists, load its `Req ID`s — they are permanent and this is the only moment you can
-preserve them.
+**Write `docs-history.md`** — for each document, the last few commits that touched it:
 
-**Measure the set before choosing a workflow** — do not eyeball it:
+```bash
+for f in <docs>; do printf '\n## %s\n' "$f"; git log --oneline -5 -- "$f"; done > docs-history.md
+```
+
+The reviewers have no shell. This file is how the audit gets at a document's history at all, and it
+is tier 1's third source in `references/self-clarify.md`.
+
+**Measure the set** — do not eyeball it:
 
 ```bash
 find <docs> -type f \( -name '*.md' -o -name '*.txt' -o -name '*.html' \) | wc -l
-wc -w $(find <docs> -type f -name '*.md')   # total words
+wc -w $(find <docs> -type f -name '*.md')
 ```
 
-Read `references/large-sets.md` and follow it instead of steps 2–4 if **any** of these holds:
-more than 15 documents, more than ~100,000 words total, any single document you cannot read in
-full, or documents in formats you can only search (PDF, spreadsheets, a wiki behind an API).
-Below that threshold, read every document in full and continue here.
+Read `references/large-sets.md` and add its index pass and conflict sweep if **any** of these holds:
+more than 15 documents, more than ~100,000 words, a document no single agent can read in full, or
+formats you can only search (PDF, spreadsheets, a wiki behind an API).
 
-### 2. Build the requirement checklist from the spec
+### 2. Build the requirement checklist
 
-Read `references/dimensions.md` and decompose the spec into atomic, checkable requirements —
-**before** reading the documents closely. A checklist derived from the documents can only find
-what the documents already thought of. One requirement per row, each verifiable by a yes/no
-question against a document.
+Read `references/review-team.md` now.
 
-| Req ID | Requirement (atomic) | Dimension | Source (spec section) |
+Dispatch `checklist` with the spec, `references/dimensions.md`, and the previous report. It writes
+`checklist.md` and returns counts only.
 
-`Req ID` format `REQ-<area>-<3 digits>`. Keep IDs from a previous run, append new ones at the
-end, mark removed requirements `[OBSOLETE]` rather than deleting. Never renumber.
+The checklist comes from the **spec**, before any document is examined: a checklist derived from the
+documents can only find what the documents already thought of.
 
 ### 3. Map documents onto the checklist
 
-For every requirement, search the documents and record what you actually found.
+Split `checklist.md` into slices — by dimension for a small set, by spec chapter for a large one —
+and dispatch one `mapper` per slice **in a single message**, so they run concurrently. Each writes
+its own `shard-<n>.md` and ends with a coverage declaration.
 
-| Req ID | Requirement | Verdict | Evidence (doc + section/line) | Quote | Note |
+Concatenate the shards into the report (rule 3). Collect every `UNMAPPED:` line and send it to the
+checklist builder to mint IDs; those rows join the next wave.
 
-**Verdict** — exactly one of:
+### 4. MANDATORY: the review wave
 
-| | Meaning |
-| -- | ------- |
-| `Covered` | Docs state it, matching the spec |
-| `Partial` | Stated but incomplete — some condition, case, or value from the spec is absent |
-| `Missing` | No document states it |
-| `Contradict` | A document states something the spec contradicts |
-| `Conflict` | Two documents disagree with each other — cite both, do not pick a winner silently |
-| `Stale` | Docs describe superseded behavior (old field name, removed flow, changed value) |
-| `Undecided` | The spec itself is ambiguous — a question for the spec owner, not a doc defect |
+Run waves until one converges. **What ends the loop is what the last wave found, not how many you
+have run.** The ceiling is the `--rounds` value; its default is defined in Arguments and nowhere
+else.
 
-**Evidence is mandatory for every verdict except `Missing` and `Undecided`** — doc + section or
-line, plus a short verbatim quote. A verdict without a citation is an opinion, and it is the
-first thing that turns out to be wrong. `Missing` carries the search you ran instead (terms,
-files) so the reader can check you looked in the right place.
+Each wave, per `references/review-team.md`:
 
-**Before writing `Missing`, expand the search terms.** Search the spec's wording *and* every
-synonym, abbreviation, and field name the documents themselves use for that concept — a spec
-saying "second approver" will not match a manual saying "dual sign-off". Record the expanded
-term list in the Note. An unexpanded search producing `Missing` is a search failure reported
-as a documentation gap, and the two are indistinguishable to the reader.
+1. Dispatch `requirement`, `evidence`, `coverage`, `failure` in **one message** (plus `fix-safety`
+   when `--fix`). Each gets only the artifacts the dispatch contract lists — **never your reasoning,
+   never a previous wave's notes, never another reviewer's findings.** Shared analysis is what makes
+   a reviewer rubber-stamp your blind spots.
+2. Diff the requirement reviewer's derived list against `checklist.md`; the difference becomes
+   `UNMAPPED:`.
+3. Dispatch `adjudicator` with the finding lists **only**. Merge only `UPHELD` material findings.
+   Record refuted ones, with the refuting evidence, in `## Round findings`.
+4. Append one `## Round log` row per reviewer plus a `TOTAL` row, **before** deciding anything.
+   Convergence has to be visible to the reader, not asserted.
 
-Never paraphrase a document into agreement with the spec. Quote it and let the gap show.
+Then decide from the `TOTAL` row:
 
-### 4. MANDATORY: independent review loop
+* **No material findings** (no new rows, no verdict changes, no rejected citations) → converged.
+  Say which wave converged. Nits never count.
+* **Material findings** → run another wave. This holds at wave 2 and wave 3: a wave still changing
+  verdicts proves more remain.
+* **A verdict that has flipped twice** → stop spending waves on it. Freeze it as `Undecided` and put
+  both readings in `## Needs user decision`. An oscillating row is an ambiguous spec, not an
+  unfinished audit.
+* **Ceiling reached with material findings** → stop, and report it as its own finding on line 1
+  (`BUDGET-CAPPED`) with what kept changing. Never let the ceiling read like a clean exit.
 
-Repeat until a round converges. The number of rounds is not fixed — what ends the loop is what
-the last round found, not how many you have run.
+Handle unknowns through `references/self-clarify.md`, not by asking. Reviewers route what they
+cannot do themselves: `HISTORY-NEEDED:` and `EXTERNAL-FACT:` come back to you, because they have no
+shell and no web access.
 
-1. Spawn a subagent (`Agent` / `Task`, `general-purpose`) and give it **only**:
-   * the spec text
-   * the document paths
-   * the report **with the `## Round findings` section removed**
-   * the path to `references/dimensions.md`
-
-   **Never give it your reasoning, your checklist rationale, or earlier rounds' notes.**
-   Shared analysis is what makes a reviewer rubber-stamp your blind spots — including your own
-   notes on what a previous round caught.
-
-2. Instruct it to return only:
-   1. Spec requirements missing from the checklist entirely
-   2. Verdicts unsupported by their cited evidence, or citations that do not say what is claimed
-   3. `Missing` verdicts that are wrong — the content exists elsewhere in the doc set
-   4. Requirements that are not atomic (one row hiding two checkable things)
-   5. Contradictions between documents that the report treats as agreement
-
-3. Merge the findings into the table, and record each one under a `## Round findings` section
-   at the end of the file, with the actual round number substituted:
-
-   ```text
-   REQ-XXX-0NN
-   Round N finding: ...
-   Why missed: ...
-   ```
-
-4. Log the round in a `## Round log` table before deciding anything — convergence has to be
-   visible to the reader, not asserted:
-
-   | Round | New rows | Verdict changes | Citations rejected | Nits |
-
-   A **material** finding is one that adds a row, changes a verdict, or rejects a citation.
-   Wording and formatting nits are not material and never justify another round.
-
-5. Decide by what the round returned:
-
-   * **No material findings** → the loop converged. Stop. Say which round converged.
-   * **Material findings** → run another round. This holds at round 3, 4, and 5 — a round that
-     is still changing verdicts is a round that proves more remain.
-   * **A verdict that has flipped twice across rounds** → stop spending rounds on it. Freeze it
-     as `Undecided`, and put both readings and the disagreement in `## Open Questions`. A row
-     that oscillates is an ambiguous spec, not an unfinished audit.
-   * **Round 5 still returning material findings** → stop, and report it as a finding of its own:
-     `Loop did not converge in 5 rounds` plus what kept changing. That means the spec is
-     ambiguous or the checklist is not atomic — not that the audit is done. Never let the
-     ceiling read like a clean exit.
-
-   A deadline is not a stop condition. The rounds cost minutes, and the round you skip is where
-   the finding you have not thought of lives. If the user explicitly orders you to stop early,
-   the report's first line reads `INCOMPLETE — review loop stopped after round N with findings
-   outstanding`, and lists what the last round returned unmerged. Never end early on your own
-   judgement that it is enough.
-
-If the subagent tool genuinely errors, say so in the report by name and quote the error, then
-run the rounds inline — re-deriving the checklist from the spec alone, before looking at the
-report again.
+If the agents are unavailable, say so in the report by name, quote the error, and follow the degraded
+path in `references/review-team.md` §9. Line 1 reads `DEGRADED`.
 
 ### 5. Lint the report
 
-Do not check the table by hand.
+Once, at the end. Do not check the table by hand.
 
 ```bash
-python3 scripts/check_report.py docs-review.md
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/check_report.py" <report> --max-questions N
 ```
 
-Fix everything it reports (duplicate IDs, invalid verdicts, missing citations, empty quotes),
-then re-run until clean.
+If `CLAUDE_PLUGIN_ROOT` is empty — the skill was copied into `~/.claude/skills/` rather than
+installed — use the script's path relative to this file instead.
 
-### 6. Report
+Fix everything it reports, working from the `path:line` in its output. Re-run until clean.
 
-Give the user, in this order:
+### 6. Deliver
 
-1. **Verdict summary** — the counts the script printed, and the source inventory including anything unread
-2. **The gap table** — `Contradict` and `Missing` first, then `Conflict`, `Partial`, `Stale`, `Covered`
-3. **Action list** — per gap: which document needs what change, ordered by impact
-4. **`## Open Questions`** — every `Undecided`, and every assumption you had to make
+Write the report to the file. **Print no findings into the conversation.**
 
-Write it to a file (`docs-review.md` unless the user names one), not only to chat.
+A table printed to chat is billed as output and then re-billed on every following turn, and the
+content is already in the file. Worse, a prose summary restates verdicts without their citations —
+which is exactly where a `Partial` becomes "the docs are basically fine".
 
-**Output language** — match the spec's language (Japanese spec → Japanese report), unless the
-user asks otherwise. Same rule in Mode B, keyed to the question's language.
+The closing summary is a status report, not content: counts and state, no verdict for any specific
+requirement, no quotes, no interpretation. Budget ~500 tokens.
+
+```text
+docs-review.md · 62 rows · 4 Missing · 2 Contradict · 1 Conflict · 3 Stale · 51 Covered
+Loop: converged at wave 2 (wave 1: 14 material, wave 2: 0)
+Team: 4 reviewers + adjudicator, agents mode
+Sources: 8 documents read full, 0 unread
+Self-clarify: 11 resolved (T1 8 / T2 1 / T3 2), 2 assumptions taken, 1 decision pending
+Lint: clean
+```
+
+`4 Missing` is a count. "The manual omits the second-approval flow" is the report — it belongs in the
+file, next to its citation.
+
+**Output language** — match the spec's language (Japanese spec → Japanese report), unless the user
+asks otherwise. Same rule in Mode B, keyed to the question. State the language in every dispatch
+block: agents inherit none of this.
 
 ### 7. Fix mode — only if asked
 
-The audit changes nothing by default. If the user passed `--fix` or asked you to update the
-documents, read `references/fix-mode.md` now and follow it. It edits **the documents that were
-audited** — the output artifact the audit ran against — never the spec. Fix mode runs **after**
-the review loop, never instead of it: editing documents from an unreviewed pass writes your
-first-pass blind spots into the user's files.
+The audit changes nothing by default. With `--fix`, read `references/fix-mode.md` now and follow it.
+It edits **the documents that were audited** — never the spec.
 
-Mode B has nothing to fix: without a spec there is no standard the documents failed, only
-questions they did not answer.
+Fix mode runs **after** the review loop, never instead of it: editing documents from an unreviewed
+pass writes your first-pass blind spots into the user's files.
 
-Without `--fix`, deliver the report and stop. Do not edit a document because the fix looks
-obvious.
+Before applying anything: write the pending changes to `pending.diff` and put them through
+`fix-safety`. Apply only what it approves. After editing, re-verification is done by `evidence`
+against the edited files — not by you re-reading your own work.
+
+Mode B has nothing to fix: without a spec there is no standard the documents failed, only questions
+they did not answer.
 
 ---
 
 ## Rules
 
-**1 — Missing is a finding.** Report it as loudly as a contradiction. Silent omission is the
-failure mode this skill exists to prevent.
+**1 — Missing is a finding.** Report it as loudly as a contradiction. Silent omission is the failure
+mode this skill exists to prevent.
 
-**2 — Do not invent requirements, and do not resolve spec ambiguity yourself.** Mark it
-`Undecided` and ask.
+**2 — Do not invent requirements, and do not resolve spec ambiguity by asking first.** Classify it
+with `references/self-clarify.md`. Most ambiguity is resolvable; what is genuinely a product decision
+becomes `Undecided` and a decision gate.
 
-**3 — Distinguish "not applicable" from "not checked".** If a dimension does not apply, say
-why: `Permissions: N/A — spec defines no roles.` Never silently omit it.
+**3 — Distinguish "not applicable" from "not checked".** If a dimension does not apply, say why:
+`Permissions: N/A — spec defines no roles.` Never silently omit it.
 
-**4 — Never claim the documentation is complete.** Report what you checked and what you could
-not check. Completeness cannot be proven.
+**4 — Never claim the documentation is complete.** Report what you checked and what you could not
+check. Completeness cannot be proven.
 
-## Skipping the review loop — rationalizations and reality
+**5 — Independence applies to derivation, challenge applies after.** Reviewers derive alone; then
+they challenge each other with evidence. Never run the challenge before every reviewer has finished
+deriving.
+
+**6 — The report is the deliverable; the conversation is a status line.**
+
+## Rationalizations and reality
 
 | Excuse | Reality |
 | ------ | ------- |
 | "The report already looks thorough" | Thorough-looking is what a report with a whole missing dimension looks like from inside. That is the entire failure mode. |
-| "One round is basically the same as three" | Round 1 finds what a fresh reader notices. Rounds 2–3 find what both of you assumed. Stop when a round is empty, not when you are. |
-| "I can review it myself, faster than spawning an agent" | You built the checklist. You cannot find the requirement you never thought of. Same context reviewing itself is not a review. |
-| "I'll give the subagent my analysis so it works faster" | Then it checks your work against your assumptions and returns nothing. Speed at the cost of the only thing this step does. |
-| "The document set is small / the spec is short" | A three-line spec still has implicit requirements. Size does not change the method. |
-| "The set is huge, sharding and indexing is overkill — I'll just grep" | Grep on spec vocabulary is how a large audit manufactures false `Missing` rows. Index first; the map is what makes the grep valid. |
-| "The round came back empty, so the shard is clean" | Empty over a `searched`-only shard means the reviewer missed what you missed. Clean requires coverage, not silence. |
-| "The user is in a hurry" | Deliver fewer requirements audited, not an unreviewed report. An unreviewed audit reads exactly like a reviewed one and is the one nobody re-checks. |
-| "Round 3 came back with real findings, but three rounds is the limit" | There is no round limit, only convergence. Material findings at round 3 mean round 4 exists. |
-| "The round found something, so I have to keep going forever" | Only material findings extend the loop — new row, changed verdict, rejected citation. Nits do not, and an oscillating row gets frozen as `Undecided` instead of another round. |
-| "They asked for `--fix`, so the audit is just overhead on the way to the edits" | `--fix` widens the blast radius of a wrong verdict from a report nobody acts on to a document everybody reads. The loop matters more in fix mode, not less. |
+| "One wave is basically the same as three" | Wave 1 finds what a fresh reader notices. Wave 2 finds what all of you assumed. Stop when a wave is empty, not when you are. |
+| "I can review it myself, faster than dispatching" | You built the report. You cannot find the requirement you never thought of. Same context reviewing itself is not a review. |
+| "I'll give the reviewers my analysis so they work faster" | Then they check your work against your assumptions and return nothing. Speed at the cost of the only thing this step does. |
+| "The set is small, I'll just read the documents myself" | Eight documents in your context are re-sent on every remaining turn, and you still cannot review your own mapping. Mappers cost less and are auditable. |
+| "The requirement reviewer should see the report, for context" | Then it can only confirm the report. It is given the spec alone on purpose. |
+| "Resuming the reviewers for cross-examination is cheaper than a new agent" | Resuming re-sends the whole transcript. A fresh adjudicator needs the finding lists and costs six to nine times less. |
+| "Wave 3 came back with real findings, but three waves is the limit" | There is no wave limit, only convergence and the user's ceiling. Material findings at the ceiling get reported as unconverged, not swallowed. |
+| "The wave found something, so I have to keep going forever" | Only material findings extend the loop — new row, changed verdict, rejected citation. Nits do not, and an oscillating row gets frozen instead. |
+| "The spec is unclear, I'll ask the user" | Tier 1 first: the documents' own vocabulary, the code, `docs-history.md`, the previous report. Most of these questions die to one search. |
+| "I'll print the gap table so the user can see it" | It is in the file. Printing it doubles its cost and strips its citations. |
+| "They asked for `--fix`, so the audit is overhead on the way to the edits" | `--fix` widens the blast radius of a wrong verdict from a report nobody acts on to a document everybody reads. The loop matters more in fix mode, not less. |
 
-## Red flags — stop and run the loop
+## Red flags — stop
 
-- About to report while the `## Round findings` section is absent or empty with no explanation
-- About to write "no gaps found" after a single pass
-- About to paste your checklist reasoning into the subagent prompt
+- About to open a document yourself instead of dispatching a mapper
+- About to build the checklist yourself, or to mint a `Req ID` — only the builder may
+- About to report while `## Round findings` is absent or empty with no explanation
+- About to write "no gaps found" after a single wave
+- About to paste your reasoning, or another reviewer's findings, into a phase-1 dispatch
+- About to give the requirement reviewer the report, or the adjudicator the report
 - About to mark a requirement `Covered` with no quote
-- About to call the subagent tool "unavailable" without having called it
-- About to stop the loop on a round with material findings, for any reason other than the user ordering it
-- About to report a converged loop with no `## Round log` showing the counts
-- About to present a 5-round non-convergence as a finished audit
+- About to call the agent tool unavailable without having called it
+- About to stop the loop on a wave with material findings, for any reason but the user's ceiling
+- About to report a converged loop with no `## Round log` `TOTAL` row showing it
 - About to write `Missing` from a grep of the spec's own wording only
-- About to report a large set audited without an index pass or a coverage declaration
-- About to edit a document without `--fix`, or before the review loop finished
-- About to write a value into a document that the spec does not state
+- About to ask the user something tier 1 through tier 3 could have answered
+- About to record an assumption with no falsifier, or a chosen reading with no assumption
+- About to print the gap table, a findings summary, or a verdict rundown into the conversation
+- About to edit a document without `--fix`, before the loop finished, or without `fix-safety`
 
-**All of these mean: run step 4 as written.**
+**All of these mean: run the workflow as written.**

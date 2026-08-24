@@ -4,3 +4,6 @@
 # playwright-notion skill: local deps + downloaded docs
 skills/playwright-notion/scripts/node_modules/
 skills/playwright-notion/scripts/package-lock.json
+
+# local design notes and probe agents (Vietnamese working docs)
+.claude/
