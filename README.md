@@ -90,6 +90,57 @@ cp -R skills/playwright-notion ~/.claude/skills/playwright-notion
 
 Copying skips `agents/`, so `docs-review` falls back to a single generic reviewer. It still runs and still says so — the report's first line reads `DEGRADED` and `## Review team` marks the rows — but the roles no longer see the documents independently, and the generic agent has no structured search tools. Prefer Option A for `docs-review`.
 
+## Update
+
+Two commands, then a reload. `add` and `install` are one-time; neither pulls new code.
+
+```bash
+claude plugin marketplace update ktkit && claude plugin update ktkit@ktkit
+```
+
+```text
+/reload-plugins
+```
+
+The CLI ends with `Restart to apply changes` because your running session still holds the previous
+version's agents and skills. `/reload-plugins` applies them in place; a new session works too.
+
+What each command does, since the difference matters when one of them looks like a no-op:
+
+| Command | Effect |
+| ------- | ------ |
+| `claude plugin marketplace update ktkit` | Refreshes the local copy of this repository, so the catalog and the plugin's declared version are current |
+| `claude plugin update ktkit@ktkit` | Installs the new version into `~/.claude/plugins/cache/ktkit/ktkit/<version>/`, if the version changed |
+| `/reload-plugins` | Swaps the running session onto it |
+
+Check what you ended up on:
+
+```bash
+ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed version
+```
+
+Old versions are kept beside the new one, and the one in use is recorded in
+`~/.claude/plugins/installed_plugins.json`.
+
+### Two things that will confuse you once
+
+**Nothing happened, and no error.** The version is the update signal: if `version` in
+`.claude-plugin/plugin.json` did not change, you keep the copy you have no matter how much code was
+pushed. Compare the version in the refreshed marketplace against the one installed before assuming
+the update failed.
+
+**`EPERM: operation not permitted, rename … -> ….bak`.** `marketplace update` deletes and re-clones
+rather than pulling, and the rename it does first fails if the process cannot write in
+`~/.claude/plugins/`. Running it from a shell inside a sandboxed Claude Code session is the usual
+cause — run it in your own terminal instead. The error suggests deleting the directory by hand; you
+almost never need to.
+
+### If you maintain a fork
+
+Bump `version` in `.claude-plugin/plugin.json` on every release. That is the only place it lives —
+the marketplace entry deliberately does not declare one, so there is a single field to change and no
+second copy to forget.
+
 ## Using `testcase`
 
 Ask in natural language, or invoke it as `/ktkit:testcase`. It triggers on any request to write,
