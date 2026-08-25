@@ -1,5 +1,7 @@
 # docs-review — critique of abc.md
 
+<!-- fixture: two material claims have no ### subsection; R3 must fire twice -->
+
 ## Source inventory
 
 | Doc ID | Path | What it is | Version | Read |
@@ -33,25 +35,6 @@
 `harness-probe.md:41` — "probe-set-b declared Read, Grep, Glob, Bash and received Read, Bash"
 
 The claim holds, and the note stops there. Nothing in it says who runs git once no role can.
-
-### CLM-002
-**Verdict** Refuted · **Kind** fact · **Severity** material
-
-> "the plugin registers eight agents"
-
-`agents/:1` — eleven files match `agents/docs-review-*.md`
-
-Three Mode C roles were added after the note was written. Say eleven, or date the count.
-
-### CLM-003
-**Verdict** Unsupported · **Kind** assertion · **Severity** material
-
-> abc.md:24: "800 words keeps the spawn cheap"
-
-The note offers no measurement, and the figure 800 appears nowhere else in it.
-
-Prompt length is also only one of three things charged per spawn; the tool schema and the skill list
-were measured elsewhere and are omitted here.
 
 ### CLM-004
 **Verdict** Answerable · **Kind** question · **Severity** material

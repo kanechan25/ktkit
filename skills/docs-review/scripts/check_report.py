@@ -54,9 +54,13 @@ REQUIRED = {
           "## Round findings", "## Self-resolved"],
     "b": ["## Source inventory", "## Findings", "## Review team", "## Round log",
           "## Round findings", "## Self-resolved"],
-    "c": ["## Source inventory", "## Claims", "## Review team", "## Round log",
-          "## Round findings", "## Self-resolved"],
+    "c": ["## Source inventory", "## Claims", "## Resolutions", "## Review team",
+          "## Round log", "## Round findings", "## Self-resolved"],
 }
+
+# Mode C verdicts that oblige a `### <CLM ID>` subsection in `## Resolutions`.
+# `Verified` is excluded on purpose: confirmations would double the section.
+MATERIAL_VERDICTS_C = ("Refuted", "Answerable", "Contradict", "Unsupported")
 
 GATE_LABELS = [
     "**Searched:**",
@@ -163,6 +167,7 @@ def main():
     # --- requirements / findings: I1, I2, I3, V1, V2, V3, R2 ------------------
     seen = Counter()
     counts = Counter()
+    material_ids = []
     key = {"a": "## Requirements", "b": "## Findings", "c": "## Claims"}[args.mode]
     id_col = {"a": "Req ID", "b": "Q ID", "c": "CLM ID"}[args.mode]
     registry = None
@@ -210,9 +215,22 @@ def main():
                 fail("V3 missing-search-terms", f"{rid} is {verdict} without the searches it ran")
             if verdict == "Answerable" and not row.get("Note", "").strip(" -"):
                 fail("V3 missing-search-terms", f"{rid} is Answerable without the answer in Note")
+            if args.mode == "c" and verdict in MATERIAL_VERDICTS_C:
+                material_ids.append(rid)
     for rid, n in seen.items():
         if n > 1:
             fail("I1 duplicate-id", f"{rid} appears on {n} rows")
+
+    # --- R3 resolutions cover every material claim ---------------------------
+    if args.mode == "c":
+        body = "\n".join(sections.get("## Resolutions", []))
+        resolved = set(re.findall(r"^###\s+(CLM-\d{3})\s*$", body, re.M))
+        for cells in table(sections.get("## Knock-on and widening", []))[1]:
+            if len(cells) >= 5 and cells[4] == "material":
+                material_ids.append(cells[0])
+        for rid in dict.fromkeys(material_ids):
+            if rid not in resolved:
+                fail("R3 resolution-missing", f"{rid} is material with no '### {rid}' in ## Resolutions")
 
     # --- round log: C1, C2, C3 -----------------------------------------------
     totals = []

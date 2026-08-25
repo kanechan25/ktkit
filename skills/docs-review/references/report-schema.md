@@ -154,6 +154,32 @@ document makes, `nit` otherwise. Every row names the `CLM ID` it derives from �
 traces to no statement is the reviewer's own opinion, and belongs to the author's judgement, not the
 report's table.
 
+### `## Resolutions` (Mode C only)
+
+One subsection per **material** row of `## Claims` — that is, every `Refuted`, `Answerable`,
+`Contradict` and `Unsupported`, plus every `material` row of `## Knock-on and widening`. Never for
+`Verified`: eighty confirmations turn the section into a second copy of the table.
+
+The heading is the bare ID and nothing else:
+
+```markdown
+### CLM-014
+**Verdict** Refuted · **Kind** fact · **Severity** material
+
+> §3.2: "retryLimit defaults to 5"
+
+`src/config/retry.ts:22` — `const DEFAULT_RETRY_LIMIT = 3`
+
+Change §3.2 to 3, or change the code if 5 was the intent.
+```
+
+The bare ID matters: it is what makes the anchor `#clm-014` stable. A heading that also carries a
+description produces an anchor that breaks the next time anyone edits the wording, and the links
+written into the reviewed document point at it.
+
+`## Claims` stays exactly as it is — the full table, machine-readable, linted. This section is the
+human layer above it, and the anchor target for `## Review status`.
+
 ### `## Review team`
 
 ```markdown
@@ -289,6 +315,7 @@ It adds none of its own, and it never renames a section to make a check pass.
 | `M1 escalation-heavy` | `self_resolve_ratio < 0.7` | warn |
 | `M2 zero-escalation-unstable` | ratio `1.00`, `assumptions=0`, and the Round log shows verdict changes | warn |
 | `M3 degraded-unreported` | `## Review team` has `Mode=degraded` rows and line 1 has no `DEGRADED` status | fail |
+| `R3 resolution-missing` | a material row of `## Claims` has no `### <CLM ID>` in `## Resolutions` | fail |
 
 Warnings do not fail the run. They exist because both ends of the ladder are suspicious: too many
 questions means the search stopped early, and no questions at all — with no assumptions recorded —

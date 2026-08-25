@@ -125,5 +125,68 @@ Sections and their exact columns are in `report-schema.md`: `## Claims` carries 
 `## Knock-on and widening` the `Implication` rows, and the self-clarify sections behave as they do in
 Mode A — an `Answerable` row is a tier-1 resolution and belongs in `## Self-resolved` too.
 
-The document is **not edited**. Mode C produces a review beside it; what to change is the author's
-call, and a file full of someone's own reasoning is the last place to apply automated edits.
+The document's **own content is never edited**. A file full of someone's reasoning is the last place
+to apply automated edits, and a reviewer that misread the author would write that misreading into
+their file.
+
+But a review sitting beside a document nobody reopens changes nothing. So one thing goes back: a
+single delimited block, appended at the **end** of the document, listing what the run found and
+linking to where it is settled. Nothing above the marker is touched — byte for byte.
+
+## 7. The status block written back into the document
+
+Write it with the script, after the loop has ended and the lint is clean:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/upsert_block.py" <document> --block <file>
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/upsert_block.py" <document> --verify --report <report>
+```
+
+It replaces the block on every later run instead of stacking copies, and it never reads the document
+into your context. Never assemble the block by reading the document and writing it back.
+
+Two tables, and the split is the point:
+
+```markdown
+<!-- docs-review:begin -->
+## Review status
+
+`spec.docs-review.md` · round 2 · 118 claims · 76 Verified
+
+### Settled — safe to apply
+
+| CLM | Where, in this file | Says now | Should say | Source |
+| --- | ------------------- | -------- | ---------- | ------ |
+| [CLM-031](spec.docs-review.md#clm-031) | §8, line 210 | *open question:* does OnlyOffice support named ranges? | Yes | `docs/onlyoffice.md:88` |
+| [CLM-014](spec.docs-review.md#clm-014) | §3.2, line 88 | `retryLimit` defaults to 5 | `retryLimit` defaults to 3 | `src/config/retry.ts:22` |
+
+### Yours to decide — nobody can apply these for you
+
+| CLM | Verdict | The problem |
+| --- | ------- | ----------- |
+| [CLM-047](spec.docs-review.md#clm-047) | Contradict | §5 and §9 disagree on when the cache is written; which one you meant is not recoverable from the file |
+| [CLM-052](spec.docs-review.md#clm-052) | Unsupported | "cuts latency 40%" — the evidence in this document does not carry the number |
+| [CLM-061](spec.docs-review.md#clm-061) | Implication | §4 commits to idempotent retries, which requires a dedup key; the document never mentions one |
+
+Full citations: `spec.docs-review.md`.
+<!-- docs-review:end -->
+```
+
+Rules for the first table, each for a reason:
+
+1. **`Where` carries the section *and* the line** — section first. Hunting for the sentence is the
+   slowest part of applying a finding, and the section survives edits while the line number does not.
+2. **Sort it by line number, descending.** Then applying the rows from the top down never invalidates
+   the line numbers below, and the numbers stay usable to the last row.
+3. **`Says now` and `Should say` sit side by side.** Enough to act without opening the report.
+4. **`Source` is a repository citation.** It is what makes a row believable without re-verifying it.
+5. **Only `Answerable` and `Refuted` rows that carry a real value belong here.** A `Refuted` whose
+   quote only shows absence goes in the second table: knowing a statement is wrong is not knowing
+   what is right.
+
+`Contradict`, `Unsupported`, `Implication`, `Open`, `Unverifiable` and value-less `Refuted` go in the
+second table — every one of them needs a decision the repository cannot supply.
+
+Between them the two tables account for **every material row**. That is the property to check: a
+finding that reaches neither table has been dropped, and the block is the only part of this run the
+author is guaranteed to read.

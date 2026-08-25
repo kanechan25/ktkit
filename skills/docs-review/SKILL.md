@@ -35,6 +35,7 @@ Read each one **when the workflow tells you to** — not upfront.
 | `references/i18n-jp.md` | The spec or documents are Japanese. |
 | `references/investigation-mode.md` | Mode B — documents and a question, no spec to audit against. |
 | `scripts/check_report.py` | At step 5, once, to lint the finished report. |
+| `scripts/upsert_block.py` | Mode C only, after the lint: writes the `## Review status` block back to the reviewed document, and `--verify` checks its anchors. |
 
 ## Arguments
 
@@ -52,6 +53,7 @@ Parse the invocation before anything else, and echo back what you parsed.
 | `--fix` | Enter fix mode after the loop. |
 | `--out <path>` | Report path. Default `docs-review.md`. |
 | `--silent` | Print the report path and nothing else. |
+| `--keep-scratch` | Keep `<base>/scratch/` after a clean run. For debugging this skill. |
 
 Echo the parsed plan in one line before step 1 — this line and the closing summary are the **only**
 chat output the audit produces:
@@ -84,6 +86,10 @@ the answer is "there is nothing else, that is why I gave you this file".
 
 In Mode C, `N` counts **self-review rounds**: round 1 reviews the document, round 2 reviews round 1's
 output, and so on. Same ceiling semantics, different subject.
+
+Mode C also writes one delimited `## Review status` block back to the **end** of the reviewed
+document, after the loop and after the lint. It never edits a line the author wrote — see
+`references/critique-mode.md` §7.
 
 ---
 
@@ -132,10 +138,35 @@ unread document is a hole in the audit, and hiding it makes the report worse tha
 **Check for a previous report** (`--out` or `docs-review.md`) and note its path. You do not mine it
 for IDs yourself — the checklist builder does that in step 2.
 
-**Working files go beside the report.** `checklist.md`, `docs-history.md`, `shard-<n>.md`, the
-stripped copy, and `pending.diff` are written to the report's own directory, so the reader can see
-what the audit was built from and delete the lot in one gesture. Say in the closing summary that they
-are there. Never scatter them into the directory being audited.
+**Working files go in one directory of your own.** For a report at `<dir>/<base>.md`, everything the
+audit builds — `checklist.md`, `docs-history.md`, `shard-<n>.md`, `claims.md`, `verdicts-<n>.tsv`, the
+stripped copy, `pending.diff` — goes under `<dir>/<base>/`, never loose beside the report. One real
+run left 26 files sitting next to the document under review; "delete the lot in one gesture" is not
+possible when the reader has to read every filename first to know which ones are yours.
+
+Two lifetimes inside that directory:
+
+| Path | Lifetime |
+| ---- | -------- |
+| `<base>/claims.md`, `<base>/checklist.md` | **Keep.** ID registries. Delete one and the next run re-mints from 001, so every ID in the previous report points at a different row. |
+| `<base>/docs-history.md`, `<base>/findings-wave<n>.md` | Keep. Cheap, and the only record of why a verdict moved. |
+| `<base>/scratch/*` | Delete when the run finishes clean — see below. |
+
+**The directory you were pointed at is shared ground, not your workspace.** It holds the user's own
+files and the output of their other work. Four rules, and they are rules:
+
+1. Write only inside `<dir>/<base>/` and to the report itself.
+2. **Never move a file you did not create in this run.** Artifacts from an older version sitting
+   beside the report stay where they are; say where they are and let the user decide.
+3. Delete nothing outside `<dir>/<base>/scratch/`, and inside it only files matching the names this
+   skill writes (`claims-*.md`, `rows-*.md`, `verdicts-*.tsv`, the stripped copy). Anything else in
+   there is kept, and said out loud.
+4. **Never `rm -r` a directory you found by globbing.** Build the path from `--out`. A stray
+   `checklists/` looks exactly like an audit artifact, and looking like one is not evidence.
+
+Deleting `scratch/` requires all four: lint clean, line 1 not `BUDGET-CAPPED` / `INCOMPLETE` /
+`DEGRADED`, path built from `--out`, and the name allowlist above. Any one missing → keep it and say
+why. `--keep-scratch` skips the step entirely.
 
 **Write `docs-history.md`** — for each document, the last few commits that touched it:
 
@@ -328,5 +359,7 @@ deriving.
 - About to record an assumption with no falsifier, or a chosen reading with no assumption
 - About to print the gap table, a findings summary, or a verdict rundown into the conversation
 - About to edit a document without `--fix`, before the loop finished, or without `fix-safety`
+- About to move, rename or delete a file this run did not create
+- About to `rm -r` a path that came from a glob rather than from `--out`
 
 **All of these mean: run the workflow as written.**
