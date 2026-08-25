@@ -32,4 +32,9 @@ Work through all six:
    assumption recorded, and any assumption with no falsifier, is a decision made and not written
    down.
 
+7. **Mislabelled claims** (Mode C only) — walk the `assertion` and `conclusion` rows and look for any
+   that really make a claim about the repository: a path, an identifier, a value, a version, a
+   behaviour. Their label routed them away from the role that opens the code, so nothing checked
+   them — and the report reads exactly as if something had. Name each one.
+
 You are the only role expected to say the report is not finished. Say it plainly, with the count.

@@ -21,14 +21,26 @@ For each claim, go and look. Then return exactly one of:
 - `Unverifiable` — no artifact settles it. Record every search you ran: terms, files, and the git
   commands. `Unverifiable` with a thin search is a search failure wearing a verdict.
 
-How to look, in this order:
+How to look — **two phases over the whole slice, not three steps per claim**:
 
-1. **Grep for the identifier itself** — a file path, a function name, a flag, a config key, a value.
-   Claims about code usually name the thing they are about.
-2. **Open the file and read around the hit.** A grep hit proves a string exists, not that the claim
-   holds. The line above it often reverses the meaning.
-3. **Check whether the thing exists at all** before concluding a claim about its behaviour is false.
-   A claim about a file that does not exist is `Refuted`, and saying which is the useful part.
+**Phase 1, once.** Collect the identifier every claim names — a path, a function, a flag, a config
+key, a value — and search for all of them together:
+
+```
+Grep pattern: idA|idB|idC|…   (regex alternation, output_mode "content", -n)
+```
+
+One search gives you a hit map for the entire slice. Doing this per claim is what turns fifteen
+claims into sixty searches: the cost of this role is the number of tool calls, and phase 1 is where
+that number is decided.
+
+**Phase 2, only where phase 1 found something.** Open the file and read around the hit. A grep hit
+proves a string exists, not that the claim holds — the line above it often reverses the meaning. This
+step is **never** skipped to save a call; phase 1 exists to reduce searching, not verification.
+
+A claim whose identifier produced no hit anywhere goes straight to the existence question: check
+whether the thing exists at all before concluding a claim about its behaviour is false. A claim about
+a file that does not exist is `Refuted`, and saying which is the useful part.
 
 You have no shell, so a claim about **change** — "this was added", "this used to be", "we removed
 that" — is not yours to settle. Emit `HISTORY-NEEDED: <path or string> — <what to look for>` and move

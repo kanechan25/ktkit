@@ -75,6 +75,35 @@ something the repository would have told them.
 `verify` deliberately does not get the document. It gets the claim, and goes looking. Handing it the
 document's own argument for a claim is how a wrong claim gets confirmed by its own reasoning.
 
+### Route by `Kind`, not by section
+
+Split `claims.md` by what each row **is**, then slice by claim count — fifteen or so per agent. Never
+by heading: the number of claims decides the number of tool calls, and a long section may hold two.
+
+| `Kind` | Goes to | Because |
+| ------ | ------- | ------- |
+| `fact` | `verify` | the repository settles it |
+| `question` | `verify` | the repository often already answers it |
+| `assertion` | `implication` | `claims` itself defines these as checkable against the document's own evidence, **not** the repo |
+| `conclusion` | `implication` | same — it is the `Reasoning` axis, not `Truth` |
+
+Sending an `assertion` to `verify` costs three to five searches and returns `Unverifiable`, because
+`verify` is required to search hard before it may say that. The repository has no opinion on whether
+a recommendation is wise. One measured run spent a large part of 455 tool calls on exactly this.
+
+**The way back matters as much as the routing.** If `claims` mislabels a `fact` as an `assertion`,
+routing alone would mean it is never checked against the repository at all — silently. So:
+
+* `implication` may emit `VERIFY-NEEDED: CLM-nnn — <identifier>` for any row it was given that turns
+  out to make a claim about the repository. The lead collects them and runs one final small `verify`.
+* `claims` **leans towards `fact` when unsure**. Mislabelling that way costs tool calls; mislabelling
+  the other way loses a finding.
+* `failure` checks the `assertion` and `conclusion` rows for anything that is really a `fact` dodging
+  verification.
+
+Three independent guards. `VERIFY-NEEDED:` is the same routing mechanism as `UNMAPPED:`,
+`HISTORY-NEEDED:` and `EXTERNAL-FACT:` — reviewer emits, lead executes.
+
 `claims` is the only role that mints `CLM` IDs, for the reason `report-schema.md` §1 gives.
 
 ## 4. What the rounds actually review

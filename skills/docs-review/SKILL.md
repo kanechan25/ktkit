@@ -36,6 +36,7 @@ Read each one **when the workflow tells you to** — not upfront.
 | `references/investigation-mode.md` | Mode B — documents and a question, no spec to audit against. |
 | `scripts/check_report.py` | At step 5, once, to lint the finished report. |
 | `scripts/upsert_block.py` | Mode C only, after the lint: writes the `## Review status` block back to the reviewed document, and `--verify` checks its anchors. |
+| `scripts/verify_citations.py` | Before the review wave, and again at step 5. Checks every quote against the file it cites, so `evidence` is handed only the rows that failed. |
 
 ## Arguments
 
@@ -226,6 +227,17 @@ Each wave, per `references/review-team.md`:
 4. Append one `## Round log` row per reviewer plus a `TOTAL` row, **before** deciding anything.
    Convergence has to be visible to the reader, not asserted.
 
+After round 1, print **one** line — the run's own cost, so the user can stop it before the ceiling
+spends the same again:
+
+```text
+Round 1: 21 agents · ~3.6M tokens · 76m · 2 rounds left in the cap
+```
+
+Do not ask, do not pause. It is a status line, not a gate; the user can interrupt if they want to.
+A run that reaches round 3 costs roughly what round 1 cost, twice more, and nothing else in the
+workflow tells them that before it happens.
+
 Then decide from the `TOTAL` row:
 
 * **No material findings** (no new rows, no verdict changes, no rejected citations) → converged.
@@ -251,7 +263,14 @@ Once, at the end. Do not check the table by hand.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/check_report.py" <report> --max-questions N
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/verify_citations.py" <report>
 ```
+
+The second one opens every cited file and checks the quote is really there. Run it **before** the
+review wave, not only at the end: `evidence` is then given the `MISMATCH` / `OFF_BY` / `NOT_FOUND`
+lines it prints, instead of the whole report, and the rows the script cleared cost it nothing. A
+script never reads a near-match and lets it through, which is the one thing an agent doing this by
+eye reliably does.
 
 If `CLAUDE_PLUGIN_ROOT` is empty — the skill was copied into `~/.claude/skills/` rather than
 installed — use the script's path relative to this file instead.

@@ -75,6 +75,19 @@ a producer before the wave starts. The report handed to reviewers is always the 
 | `verify` (Mode C) | `claims.md`, the repository root, the path to write its verdict file | **the document** — a claim handed over with the author's argument for it gets confirmed by that argument instead of by the files |
 | `implication` (Mode C) | the document, `claims.md` | — |
 
+## 2b. Citations are checked by script before `evidence` is dispatched
+
+`scripts/verify_citations.py` opens every cited file and compares the quote. Run it first, then hand
+`evidence` **only** its `MISMATCH` / `OFF_BY` / `NOT_FOUND` lines.
+
+This is not a shortcut around the role. The script settles whether the text is *there*; `evidence`
+settles whether the text *supports the verdict*, which is a judgement and stays with the agent. One
+measured run spent 71 tool calls and 378k tokens on a pass that was mostly the first question.
+
+`adjudicator` gets the same lines. A finding that disputes a citation the script already cleared does
+not need the file opened a third time — say so in its dispatch block, and it spends its budget on the
+findings that are actually contested.
+
 ## 3. The requirement reviewer never sees the report
 
 Asking one agent to "derive your own checklist first, then read the report" cannot be enforced —
@@ -118,6 +131,7 @@ Three request lines may appear instead of a finding, when the role lacks the cap
 UNMAPPED: <requirement verbatim> — <spec section>
 HISTORY-NEEDED: <path> — <what to look for>
 EXTERNAL-FACT: <the fact> — <why the verdict depends on it>
+VERIFY-NEEDED: CLM-nnn — <identifier>          # Mode C, from implication
 ```
 
 Reviewers have no shell, no MCP tools and no web access. These are not failures; they are how work

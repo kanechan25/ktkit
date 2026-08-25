@@ -23,6 +23,12 @@ A statement is checkable when someone could settle it by opening a file. Classif
   "need to check", "TBD", a bare question mark.
 - `conclusion` — a claim the document derives from other statements it makes.
 
+**When a statement could be either, call it `fact`.** The label decides who checks it: `fact` and
+`question` go to the role that opens the repository, `assertion` and `conclusion` to the role that
+weighs the document's own evidence. Leaning towards `fact` costs a few searches. Leaning the other
+way means a claim about the code is never checked against the code, and the report cannot be told
+apart from one where it was.
+
 Quote the statement rather than paraphrasing it. A paraphrase is where a claim quietly becomes the
 claim you expected, and the whole run then argues with something the author never wrote. Keep the
 author's own wording, including hedges: "probably", "seems", "I think" change what is being claimed
