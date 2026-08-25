@@ -106,8 +106,18 @@ with findings outstanding is reported on line 1, exactly as in Mode A.
 Same rule as Mode A, same reason: what the lead reads is re-sent on every later turn. The lead holds
 the claim IDs and the finding lists. `claims` reads the document; `verify` reads the repository.
 
-For a document under a few thousand words, `claims` reads it in one pass. Above that, slice it by
-heading and dispatch one `claims` agent per slice — the ID registry stays one file with one writer.
+For a document under a few thousand words, `claims` reads it in one pass. Above that, slice it and
+dispatch one `claims` agent per slice — the ID registry stays one file with one writer.
+
+**Slice by line range, never by heading.** Get the line count with `wc -l`, divide it, and hand each
+agent `lines <a>-<b>`. A heading name is not a boundary either of you can check: the agent cannot
+prove it reached the end of "§5-7a", and neither can you, so the only move left is to dispatch it
+again and hope. That is exactly how one run turned three slices into nine dispatches —
+`slice 3` → `supplement` → `residue` → `final residue` — each one re-reading the document from the top.
+
+Every `claims` agent closes with `COVERED_LINES` and `LAST_LINE_PROCESSED`. Compare them with the
+range you handed out. Equal → the slice is done, do not dispatch it again. Short → dispatch **only
+the remaining lines**. This is arithmetic, not judgement; do not re-read the document to decide.
 
 ## 6. What the report says
 

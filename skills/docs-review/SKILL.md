@@ -106,6 +106,10 @@ Seven rules follow from that. They are rules, not preferences:
    allocation.
 3. **Concatenate shard files, never read-then-rewrite:** `cat "$OUT"/shard-*.md >> <report>`. The
    shard content must not pass through your context. Resist "improving" this into read-and-merge.
+3b. **Claim rows and verdict rows are concatenated, never assembled by an agent.** Each `claims` and
+   `verify` agent writes its own file; you join them with the shell. Dispatching an agent to
+   "assemble rows" is the read-then-rewrite of rule 3 under a different name — and it reaches for
+   `general-purpose`, which is outside the review team and inherits no part of its discipline.
 4. **Merge findings with targeted edits.** `grep -n '<Req ID>' <report>` to get the one line, then
    `Edit` it. A two-hundred-row table never enters your context.
 5. **Strip the review section with the script**, not by hand:
@@ -315,6 +319,8 @@ deriving.
 - About to give the requirement reviewer the report, or the adjudicator the report
 - About to mark a requirement `Covered` with no quote
 - About to call the agent tool unavailable without having called it
+- About to dispatch `general-purpose`, or any agent outside the team, to assemble or merge rows
+- About to re-dispatch a `claims` slice without comparing `LAST_LINE_PROCESSED` against the range you gave it
 - About to stop the loop on a wave with material findings, for any reason but the user's ceiling
 - About to report a converged loop with no `## Round log` `TOTAL` row showing it
 - About to write `Missing` from a grep of the spec's own wording only

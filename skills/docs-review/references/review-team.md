@@ -72,7 +72,7 @@ a producer before the wave starts. The report handed to reviewers is always the 
 | `adjudicator` | the finding lists, document paths | **the report** — reading it anchors it to what the four roles just attacked |
 | `fix-safety` | proposed edits, `pending.diff`, `fix-mode.md`, spec | — |
 | `claims` (Mode C) | the document only | the repository — forming a verdict now would leak into how the row is written |
-| `verify` (Mode C) | `claims.md`, the repository root | **the document** — a claim handed over with the author's argument for it gets confirmed by that argument instead of by the files |
+| `verify` (Mode C) | `claims.md`, the repository root, the path to write its verdict file | **the document** — a claim handed over with the author's argument for it gets confirmed by that argument instead of by the files |
 | `implication` (Mode C) | the document, `claims.md` | — |
 
 ## 3. The requirement reviewer never sees the report
@@ -405,14 +405,21 @@ fix instead of rewriting all eight.
 | failure | `ktkit:docs-review-failure` | `Read, Grep, Glob` | inherit |
 | adjudicator | `ktkit:docs-review-adjudicator` | `Read, Grep, Glob` | inherit |
 | fix-safety | `ktkit:docs-review-fix-safety` | `Read, Grep, Glob` | inherit |
-| claims (Mode C) | `ktkit:docs-review-claims` | `Read, Write, Grep, Glob` | inherit |
-| verify (Mode C) | `ktkit:docs-review-verify` | `Read, Grep, Glob` | sonnet |
+| claims (Mode C) | `ktkit:docs-review-claims` | `Read, Write, Grep, Glob` | sonnet |
+| verify (Mode C) | `ktkit:docs-review-verify` | `Read, Write, Grep, Glob` | sonnet |
 | implication (Mode C) | `ktkit:docs-review-implication` | `Read, Grep, Glob` | inherit |
 
 No role has `Bash`, `Edit`, `WebFetch`, MCP tools or `Skill`. Granting `Bash` **removes** `Grep` and
 `Glob` from an agent in this harness, which would silently blind the roles that live by search — so
 shell work stays with the lead, and `docs-history.md` and `pending.diff` exist so the roles never
-need it. Only the two producers may write, and only to their own file.
+need it. Only the three writers — `checklist`, `mapper` / `claims`, and `verify` — may write, and
+each only to its own file. `verify` has `Write` because it *produces* verdicts: without it every
+verdict returns through the lead's context, which is what forced a `general-purpose` agent to be
+dispatched purely to assemble rows.
+
+Downgrade the roles that SEARCH, keep the tier of the roles that JUDGE: `mapper`, `coverage`,
+`evidence`, `claims` and `verify` search and cite, so they run on sonnet. `adjudicator`, `failure` and
+`implication` weigh evidence and decide, so they inherit.
 
 ## 9. When the team is unavailable
 
