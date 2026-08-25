@@ -20,7 +20,7 @@ Reviews documentation in whichever of three shapes your situation has: **critiqu
 the repository and itself, **check documents against a standard**, or **ask a question of a document
 set**. See [Using `docs-review`](#using-docs-review) for which is which.
 
-- **Critique mode** — one file, nothing to compare it against. Its claims are verified against the repository, its open questions answered where the repo already answers them, its self-contradictions and unsupported conclusions named, and the consequences it committed to but never wrote down surfaced as `Implication`. Verdicts are `Verified` / `Refuted` / `Unverifiable` / `Contradict` / `Unsupported` / `Answerable` / `Open` / `Implication`
+- **Critique mode** — one file, nothing to compare it against. Its claims are verified against the repository, its open questions answered where the repo already answers them, its self-contradictions and unsupported conclusions named, and the consequences it committed to but never wrote down surfaced as `Implication`. Verdicts are `Verified` / `Refuted` / `Unverifiable` / `Contradict` / `Unsupported` / `Answerable` / `Open` / `Implication`. Nothing you wrote is edited; one delimited block is appended to the end of the file, holding a worklist of what is settled (section, line, what it says, what it should say, the repository line that settles it) and separately what only you can decide
 - **Gap analysis mode** — decomposes the standard into atomic requirements *before* reading the docs, then maps each one to `Covered` / `Partial` / `Missing` / `Contradict` / `Conflict` / `Stale` / `Undecided` with a mandatory citation and quote
 - **Investigation mode** — no standard? the checklist comes from the question instead, and answers are marked `Stated` / `Inferred` / `Conflicting` / `Absent`
 - **A team of agents, not one reviewer** — a generic reviewer run once per round covers one or two of its checks per pass, which is why that shape needs four or five rounds. Here the work is split into roles that run concurrently and then challenge each other. Producers: `checklist` and `mapper` in gap analysis, `claims` in critique. Reviewers: `requirement` re-derives from the standard **without being shown the report**, `evidence` verifies every quote character by character, `coverage` attacks `Missing` rows in the documents' own vocabulary, `verify` settles a file's claims against the repository **without being shown the file**, `implication` finds what follows and was never said, `failure` attacks the review itself, `adjudicator` upholds or refutes each finding against the files, `fix-safety` gates edits. One or two rounds instead of four or five
@@ -30,7 +30,10 @@ set**. See [Using `docs-review`](#using-docs-review) for which is which.
 - **Convergence is computed, not claimed** — every wave logs its counts, and a report claiming convergence while the last row still shows new rows, changed verdicts or rejected citations fails the lint. `--rounds N` caps the waves; a cap reached with findings outstanding is reported on line 1, never as a clean exit
 - **Scales by agent count, not by workflow** — index-then-shard is the pipeline at every size, so a set of eight documents and a set of eighty differ in how many mappers run, not in which steps happen. Above ~15 documents four things change: the document map (their vocabulary, not the spec's) becomes mandatory, shards follow spec chapters, the doc-vs-doc conflict sweep becomes its own pass because no single reviewer holds the whole set any more, and shard waves cap at two without counting toward the round ceiling
 - **`--fix`** — edits the audited document (the output artifact, never the spec) after the review loop: `Missing` / `Partial` / `Stale` rows the spec states in full, as minimal in-place edits traced to a requirement ID. Every edit passes `fix-safety` first, and re-verification is done by `evidence` against the edited files rather than by the session that wrote them. In a deliverable still being drafted, `Contradict` is fixed too. In documentation of a running system it is only proposed — a doc contradicting the spec may be the one describing reality
-- **Lint with named checks** — `references/report-schema.md` owns every heading, column and ID format, and `scripts/check_report.py` implements exactly its twenty checks: false convergence, unregistered IDs, missing citations, gates without a default, assumptions without a falsifier, coverage weaker than the verdicts imply, and a degraded run that did not announce itself
+- **Lint with named checks** — `references/report-schema.md` owns every heading, column and ID format, and `scripts/check_report.py` implements exactly its twenty-one checks: false convergence, unregistered IDs, missing citations, gates without a default, assumptions without a falsifier, coverage weaker than the verdicts imply, a degraded run that did not announce itself, and a material claim with no resolution written for it.
+  Alongside it `scripts/verify_citations.py` opens every cited file and checks the quote is really at
+  that line — a string comparison, so `evidence` is handed only the rows that failed instead of the
+  whole report
 - **Quiet by default** — the audit writes the report to a file and prints a short status summary. A table printed into the conversation is billed again on every later turn and arrives without its citations
 
 ```text
@@ -121,6 +124,22 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 1.8.0 — where the working files went
+
+`docs-review` used to write its working files loose beside the report. From 1.8.0 they go into one
+directory named after the report: a report at `spec.docs-review.md` keeps its artifacts in
+`spec.docs-review/`.
+
+**Your old artifacts stay where they are.** The skill does not tidy them up, on purpose: the
+directory it was pointed at is also where your own files live, and a cleanup pass that guesses which
+loose `.md` files were "probably the audit's" is one bad guess away from deleting your work. Delete
+them yourself when you are ready — from a 1.7.0 run they are the loose `claims*.md`, `rows-*.md`,
+`verdicts-*.tsv`, `findings-wave*.md` and `docs-history.md` sitting next to the report.
+
+Inside the new directory two things are kept rather than cleaned: `claims.md` and `checklist.md` are
+ID registries. Delete one and the next run re-mints IDs from 001, so every `CLM-014` in the old
+report points at a different statement.
 
 ### Two things that will confuse you once
 
@@ -277,8 +296,46 @@ What the rows look like, from a real run:
 more. `CLM-004` is the other one — you wrote down a question, and the answer was in the repository
 the whole time.
 
-**Your file is never edited.** The review lands beside it; what to change is your call, and a file
-full of your own reasoning is the last place for automated edits.
+**Nothing you wrote is edited.** Not one line. A file full of your own reasoning is the last place for
+automated edits, and a reviewer that misread you would write the misreading into your file.
+
+What does go back is one block at the **end** of the file, between markers, so the findings are in
+front of you the next time you open it instead of in a report you have to remember to reopen:
+
+```markdown
+<!-- docs-review:begin -->
+## Review status
+
+`spec.docs-review.md` · round 2 · 118 claims · 76 Verified
+
+### Settled — safe to apply
+
+| CLM | Where, in this file | Says now | Should say | Source |
+| --- | ------------------- | -------- | ---------- | ------ |
+| [CLM-031](spec.docs-review.md#clm-031) | §8, line 210 | *open question:* does OnlyOffice support named ranges? | Yes | `docs/onlyoffice.md:88` |
+| [CLM-014](spec.docs-review.md#clm-014) | §3.2, line 88 | `retryLimit` defaults to 5 | `retryLimit` defaults to 3 | `src/config/retry.ts:22` |
+
+### Yours to decide — nobody can apply these for you
+
+| CLM | Verdict | The problem |
+| --- | ------- | ----------- |
+| [CLM-047](spec.docs-review.md#clm-047) | Contradict | §5 and §9 disagree on when the cache is written; which one you meant is not recoverable from the file |
+| [CLM-052](spec.docs-review.md#clm-052) | Unsupported | "cuts latency 40%" — the evidence in this document does not carry the number |
+<!-- docs-review:end -->
+```
+
+The first table is a worklist: section, line, what it says, what it should say, and the file in the
+repository that settles it. Enough to apply a row without opening the report. It is sorted by line
+number descending, so applying from the top never shifts the lines below it.
+
+The second table is everything nobody can decide for you — a contradiction where only you know which
+side you meant, a number the file's own evidence does not support, a consequence you may or may not
+want to write down. Between them the two tables hold **every** material finding.
+
+Run it again and the block is replaced, not duplicated. Everything above the marker is copied byte
+for byte; if that ever changed, it would be a bug in the skill, not a judgement call it is allowed to
+make. The links point at `### CLM-014` headings in the report, and the skill fails the run if one of
+them does not resolve.
 
 ---
 
@@ -381,6 +438,7 @@ together. That is the part you cannot get by reading the documents yourself.
 | `--silent` | Print the report path and nothing else |
 | `--team off` | Run without the agent team. Emergency fallback; the report says it ran degraded |
 | `--ask-only` | Diagnostic: skip the searching and surface every unknown as a question. Shows you what the ladder was absorbing. Never leave it on |
+| `--keep-scratch` | Keep the run's intermediate files instead of deleting them after a clean run |
 
 A ceiling reached with findings still outstanding is not a clean pass: the report's first line says
 `BUDGET-CAPPED` and lists what was left unmerged.
@@ -430,15 +488,29 @@ Not one long read — a short pipeline of agents, each with its own context:
 7. **Writes the report and tells you almost nothing** — counts, which round converged, how many
    documents went unread, how many questions are waiting.
 
-Working files land beside the report so you can delete the lot in one gesture:
+Working files go in one directory named after the report, never loose beside it:
 
 ```text
-docs-review.md          the report
-checklist.md            Mode A — the requirements it derived, and the ID registry
-claims.md               Mode C — your statements, classified, and the ID registry
-docs-history.md         recent commits per document
-shard-1.md, shard-2.md  what each reading agent found, before merging
+spec.docs-review.md              the report
+spec.docs-review/
+├── claims.md                    Mode C — your statements, classified. ID registry: kept
+├── checklist.md                 Mode A — requirements derived from the standard. ID registry: kept
+├── docs-history.md              recent commits per document
+├── findings-wave1.md            what each round raised, before merging
+└── scratch/                     deleted when the run finishes clean
+    ├── claims-1.md …            one file per slice
+    ├── rows-cv1.md …
+    └── verdicts-cv1.tsv …
 ```
+
+`claims.md` and `checklist.md` survive on purpose — they are ID registries, and deleting one makes the
+next run re-mint from 001, so every ID in the old report points somewhere else. `scratch/` is deleted
+only when the lint is clean and the run did not stop early; `--keep-scratch` keeps it regardless.
+
+Three things it will not do to the directory you pointed it at, because that directory is also where
+your own files live: move a file it did not create, delete anything outside its own `scratch/`, or
+`rm -r` a path it found by globbing rather than derived from `--out`. A stray `checklists/` from
+another task looks exactly like an audit artifact, and looking like one is not evidence.
 
 The findings are not repeated in the conversation on purpose: a verdict restated in prose loses its
 citation, and that is exactly where a `Partial` becomes "the docs are basically fine".
