@@ -100,11 +100,56 @@ routing alone would mean it is never checked against the repository at all — s
   the other way loses a finding.
 * `failure` checks the `assertion` and `conclusion` rows for anything that is really a `fact` dodging
   verification.
+* `verify` may emit `HISTORY-NEEDED: <path or string> — <what to look for>` for a claim about
+  **change**, and writes no row for it. You run the git command, append the output to
+  `docs-history.md`, and dispatch one final small `verify` with those claim IDs and that path — the
+  slice writes their rows. Never write the row yourself: a row the lead composed is a row nobody
+  verified, and rule 3b exists for it.
 
 Three independent guards. `VERIFY-NEEDED:` is the same routing mechanism as `UNMAPPED:`,
 `HISTORY-NEEDED:` and `EXTERNAL-FACT:` — reviewer emits, lead executes.
 
 `claims` is the only role that mints `CLM` IDs, for the reason `report-schema.md` §1 gives.
+
+## 3b. The wave protocol for this mode
+
+`review-team.md` §6 is written for Mode A and names `requirement · evidence · coverage · failure`.
+**Those are not the roles here.** This is the sequence for Mode C, and it replaces §6 entirely:
+
+```text
+WAVE n
+ 1. Lead dispatches every `claims` slice in ONE message      → they run concurrently
+      each: lines <a>-<b>, writes claims.md, returns COVERED_LINES + LAST_LINE_PROCESSED
+ 2. Lead compares those two numbers against the range it handed out (section 5).
+    Short → dispatch ONLY the remaining lines. Equal → done, do not dispatch again
+ 3. Lead splits claims.md by `Kind` (section 3), then by claim count, and dispatches
+    ALL of these in ONE message:
+      verify      × slices of  fact | question      (never given the document)
+      implication × slices of  assertion | conclusion
+      failure     × 1                                (attacks the review, not the document)
+ 4. Lead runs verify_citations.py over the rows written so far, before step 5
+ 5. Lead collects the markers and executes them: VERIFY-NEEDED and HISTORY-NEEDED each
+    get one final small `verify`; EXTERNAL-FACT is the lead's own lookup
+ 6. Lead concatenates the shards into the report (rule 3b — cat, never assemble)
+ 7. Lead dispatches `adjudicator` × 1 with the finding lists ONLY — and the finding
+    lists include `implication`'s. Its Implication, Unsupported and Contradict rows are
+    findings like any other and are adjudicated as reasoning findings, not by opening files
+ 8. Only UPHELD material findings are merged. REFUTED ones stay in `## Round findings`
+    with the refuting evidence
+ 9. Lead appends one `## Round log` row per role plus a TOTAL row, BEFORE deciding
+10. TOTAL all zeros on the material columns → converged. Otherwise next wave, up to the
+    ceiling
+```
+
+Step 7 is the one that goes missing. `verify` verdicts arrive already double-guarded — the role
+searched for them, `verify_citations.py` checked the quotes, and `failure` sweeps the rows. Nothing
+guards `implication` except the adjudicator, so skipping it leaves the whole `Reasoning` axis
+unchecked for a wave, and unchecked in the direction that produces confident-sounding rows.
+
+From wave 2 on, the subject is the previous wave's output (section 4) and `claims` does not run
+again: there are no new claims to mint, only verdicts and findings to attack. Re-dispatching `claims`
+on wave 2 re-reads the document and re-mints IDs, which is the one thing `report-schema.md` §1
+forbids.
 
 ## 4. What the rounds actually review
 
