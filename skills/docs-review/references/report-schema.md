@@ -186,8 +186,12 @@ human layer above it, and the anchor target for `## Review status`.
 | Wave | Role | Agent | Model | Mode |
 ```
 
-`Mode` is `agents` or `degraded`. One row per role per wave. A wave that ran fewer roles than the
-design specifies says so here — this table is how a reader sees that only two roles ran.
+`Mode` is `agents`, `solo` or `degraded`. One row per role per wave. A wave that ran fewer roles than
+the design specifies says so here — this table is how a reader sees that only two roles ran.
+
+`solo` is `--team off`: the user chose one reviewer (`solo-loop.md`). Unlike `degraded` it is not a
+failure and puts nothing on line 1 — but the closing summary still names it, because a solo report
+is otherwise indistinguishable from a full one.
 
 ### `## Round log`
 

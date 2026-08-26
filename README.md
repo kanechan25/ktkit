@@ -77,7 +77,7 @@ Or via the interactive UI:
 /plugin install ktkit@ktkit
 ```
 
-Installing as a plugin is what registers the eleven `docs-review` agents. Verify them after install:
+Installing as a plugin is what registers the twelve `docs-review` agents. Verify them after install:
 
 ```text
 /context          # Custom agents should list ktkit:docs-review-*
@@ -124,6 +124,32 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 1.9.0 — `--team off` does something again
+
+`docs-review --team off` has been documented since the agent team landed, but the procedure it
+pointed at — one context doing the audit, one blind reviewer attacking it each round — was left
+behind in the refactor. The flag named a loop that existed in no file, so a lead that hit it
+improvised. From 1.9.0 it follows `references/solo-loop.md`.
+
+Three things worth knowing before you reach for it:
+
+- **Mode A and Mode B only.** Critiquing a single document is refused with `--team off`, because
+  Mode C's whole content is that the role settling a claim has never read the argument for it. One
+  context cannot un-read the document.
+- **It is not the cheap option.** A single context pays for its entire prefix on every tool call it
+  makes, and that prefix holds the spec, the documents and everything it has read. Pick it for one
+  transcript you can debug, or to leave the team's quota alone — not to save tokens.
+- **It is not `DEGRADED`.** That is the team being unavailable, and it still says so on line 1. A
+  solo run is a choice and reports as `Mode=solo`.
+
+Its reviewer is a lean role rather than the `general-purpose` agent the pre-team version used:
+measured on this harness, `general-purpose` costs **35,132** base tokens against **6,619** for a
+three-tool role doing the same job.
+
+Also in 1.9.0: Mode C gained the wave protocol it never had — whether `implication` findings reached
+the adjudicator was previously left to inference, which left the reasoning axis unguarded for a round
+while factual claims carried three guards.
 
 ### Upgrading to 1.8.0 — where the working files went
 

@@ -31,6 +31,7 @@ Read each one **when the workflow tells you to** — not upfront.
 | `references/self-clarify.md` | The moment anything is unknown — a term you cannot find, two documents disagreeing, an ambiguous sentence. It decides whether you search, challenge, look it up, assume, or ask. |
 | `references/dimensions.md` | Passed to the checklist builder and the requirement reviewer. You do not need to read it yourself. |
 | `references/large-sets.md` | The measurement in step 1 says the set is large. Adds the index pass and the conflict sweep. |
+| `references/solo-loop.md` | The user passed `--team off`. It replaces steps 2–4 with the one-context loop and one blind reviewer. Mode A and B only. |
 | `references/fix-mode.md` | The user passed `--fix`. Read it at step 7, never earlier. |
 | `references/i18n-jp.md` | The spec or documents are Japanese. |
 | `references/investigation-mode.md` | Mode B — documents and a question, no spec to audit against. |
@@ -47,8 +48,8 @@ Parse the invocation before anything else, and echo back what you parsed.
 | `<path>` | Spec or document path. Multiple paths allowed. |
 | `<N>` (bare leading integer, 1–9) | Same as `--rounds N`. `docs-review 3 spec.md` caps the loop at 3 waves. |
 | `--rounds N` | Review-wave **ceiling**. Convergence may end the loop earlier; the ceiling never forces an extra wave. |
-| `--rounds auto` | Default: **3** with the agent team, **5** in the solo fallback. This is the only place the default is defined. |
-| `--team off` | Skip the team; run the single-reviewer loop. Emergency fallback, not a mode to prefer. |
+| `--rounds auto` | Default: **3** with the agent team, **5** with `--team off`. One reviewer per round finds less per round than four specialists, so the loop needs more of them. This is the only place the default is defined. |
+| `--team off` | Skip the team; follow `references/solo-loop.md` — one context, one blind reviewer per round. **Mode A and B only**; refuse it in Mode C and say why. Choose it for one debuggable transcript or to keep the team's quota, not because it is cheaper — it usually is not. Distinct from `DEGRADED`, which is the team being unavailable. |
 | `--max-questions N` | Cap on rows that may reach the user. Default **3**. |
 | `--ask-only` | Diagnostic: skip tiers 1–3 of the ladder and surface every unknown. Never the default; the report says it ran this way. |
 | `--fix` | Enter fix mode after the loop. |
@@ -79,6 +80,9 @@ formats are in `report-schema.md`.
 | Documents and a question, no spec | **B — Investigation** | Sourced findings report. Read `references/investigation-mode.md`, then return here at step 4. |
 | Several documents, no spec and no question | Ask which is the standard, or what the question is. Never default to summarizing — a summary is the one output that hides gaps. |
 | A spec, no documents named | Search the workspace for candidate documents and list them for confirmation. Do not audit an empty set. |
+
+Mode C requires the agent team: `verify` must never see the document, and one context cannot un-read
+it. `--team off` is refused here — see `references/solo-loop.md`.
 
 **One path and no question means Mode C.** Do not ask what to compare it against; the standards are
 the repository, the document's own internal consistency, and whether its conclusions follow — all
@@ -209,6 +213,9 @@ Concatenate the shards into the report (rule 3). Collect every `UNMAPPED:` line 
 checklist builder to mint IDs; those rows join the next wave.
 
 ### 4. MANDATORY: the review wave
+
+With `--team off`, this step and the two above it are `references/solo-loop.md` instead. The loop
+itself is not optional in either shape — only the number of reviewers in it changes.
 
 Run waves until one converges. **What ends the loop is what the last wave found, not how many you
 have run.** The ceiling is the `--rounds` value; its default is defined in Arguments and nowhere

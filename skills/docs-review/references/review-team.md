@@ -427,6 +427,7 @@ fix instead of rewriting all eight.
 | An open question the repository already answers | `verify` (Mode C) |
 | A consequence the document committed to and never stated | `implication` (Mode C) |
 | Two statements in one document that cannot both hold | `implication` (Mode C) |
+| Any of the above, with `--team off` | `solo-reviewer` — one role, five attacks, so a seeded-defect miss here says which of its five attacks is weak, not which prompt to swap |
 
 ## 8. Roles, models, tools
 
@@ -443,6 +444,7 @@ fix instead of rewriting all eight.
 | claims (Mode C) | `ktkit:docs-review-claims` | `Read, Write, Grep, Glob` | sonnet |
 | verify (Mode C) | `ktkit:docs-review-verify` | `Read, Write, Grep, Glob` | sonnet |
 | implication (Mode C) | `ktkit:docs-review-implication` | `Read, Grep, Glob` | inherit |
+| solo-reviewer (`--team off`) | `ktkit:docs-review-solo-reviewer` | `Read, Grep, Glob` | inherit |
 
 No role has `Bash`, `Edit`, `WebFetch`, MCP tools or `Skill`. Granting `Bash` **removes** `Grep` and
 `Glob` from an agent in this harness, which would silently blind the roles that live by search — so
@@ -455,6 +457,13 @@ dispatched purely to assemble rows.
 Downgrade the roles that SEARCH, keep the tier of the roles that JUDGE: `mapper`, `coverage`,
 `evidence`, `claims` and `verify` search and cite, so they run on sonnet. `adjudicator`, `failure` and
 `implication` weigh evidence and decide, so they inherit.
+
+`solo-reviewer` is the one role that never runs in a wave. It exists only for `--team off`
+(`solo-loop.md`), where it carries all five attacks alone, and it inherits for the same reason
+`requirement` does — deriving a requirement nobody wrote down is the judging half of this work, not
+the searching half. It replaces the `general-purpose` reviewer the pre-team version used, which
+measured **35,132** base tokens against a lean role's **6,619**: the most expensive agent type in the
+harness, doing a job that needs three tools.
 
 ## 9. When the team is unavailable
 
