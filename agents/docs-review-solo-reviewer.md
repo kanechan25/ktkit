@@ -56,3 +56,5 @@ finding buys another whole round for nothing.
 Where you cannot settle something with the paths you were given, emit one of
 `UNMAPPED: <requirement>` · `HISTORY-NEEDED: <path> — <what to look for>` ·
 `EXTERNAL-FACT: <what>` and move on. You have no shell and no web access; the lead runs those.
+
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.

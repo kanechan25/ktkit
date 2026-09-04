@@ -229,6 +229,7 @@ not permitted to mint them, and the comparison against the existing checklist is
 after you return. Then, briefly: requirements that are not atomic in the spec itself, spec sentences
 supporting two readings with both stated, and the dimensions the spec is silent on — capped at the
 ones that would change a verdict.
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
 ```
 
 ### `evidence` — reviewer, tools `Read, Grep, Glob`
@@ -257,6 +258,7 @@ finding.
 
 Never repair a citation you reject. Report it and let the row be corrected upstream; a reviewer that
 fixes what it audits has audited nothing.
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
 ```
 
 ### `coverage` — reviewer, tools `Read, Grep, Glob`
@@ -281,6 +283,7 @@ You also resolve tier 1 questions for the team. History lives in `docs-history.m
 enough, emit `HISTORY-NEEDED: <path> — <what to look for>` rather than guessing. For an external
 fact, emit `EXTERNAL-FACT:`. You have no shell and no web access, and inventing what you would have
 found there is the worst outcome available to you.
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
 ```
 
 ### `failure` — reviewer, tools `Read, Grep, Glob`
@@ -310,6 +313,7 @@ Work through all six:
    down.
 
 You are the only role expected to say the report is not finished. Say it plainly, with the count.
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
 ```
 
 ### `adjudicator` — reviewer, tools `Read, Grep, Glob`
@@ -357,6 +361,7 @@ Downgrade to `nit` any finding that changes wording, formatting or tone without 
 verdict or a citation. Extending the loop on a nit costs a whole wave.
 
 Return one verdict per finding, in the same order you received them, and nothing else.
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
 ```
 
 ### `fix-safety` — reviewer, tools `Read, Grep, Glob`
@@ -385,6 +390,7 @@ For each proposed edit, check all six:
 
 Return `APPROVE` or `BLOCK` per edit, with the rule number and the reason. Blocked edits are the
 deliverable as much as approved ones.
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
 ```
 
 ## 6. Wave protocol

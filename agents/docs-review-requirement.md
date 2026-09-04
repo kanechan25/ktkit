@@ -36,3 +36,5 @@ after you return.
 Then, briefly: requirements that are not atomic in the spec itself, spec sentences that support two
 readings with both stated, and the dimensions the spec is silent on. Cap each of those at the ones
 that would change a verdict.
+
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.

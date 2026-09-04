@@ -60,3 +60,5 @@ document should not have said what it did" — you own the first, and the second
 
 Return findings in the format your dispatch block specifies, with severity `material` for anything
 that would change a decision and `nit` for the rest.
+
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.

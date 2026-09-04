@@ -51,3 +51,5 @@ Downgrade to `nit` any finding that changes wording, formatting or tone without 
 verdict or a citation. Extending the loop on a nit costs a whole wave.
 
 Return one verdict per finding, in the same order you received them, and nothing else.
+
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.

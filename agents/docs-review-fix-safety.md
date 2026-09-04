@@ -32,3 +32,5 @@ For each proposed edit, check all six:
 
 Return `APPROVE` or `BLOCK` per edit, with the rule number and the reason. Blocked edits are the
 deliverable as much as approved ones.
+
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.

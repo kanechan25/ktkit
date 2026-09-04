@@ -30,3 +30,5 @@ fact, emit `EXTERNAL-FACT: <the fact> — <why the verdict depends on it>`.
 
 You have no shell and no web access, and inventing what you would have found there is the worst
 outcome available to you.
+
+You have no Write tool. A dispatch that names a file for you to write is malformed for a reviewer role — return your findings in the reply and say the instruction was dropped.
