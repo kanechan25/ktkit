@@ -93,6 +93,19 @@ sources. The invariant is not broken — the reviewers are simply given more to 
   is routed to an arbiter that opens the code and returns `REFUTED` with a `path:line`, or `UPHELD`
   carrying both the search terms that failed **and** the regions it could not reach. A verdict of
   that shape from a document-only reviewer is not a verdict, it is a routing state
+- **A gap says where the change goes** — an upheld gap routes once more, to a role that returns an
+  **anchor**: the `path:line` a change would land on, a one-sentence shape, and a neighbour where
+  this codebase already does something similar. The lint opens every anchor and rejects the row if
+  the line is not there, because "add a column to the `estimates` table" reads exactly like analysis
+  and costs a week when that table does not exist. Effort estimates are rejected too — produced
+  without team context, they get quoted downstream as though measured
+- **Shards are sized in bytes, not lines** — a line is not a unit of cost: one line of minified
+  markup carries 50 KB, one line of prose carries 60 bytes. On a real 62-document set the line rule
+  handed one agent a 729 KB file, which is not merely expensive but infeasible — it reads part and
+  reports as though it read all. Sizing by bytes cut that set from 79 agents to 43, capped the
+  largest slice at 121 KB, and packed 42 documents under 24 KB into 2 agents instead of 42. Each
+  agent gets an explicit byte range so it reads once instead of groping toward what it needs, and
+  can answer `NEEDS-WIDER` when the answer lies outside its slice
 - **Freshness is measured before anything is read** — revision markers live *inside* documents as
   per-section changelog tokens, and the signal is the **largest** one, not the first. An audit built
   on a superseded revision is wrong at the foundation and nothing downstream can detect it
@@ -830,6 +843,7 @@ agents/                           — the roles, registered by the plugin
   spec-recon-probe-runtime.md       read-only queries against a live system, on request only
   spec-recon-state-extract.md       one current-state document → baseline + change surface
   spec-recon-arbiter-impl.md        upholds or refutes every claim that something is missing
+  spec-recon-gap-design.md          turns an upheld gap into an anchor line and a neighbour
   escalation-resolver.md            settles one unknown from the repository, returns one line
 skills/spec-recon/
   SKILL.md                        — the five phases, arguments, rules
