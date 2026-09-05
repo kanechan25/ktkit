@@ -370,11 +370,12 @@ together. That is the part you cannot get by reading the documents yourself.
 | ---- | ------ |
 | `<N>` (bare integer) | Same as `--rounds N` |
 | `--rounds N` | Ceiling on review rounds. Convergence can end it earlier; the ceiling never forces an extra round |
+| `--rounds auto` | The default: **3** with the team, **5** with `--team off` — one reviewer finds less per round than four specialists |
 | `--max-questions N` | At most N rows may reach you as questions. Default 3 |
 | `--out <path>` | Where the report goes. Default `docs-review.md` |
-| `--fix` | Mode A only: apply the fixable rows |
+| `--fix` | Mode A: apply the fixable rows after the loop. Mode B has no standard the documents failed, so there is nothing to fix; Mode C never edits your file's content |
 | `--silent` | Print the report path and nothing else |
-| `--team off` | Run without the agent team. Emergency fallback; the report says it ran degraded |
+| `--team off` | Run the loop in one context with one blind reviewer instead of the team. **Mode A and B only** — refused in Mode C. Not the same as `DEGRADED`, which is the team being unavailable: this is a choice, and the report marks it `Mode=solo` |
 | `--ask-only` | Diagnostic: skip the searching and surface every unknown as a question. Shows you what the ladder was absorbing. Never leave it on |
 | `--keep-scratch` | Keep the run's intermediate files instead of deleting them after a clean run |
 
