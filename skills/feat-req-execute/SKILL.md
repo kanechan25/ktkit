@@ -64,6 +64,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
 
 Drop `speckit` from `--groups` when the user passed `--no-speckit` — that flag *is* the decision to
 take the internalised path, so probing for scaffolding the run will not use would block for nothing.
+The flag holds **even when speckit is installed and scaffolded**: it selects the path, it does not
+merely relax the check.
+
+⛔ **Without that flag, a missing half stops the run.** Never fall back to the internalised path on
+your own. Degrading silently ships something other than what was asked for, under the same name.
 
 **Exit 1 → STOP here.** Print what is missing and both ways forward, then wait:
 

@@ -332,9 +332,14 @@ def check_speckit(repo):
     The scaffolding is per-repository and the skills are per-machine, so a user
     can easily have one and not the other. Each missing half gets its own fix,
     and either one is a FAIL: a run that calls `/speckit.plan` without them
-    burns tokens up to the point of the call and then cannot continue. The
-    caller's escape hatch is `--no-speckit`, which skips this group entirely and
-    takes the internalised path instead.
+    burns tokens up to the point of the call and then cannot continue.
+
+    A FAIL here stops the run. It never degrades to the internalised path on its
+    own -- silently delivering a different thing under the same name is how a
+    workflow loses the user's trust. The internalised path is reached only when
+    the caller passes `--no-speckit`, which skips this group entirely. That flag
+    means "take the internalised path", not "check less": it holds even on a
+    machine where both halves are present.
     """
     res = []
     scaffold = os.path.abspath(os.path.join(repo or ".", SPECKIT_SCAFFOLD))
