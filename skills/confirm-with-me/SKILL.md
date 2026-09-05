@@ -1,6 +1,6 @@
 ---
 name: confirm-with-me
-description: Use IMMEDIATELY when encountering the literal phrase `confirm with me` in user messages, spec files, plan files, workflow steps, task instructions, or other skill bodies. Pauses execution BEFORE the marked step, posts a 5-field structured confirm block, and BLOCKS until user replies `confirm` / `abort` / `modify: <change>`. Never assume prior task-level approval covers a step marked with this phrase. Each marker = one atomic gate for one step.
+description: "Use IMMEDIATELY when encountering the literal phrase `confirm with me` in user messages, spec files, plan files, workflow steps, task instructions, or other skill bodies. Pauses execution BEFORE the marked step, posts a 5-field structured confirm block, and BLOCKS until user replies `confirm` / `abort` / `modify: <change>`. Never assume prior task-level approval covers a step marked with this phrase. Each marker = one atomic gate for one step."
 ---
 
 # confirm-with-me — Per-Step Action Confirmation Gate
