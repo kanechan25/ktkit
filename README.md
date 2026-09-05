@@ -53,6 +53,11 @@ sources. The invariant is not broken — the reviewers are simply given more to 
 - **Freshness is measured before anything is read** — revision markers live *inside* documents as
   per-section changelog tokens, and the signal is the **largest** one, not the first. An audit built
   on a superseded revision is wrong at the foundation and nothing downstream can detect it
+- **Conventions are data, not code** — which revision syntaxes exist, which directories hold build
+  output, which extensions are binary: all of it lives in `data/recon-patterns.json` and is extended
+  with `--patterns <file.json>`. Your repository writes revisions in a way nobody here has seen? Add
+  three values to a JSON file. Nothing in this toolkit is tied to the codebase it was built against,
+  and a test scans every shipped file to keep it that way
 - **One artifact, several copies** — the source, a copy under `bin/`, a test fixture, a hand-edited
   spare. Build output and stand-ins are disqualified; when more than one candidate survives the run
   refuses to choose and says so, and copies that differ by `md5` are themselves a finding
@@ -228,7 +233,7 @@ kind of file that has correct claims, wrong claims, open questions and conclusio
 together.
 
 ```text
-ktkit:docs-review 3 .claude/claude/specs/billing/retry/abc.md
+ktkit:docs-review 3 docs/specs/billing/retry/abc.md
 ```
 
 `3` is the number of **self-review rounds**. Round 1 reviews the file. **Round 2 reviews round 1's own
@@ -336,10 +341,10 @@ directions are useful:
 
 ```text
 # the ticket is the standard; the draft has to say what it requires
-ktkit:docs-review 3 docs/req-1234.md .claude/claude/specs/billing/retry/abc.md
+ktkit:docs-review 3 docs/req-1234.md docs/specs/billing/retry/abc.md
 
 # abc.md is settled; the other docs have to keep up with it
-ktkit:docs-review 3 .claude/claude/specs/billing/retry/abc.md ./docs ./api-design
+ktkit:docs-review 3 docs/specs/billing/retry/abc.md ./docs ./api-design
 ```
 
 You get one row per requirement in the standard:
@@ -550,6 +555,7 @@ skills/spec-recon/
   references/handoff.md           — passing evidence to docs-review --evidence
   references/cost-model.md        — measured base costs and the per-wave spend line
   references/incremental.md       — what is re-derived when a prior report exists
+  data/recon-patterns.json        — revision syntaxes, build dirs, binary extensions; yours to edit
   scripts/recon.py                — freshness, revision markers, duplicate-source resolution
   scripts/plan_fleet.py           — recon.json → a fleet plan, deterministic and tested
   scripts/probe_xlsx.py           — .xlsx via zipfile + ElementTree; no openpyxl anywhere

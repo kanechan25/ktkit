@@ -31,6 +31,7 @@ first-class sources. The invariant is not broken; the reviewers are handed more 
 | `--handoff on\|off` | `on` | Hand phases 3–4 to `ktkit:docs-review --evidence <dir>`. `off` stops after evidence, which is also how this skill is tested. |
 | `--max-questions N` | `3` | Ceiling on rows that reach you. Counts across the **whole run**, not per round. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed from the inputs. |
+| `--patterns <file>` | — | JSON merged over `data/recon-patterns.json`. How a house convention this toolkit has never seen — a revision syntax, a build directory, an extension — is recognised **without editing any code**. |
 | `--keep-scratch` | off | Keep the working directory after a clean run. |
 
 ## The five phases
@@ -72,7 +73,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/recon.py" <paths> \
 This settles three things before a single token is spent on reading:
 
 - **Freshness.** Revision markers live *inside* documents as changelog tokens, and the signal is the
-  **largest** one, not the first. An input newer than the prior report is stated on line 1 of the
+  **largest** one, not the first. Which syntaxes count is **data**, in
+  `data/recon-patterns.json`, extended by `--patterns` — every house writes revisions differently, so
+  none of it belongs in code. A document matching no pattern is not an error: mtime and `git log`
+  still answer the question. An input newer than the prior report is stated on line 1 of the
   report — an audit built on a superseded revision is wrong at the foundation and nothing downstream
   can detect it.
 - **Ambiguous sources.** One artifact usually exists several times: the source, a copy under `bin/`,
@@ -222,6 +226,7 @@ directory. That is the supported way to use this skill on its own.
 | `references/handoff.md` | handing off to `docs-review` |
 | `references/cost-model.md` | estimating, or writing the per-wave cost line |
 | `references/incremental.md` | a prior report exists |
+| `data/recon-patterns.json` | this repository writes revisions, build paths or fixtures differently |
 | `docs-review/references/self-clarify.md` | any unknown, at any point |
 | `docs-review/references/large-sets.md` | more than ~15 documents |
 | `docs-review/references/i18n-jp.md` | Japanese documents |

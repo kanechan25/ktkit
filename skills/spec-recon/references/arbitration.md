@@ -60,8 +60,8 @@ a migration default and present it as a measurement. Those answer a different qu
 weakness in the report:
 
 ```markdown
-| V-014 | UPHELD | `calcEngineVersion` is not referenced in the frontend |
-| | searched | calcEngineVersion, calc_engine_version, CalcEngineVersion, calc-engine-version, engineVersion, glob **/*calc* |
+| V-014 | UPHELD | `retryBudgetMs` is not referenced in the client |
+| | searched | retryBudgetMs, retry_budget_ms, RetryBudgetMs, retry-budget-ms, budgetMs, glob **/*retry* |
 | | unsearched | generated bundles under dist/, and anything injected at build time |
 ```
 

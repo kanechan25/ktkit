@@ -62,13 +62,13 @@ A markdown file at the path you are given, structured as measurements — never 
 
 | Property | Value | Label |
 | -------- | ----- | ----- |
-| path | src/.../quotation.xlsx | [measured] |
+| path | src/.../report-template.xlsx | [measured] |
 | md5 | a2e610bd… | [measured] |
-| sheet names | 見積書, 内訳, 明細, 集計, 備考 | [measured] |
+| sheet names | Cover, Summary, Detail, Totals, Notes | [measured] |
 | defined names | 172 | [measured] |
-| shared with Rev.03 form | 0 of 5 sheet names | [derived] |
+| shared with the published form | 0 of 5 sheet names | [derived] |
 
-Reproduce: `python3 scripts/probe_xlsx.py src/.../quotation.xlsx --sheets --names`
+Reproduce: `python3 scripts/probe_xlsx.py src/.../report-template.xlsx --sheets --names`
 ```
 
 **Every number carries exactly one label**: `[measured]` for something you read out of the file,

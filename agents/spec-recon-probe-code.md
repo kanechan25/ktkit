@@ -34,8 +34,8 @@ Reporting `NOT_FOUND` is asserting that a competent search would not have found 
 terms are part of the answer, and a thin list is a defect. Before writing `NOT_FOUND`, try:
 
 - the identifier exactly, then case-insensitively
-- the identifier split at word boundaries — `calcEngineVersion` also as `calc_engine_version`,
-  `CalcEngineVersion`, `calc-engine-version`
+- the identifier split at word boundaries — `retryBudgetMs` also as `retry_budget_ms`,
+  `RetryBudgetMs`, `retry-budget-ms`
 - the distinctive half alone — the noun without the prefix, the prefix without the noun
 - the concept in the codebase's other language, when the repository mixes them
 - the file the thing would live in, by `Glob`, when the name suggests a location
@@ -49,9 +49,10 @@ put the identifier somewhere you were not given — generated code, a database m
 resource, a template inside a binary file, an environment-specific config — say so on the row:
 
 ```
-NOT_FOUND  quotation_layout  tried: quotation_layout, quotationLayout, QuotationLayout,
-           layout, 帳票, glob **/*layout*  |  UNSEARCHED: the .xlsx templates are binary and
-           outside my reach; an artifact probe has to settle those
+NOT_FOUND  page_layout  tried: page_layout, pageLayout, PageLayout, layout,
+           <the same concept in the other language this repo mixes>,
+           glob **/*layout*  |  UNSEARCHED: the spreadsheet templates are binary
+           and outside my reach; an artifact probe has to settle those
 ```
 
 Whoever reads your rows will turn some of them into verdicts. A `NOT_FOUND` that hides an unsearched

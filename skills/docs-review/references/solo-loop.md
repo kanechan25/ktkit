@@ -151,6 +151,5 @@ Measured on this harness, a lean role's base is ~6.6k tokens and a subagent's re
 number of turns multiplied by a prefix that only grows. The larger the context window, the worse that
 trades — a bigger window does not bound the prefix, it lets it grow.
 
-`.claude/claude/analyze/solo-vs-team-arch-20260826.md` in this repo has the full comparison. Its
-conclusion, in one line: solo wins on latency and on having a single transcript to debug, roughly
-ties on token for a small set, and loses badly on a large one.
+The comparison behind that, in one line: solo wins on latency and on having a single transcript to
+debug, roughly ties on token cost for a small set, and loses badly on a large one.

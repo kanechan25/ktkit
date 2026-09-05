@@ -3,7 +3,7 @@
 Read this when the user hands you **one document and no standard**:
 
 ```text
-docs-review 3 .claude/claude/specs/billing/retry/abc.md
+docs-review 3 docs/specs/billing/retry/abc.md
 ```
 
 The document is the subject, not something being measured against a spec. It is the kind of file

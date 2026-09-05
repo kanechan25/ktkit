@@ -134,11 +134,21 @@ def test_only_two_docs_review_files_changed():
     """Exactly the two extensions, and nothing else in the skill."""
     import subprocess
     allowed = {
+        # the two extensions themselves
         "skills/docs-review/SKILL.md",
         "skills/docs-review/references/self-clarify.md",
         # the agent-table checker was generalised to cover a second suite;
         # its docs-review behaviour is asserted by running it, not by diffing.
         "skills/docs-review/tests/check_agent_table.py",
+        # portability, not behaviour: test_no_project_strings.py found example
+        # paths using a directory convention private to one machine, and a
+        # pointer to a file that is gitignored and therefore absent for anyone
+        # who installs this. Both predate the evidence work. Neither changes
+        # what the skill does; they are listed here rather than excused,
+        # because a scope expansion that nobody can see is the thing this test
+        # exists to prevent.
+        "skills/docs-review/references/critique-mode.md",
+        "skills/docs-review/references/solo-loop.md",
     }
     p = subprocess.Popen(["git", "-C", ROOT, "diff", "--name-only", "HEAD", "--",
                           "skills/docs-review"],

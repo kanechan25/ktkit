@@ -36,6 +36,7 @@ Exit status
 """
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -43,32 +44,72 @@ import subprocess
 import sys
 
 # ---------------------------------------------------------------------------
-# Revision markers. Extend this table; do not add branches to the code.
+# Conventions live in data/recon-patterns.json, not here.
 #
-# Each entry: (name, compiled regex with one capturing group, kind).
-#   kind "alpha"  -> the group is a letter sequence; compare by length then value
-#   kind "numeric"-> the group is dotted digits; compare component-wise
-# The Japanese entry is one house style among several, not the default.
+# Which revision syntax a house uses, which directories hold build output, which
+# extensions are binary -- every one of those is true of some repositories and
+# false of others. Baking them into this file would mean a user with a different
+# convention has to patch source; in a file they can edit, or extend through
+# --patterns, they do not.
+#
+# The defaults are a starting set, never a requirement: a document matching no
+# revision pattern at all still gets a freshness answer, from mtime and git.
 # ---------------------------------------------------------------------------
-MARKER_PATTERNS = [
-    ("ja-han",   re.compile(r"(?:初版|\d+版)-([a-z])"),            "alpha"),
-    ("rev-dot",  re.compile(r"\bRev\.(\d+(?:\.\d+)*)"),            "numeric"),
-    ("rev-alpha", re.compile(r"\brev-([a-z])\b", re.I),            "alpha"),
-    ("v-semver", re.compile(r"\bv(\d+(?:\.\d+){1,3})\b"),          "numeric"),
-    ("draft-n",  re.compile(r"\bDraft\s+(\d+)\b", re.I),           "numeric"),
-]
+DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    "data", "recon-patterns.json")
 
-# Path segments that mean "this file is a build product or a stand-in, not the
-# source". A hit on any of these disqualifies a candidate from being the source
-# copy of an artifact.
-BUILD_SEGMENTS = {"bin", "obj", "dist", "build", "out", "target",
-                  "node_modules", ".next", ".nuxt", "coverage", "__pycache__"}
-STANDIN_HINTS = ("test", "tests", "fixture", "fixtures", "sample", "samples",
-                 "example", "examples", "mock", "mocks", "_user-edited")
+# Used only if the data file is missing -- a copied-out script should degrade,
+# not crash. Deliberately minimal: the real table is the JSON.
+FALLBACK = {
+    "revision_markers": [["v-semver", r"\bv(\d+(?:\.\d+){1,3})\b", "numeric"]],
+    "build_segments": ["bin", "obj", "dist", "build", "out", "target",
+                       "node_modules"],
+    "standin_hints": ["test", "tests", "fixture", "fixtures", "sample"],
+    "binary_exts": [".xlsx", ".docx", ".pdf", ".zip", ".png", ".jpg"],
+}
 
-BINARY_EXTS = {".xlsx", ".xls", ".xlsm", ".docx", ".pptx", ".pdf", ".zip",
-               ".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2",
-               ".ttf", ".otf", ".so", ".dylib", ".dll", ".exe", ".class"}
+
+def load_conventions(extra_path=None):
+    """Read the shipped conventions, then merge a caller's file over them.
+
+    Supplying --patterns is how a house style this table has never seen gets
+    recognised without a code change.
+    """
+    try:
+        with io.open(DATA, encoding="utf-8") as fh:
+            conf = json.load(fh)
+    except (OSError, IOError, ValueError):
+        conf = dict(FALLBACK)
+
+    if extra_path:
+        with io.open(extra_path, encoding="utf-8") as fh:
+            extra = json.load(fh)
+        # A bare list is the old shorthand for "more revision patterns".
+        if isinstance(extra, list):
+            extra = {"revision_markers": extra}
+        for key, val in extra.items():
+            if key.startswith("$"):
+                continue
+            if key not in conf:
+                raise ValueError("unknown key %r; known: %s"
+                                 % (key, ", ".join(sorted(k for k in conf
+                                                          if not k.startswith("$")))))
+            conf[key] = list(conf[key]) + list(val)
+
+    patterns = []
+    for row in conf["revision_markers"]:
+        name, rx, kind = row[0], row[1], row[2]
+        if kind not in ("alpha", "numeric"):
+            raise ValueError("pattern %r: kind must be alpha or numeric" % name)
+        patterns.append((name, re.compile(rx), kind))
+
+    return {
+        "patterns": patterns,
+        "build_segments": set(s.lower() for s in conf["build_segments"]),
+        "standin_hints": tuple(s.lower() for s in conf["standin_hints"]),
+        "binary_exts": set(e.lower() for e in conf["binary_exts"]),
+    }
+
 
 TEXT_READ_LIMIT = 4 * 1024 * 1024      # markers past 4 MB are not worth the read
 
@@ -83,25 +124,6 @@ def sh(cmd, cwd=None, timeout=20):
         return 1, ""
 
 
-def load_patterns(path):
-    """Merge a caller-supplied pattern table over the built-in one.
-
-    The file is a list of [name, regex, kind]. Supplying one is how a house
-    style this table has never seen gets recognised without a code change.
-    """
-    if not path:
-        return list(MARKER_PATTERNS)
-    with open(path) as fh:
-        extra = json.load(fh)
-    out = list(MARKER_PATTERNS)
-    for row in extra:
-        name, rx, kind = row[0], row[1], row[2]
-        if kind not in ("alpha", "numeric"):
-            raise ValueError("pattern %r: kind must be alpha or numeric" % name)
-        out.append((name, re.compile(rx), kind))
-    return out
-
-
 def _alpha_key(s):
     return (len(s), s.lower())
 
@@ -113,8 +135,9 @@ def _numeric_key(s):
 def revision_markers(text, patterns):
     """Return the highest marker per pattern family found in the body.
 
-    Families are kept separate on purpose: `5版-n` and `Rev.03` are not
-    comparable, and picking a winner across them would invent an ordering.
+    Families are kept separate on purpose: a letter sequence and a dotted
+    version number have no shared ordering, and picking a winner across them
+    would invent one.
     """
     found = {}
     for name, rx, kind in patterns:
@@ -131,8 +154,8 @@ def revision_markers(text, patterns):
     return found
 
 
-def is_binary(path, ext):
-    if ext in BINARY_EXTS:
+def is_binary(path, ext, binary_exts):
+    if ext in binary_exts:
         return True
     try:
         with open(path, "rb") as fh:
@@ -170,10 +193,10 @@ def md5(path):
     return h.hexdigest()
 
 
-def measure(path, repo, patterns):
+def measure(path, repo, conv):
     st = os.stat(path)
     ext = os.path.splitext(path)[1].lower()
-    binary = is_binary(path, ext)
+    binary = is_binary(path, ext, conv["binary_exts"])
     rec = {
         "path": path,
         "bytes": st.st_size,
@@ -195,7 +218,7 @@ def measure(path, repo, patterns):
             text = ""
         rec["lines"] = text.count("\n") + (1 if text and not text.endswith("\n") else 0)
         rec["lang"] = guess_lang(text)
-        rec["revision_markers"] = revision_markers(text, patterns)
+        rec["revision_markers"] = revision_markers(text, conv["patterns"])
     elif not binary:
         rec["lang"] = "unread-too-large"
 
@@ -223,7 +246,7 @@ def expand(paths):
     return out
 
 
-def duplicate_groups(records):
+def duplicate_groups(records, conv):
     """Group inputs that share a basename, and rank the candidates.
 
     One artifact commonly exists several times in a repository: the source, a
@@ -249,10 +272,10 @@ def duplicate_groups(records):
         for r in rows:
             segs = set(s.lower() for s in r["path"].split(os.sep))
             low = r["path"].lower()
-            if segs & BUILD_SEGMENTS:
+            if segs & conv["build_segments"]:
                 verdict = "build-output"
-            elif any(h in segs for h in STANDIN_HINTS) or \
-                    any(h in low for h in ("_user-edited", "sample", "fixture")):
+            elif any(h in segs for h in conv["standin_hints"]) or \
+                    any(h in low for h in conv["standin_hints"]):
                 verdict = "stand-in"
             else:
                 verdict = "candidate"
@@ -296,13 +319,13 @@ def main(argv=None):
     ap.add_argument("--repo", default=".")
     ap.add_argument("--prior", help="path of an existing report, to date against")
     ap.add_argument("--out", help="write recon.json here instead of stdout")
-    ap.add_argument("--patterns", help="JSON list of extra [name, regex, kind]")
+    ap.add_argument("--patterns", help="JSON file merged over data/recon-patterns.json; a bare list means extra revision markers")
     a = ap.parse_args(argv)
 
     try:
-        patterns = load_patterns(a.patterns)
-    except (ValueError, OSError, IOError, json.JSONDecodeError) as exc:
-        sys.stderr.write("bad --patterns: %s\n" % exc)
+        conv = load_conventions(a.patterns)
+    except (ValueError, OSError, IOError) as exc:
+        sys.stderr.write("bad conventions (%s): %s\n" % (a.patterns or DATA, exc))
         return 2
 
     files = expand(a.paths)
@@ -311,7 +334,7 @@ def main(argv=None):
         sys.stderr.write("cannot read: %s\n" % ", ".join(missing))
         return 1
 
-    records = [measure(p, a.repo, patterns) for p in files]
+    records = [measure(p, a.repo, conv) for p in files]
 
     prior_mtime = None
     if a.prior and os.path.isfile(a.prior):
@@ -325,9 +348,9 @@ def main(argv=None):
         "prior_report": a.prior if prior_mtime else None,
         "prior_report_mtime": prior_mtime,
         "stale_risk": stale,
-        "patterns": [p[0] for p in patterns],
+        "patterns": [p[0] for p in conv["patterns"]],
         "inputs": records,
-        "duplicates": duplicate_groups(records),
+        "duplicates": duplicate_groups(records, conv),
         "totals": {
             "n_inputs": len(records),
             "n_binary": sum(1 for r in records if r["is_binary"]),

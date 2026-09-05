@@ -1,0 +1,63 @@
+{
+  "$comment": [
+    "Data, not code. Every value here is a convention some repositories use and",
+    "others do not, so it belongs in a file a user can edit rather than in a",
+    "source file they would have to patch.",
+    "",
+    "recon.py loads this file, then merges anything passed with --patterns on",
+    "top of it. Nothing here is required: a repository matching none of these",
+    "revision patterns still gets a freshness answer, from mtime and git log.",
+    "",
+    "revision_markers  how a document says which revision it is at.",
+    "                  [name, regex with ONE capturing group, kind]",
+    "                  kind 'alpha'   -> the group is a letter sequence; the",
+    "                                    highest is the longest, then the",
+    "                                    latest alphabetically",
+    "                  kind 'numeric' -> the group is dotted digits, compared",
+    "                                    component by component",
+    "                  Families are never compared with each other: 'Rev.03'",
+    "                  and 'v2.1' have no shared ordering, and inventing one",
+    "                  would silently pick a winner.",
+    "",
+    "build_segments    a path segment meaning 'this is a build product, not a",
+    "                  source file'. Used to disqualify a copy when one",
+    "                  artifact appears several times in a repository.",
+    "",
+    "standin_hints     a path fragment meaning 'this is a fixture or a sample'.",
+    "                  Same purpose, weaker signal.",
+    "",
+    "binary_exts       extensions never read as text. A file not listed here is",
+    "                  still treated as binary if its first bytes contain NUL,",
+    "                  so this list is an optimisation, not the whole test."
+  ],
+
+  "revision_markers": [
+    ["rev-dot",    "\\bRev\\.(\\d+(?:\\.\\d+)*)",        "numeric"],
+    ["rev-alpha",  "\\brev-([a-z])\\b",                   "alpha"],
+    ["v-semver",   "\\bv(\\d+(?:\\.\\d+){1,3})\\b",       "numeric"],
+    ["draft-n",    "\\bDraft\\s+(\\d+)\\b",               "numeric"],
+    ["issue-n",    "\\bIssue\\s+(\\d+)\\b",               "numeric"],
+    ["ver-n",      "\\bVersion\\s+(\\d+(?:\\.\\d+)*)\\b", "numeric"],
+    ["ja-han",     "(?:\\u521d\\u7248|\\d+\\u7248)-([a-z])", "alpha"]
+  ],
+
+  "build_segments": [
+    "bin", "obj", "dist", "build", "out", "target", "node_modules",
+    ".next", ".nuxt", "coverage", "__pycache__", "vendor", ".venv",
+    "Debug", "Release"
+  ],
+
+  "standin_hints": [
+    "test", "tests", "fixture", "fixtures", "sample", "samples",
+    "example", "examples", "mock", "mocks", "stub", "stubs", "_user-edited"
+  ],
+
+  "binary_exts": [
+    ".xlsx", ".xls", ".xlsm", ".docx", ".doc", ".pptx", ".ppt", ".pdf",
+    ".zip", ".tar", ".gz", ".7z", ".rar", ".jar", ".war",
+    ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svgz",
+    ".woff", ".woff2", ".ttf", ".otf", ".eot",
+    ".so", ".dylib", ".dll", ".exe", ".class", ".pyc", ".o", ".a",
+    ".db", ".sqlite", ".sqlite3", ".mp3", ".mp4", ".mov", ".avi"
+  ]
+}

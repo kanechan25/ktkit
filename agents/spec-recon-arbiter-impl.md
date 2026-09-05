@@ -39,8 +39,9 @@ it. Guessing to avoid it is the failure.
 
 ## How to search before you uphold
 
-Reach for the vocabulary of the codebase, not of the document. The document says *seat print rows*;
-the code may say `printableRowCount`, `座席印字行`, `SEAT_ROWS`, or nothing recognisable at all.
+Reach for the vocabulary of the codebase, not of the document. Where the document says *printable
+row slots*, the code may say `slotCount`, `ROW_SLOTS`, the same idea in whatever other language the
+repository mixes, or nothing recognisable at all.
 
 - the concept's noun, its verb, and the domain term in every language the repo mixes
 - the layer where it would live, found by `Glob` — the config, the entity, the migration, the view
