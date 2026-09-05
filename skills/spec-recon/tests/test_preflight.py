@@ -129,6 +129,68 @@ def test_report_file_is_written():
         check("step file names the groups probed", "Groups probed" in body, body[:200])
 
 
+def test_artifacts_group_creates_the_layout_and_repeats_cleanly():
+    """The layout is a rule, so the gate creates it rather than complaining.
+
+    The second run matters as much as the first: a gate that reports "created"
+    every time is a gate that is doing something it should not, and a skill that
+    runs it twice in one session would see its own artifacts as new.
+    """
+    d = tempfile.mkdtemp()
+    rc, out, _ = run(["--groups", "artifacts", "--repo", d])
+    check("artifacts group exits 0 on a bare repository", rc == 0, out)
+    root = os.path.join(d, ".claude", "claude")
+    missing = [s for s in ("prompts", "analyze", "specs", "pipeline",
+                           "implemented", "compacts")
+               if not os.path.isdir(os.path.join(root, s))]
+    check("artifacts group creates every artifact directory", not missing, missing)
+    check("the first run says what it created", "created" in out, out)
+
+    rc2, out2, _ = run(["--groups", "artifacts", "--repo", d])
+    check("re-running is idempotent", rc2 == 0, out2)
+    check("the second run creates nothing", "created" not in out2, out2)
+
+
+def test_artifacts_group_never_writes_outside_dot_claude():
+    """The only filesystem change permitted is inside `<repo>/.claude/`."""
+    d = tempfile.mkdtemp()
+    run(["--groups", "artifacts", "--repo", d])
+    stray = [n for n in os.listdir(d) if n != ".claude"]
+    check("nothing is created beside .claude/", not stray, stray)
+
+
+def test_speckit_group_fails_with_both_ways_out():
+    """Missing scaffolding must name `specify init` AND `--no-speckit`.
+
+    Naming only the first strands anyone who does not want speckit at all; the
+    internalised path is a supported way to run, not a fallback to discover.
+    """
+    d = tempfile.mkdtemp()
+    rc, out, _ = run(["--groups", "speckit", "--repo", d])
+    check("missing .specify/ exits 1", rc == 1, "rc=%d\n%s" % (rc, out))
+    check("missing .specify/ is reported FAIL",
+          "FAIL" in out and "speckit scaffolding" in out, out)
+    check("the fix names `specify init`", "specify init" in out, out)
+    check("the fix also names --no-speckit", "--no-speckit" in out, out)
+
+
+def test_mcp_group_never_tells_the_user_to_install_the_server():
+    """The plugin ships the server, so the fix is never "go install it".
+
+    A hand-installed second copy registers under a different tool name, and the
+    skills call the plugin's name. Telling a user to install it would produce a
+    server that runs and a skill that still cannot see it.
+    """
+    rc, out, _ = run(["--groups", "mcp"])
+    check("mcp group runs", rc in (0, 1), "rc=%d" % rc)
+    lowered = out.lower()
+    check("mcp group never suggests installing the server by hand",
+          "install sequential-thinking" not in lowered
+          and "add the sequential-thinking" not in lowered, out)
+    check("mcp group names the plugin as the owner of the server",
+          ".mcp.json" in out or "do not add a second copy" in out, out)
+
+
 def main():
     for fn in sorted(
             (v for k, v in globals().items() if k.startswith("test_")),

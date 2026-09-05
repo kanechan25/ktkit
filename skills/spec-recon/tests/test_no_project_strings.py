@@ -59,9 +59,16 @@ BANNED = [
     (r"様式", "a domain term from one project"),
     (r"積算", "a domain term from one project"),
     (r"見積", "a domain term from one project"),
-    (r"\.claude/claude/", "a directory layout private to one machine"),
     (r"/Users/[a-z]+/", "an absolute path from one machine"),
 ]
+
+# `.claude/claude/` was banned here once, read as a layout private to the machine
+# this plugin was built on. It is the opposite: it is the plugin's own rule --
+# every skill writes its artifacts under `<repo-root>/.claude/claude/` and
+# creates that directory when a repository does not have one yet. Banning it
+# would push each skill to invent its own place to write, which is exactly the
+# drift the rule exists to stop. What stays banned is a path naming a person or
+# a machine: `/Users/<name>/` above.
 
 # The homepage and repository fields of the manifest legitimately name the
 # account that publishes the plugin.

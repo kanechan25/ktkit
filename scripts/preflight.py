@@ -25,11 +25,11 @@ Two lessons are wired into this file and must not be undone:
     exist". It is reported as SKIP, never as FAIL.
 
 Usage
-    preflight.py --groups runtime,write,read,vcs,forge [options]
+    preflight.py --groups runtime,write,read,vcs,forge,artifacts,speckit,mcp [options]
 
     --out <dir>        directory the run will write to (group: write)
     --inputs <p> [..]  paths the run will read (group: read)
-    --repo <dir>       repository root (groups: vcs, forge)
+    --repo <dir>       repository root (groups: vcs, forge, artifacts, speckit)
     --report <path>    also write the table here, e.g. <base>/steps/00-preflight.md
     --json             emit machine-readable results instead of the table
 
@@ -53,7 +53,22 @@ import os
 import subprocess
 import sys
 
-GROUPS = ("runtime", "write", "read", "vcs", "forge")
+GROUPS = ("runtime", "write", "read", "vcs", "forge",
+          "artifacts", "speckit", "mcp")
+
+# Every skill in this plugin writes its artifacts here, and nowhere else. The
+# path is a rule, not a discovery: a repository that does not have the directory
+# gets one, and no skill ever probes for an alternative layout. Creating a
+# missing directory is the only filesystem change this gate is allowed to make.
+ARTIFACT_ROOT = os.path.join(".claude", "claude")
+ARTIFACT_DIRS = ("prompts", "analyze", "specs", "pipeline", "implemented",
+                 "compacts")
+
+# speckit is a separate toolkit with its own lifecycle. This plugin never ships
+# it and never vendors it: `.specify/` is scaffolding that lives inside the
+# repository being worked on, so no plugin can supply it on the user's behalf.
+SPECKIT_SCAFFOLD = ".specify"
+SPECKIT_SKILL = os.path.join("~", ".claude", "skills", "speckit.specify")
 
 # The transport used for every forge request. Deliberately not `gh api`: see the
 # module docstring. urllib goes through OpenSSL and works where `gh` does not.
@@ -284,12 +299,90 @@ def check_forge(repo):
     return res
 
 
+def check_artifacts(repo):
+    """Make the plugin's artifact root exist, and prove it can be written to.
+
+    This is the one place the layout rule is enforced. A skill that asks for
+    this group may then write under `<repo>/.claude/claude/<area>/` without
+    checking anything, and must never write outside `<repo>/.claude/`.
+    """
+    root = os.path.abspath(os.path.join(repo or ".", ARTIFACT_ROOT))
+    made = []
+    try:
+        for sub in ARTIFACT_DIRS:
+            d = os.path.join(root, sub)
+            if not os.path.isdir(d):
+                os.makedirs(d)
+                made.append(sub)
+        probe = os.path.join(root, ".preflight-probe")
+        with open(probe, "w") as fh:
+            fh.write("ok\n")
+        os.remove(probe)
+    except (OSError, IOError) as exc:
+        return [Result("FAIL", "artifact root",
+                       "%s not writable (%s) -> run from the repository root, "
+                       "or /sandbox to allow writes there" % (root, exc))]
+    detail = root if not made else "%s (created %s)" % (root, ", ".join(made))
+    return [Result("PASS", "artifact root", detail)]
+
+
+def check_speckit(repo):
+    """Both halves of speckit, reported separately because they fail apart.
+
+    The scaffolding is per-repository and the skills are per-machine, so a user
+    can easily have one and not the other. Each missing half gets its own fix,
+    and either one is a FAIL: a run that calls `/speckit.plan` without them
+    burns tokens up to the point of the call and then cannot continue. The
+    caller's escape hatch is `--no-speckit`, which skips this group entirely and
+    takes the internalised path instead.
+    """
+    res = []
+    scaffold = os.path.abspath(os.path.join(repo or ".", SPECKIT_SCAFFOLD))
+    if os.path.isdir(scaffold):
+        res.append(Result("PASS", "speckit scaffolding", scaffold))
+    else:
+        res.append(Result("FAIL", "speckit scaffolding",
+                          "no %s in this repository -> run `specify init` at the "
+                          "repository root, or re-run the skill with --no-speckit"
+                          % SPECKIT_SCAFFOLD))
+    skill = os.path.expanduser(SPECKIT_SKILL)
+    if os.path.isdir(skill):
+        res.append(Result("PASS", "speckit skills", skill))
+    else:
+        res.append(Result("FAIL", "speckit skills",
+                          "%s not installed -> install the speckit skills, or "
+                          "re-run the skill with --no-speckit" % SPECKIT_SKILL))
+    return res
+
+
+def check_mcp():
+    """The transport for the MCP server this plugin ships in `.mcp.json`.
+
+    The server itself is the plugin's responsibility, not the user's, so a
+    failure here is never "go and install it" -- installing a second copy by
+    hand produces a differently-named tool that the skills do not call. What can
+    actually break is the runner: `npx` fetches the package on first use, so no
+    `npx` and no network means no server. Say that, and say it as an environment
+    fault.
+    """
+    if have("npx"):
+        return [Result("PASS", "npx (mcp runner)",
+                       "ktkit ships sequential-thinking via .mcp.json")]
+    return [Result("FAIL", "npx (mcp runner)",
+                   "npx not found -> install Node.js. The plugin ships the "
+                   "sequential-thinking server itself; do not add a second copy "
+                   "by hand, its tool would have a different name")]
+
+
 CHECKS = {
     "runtime": lambda a: check_runtime(),
     "write": lambda a: check_write(a.out),
     "read": lambda a: check_read(a.inputs),
     "vcs": lambda a: check_vcs(a.repo),
     "forge": lambda a: check_forge(a.repo),
+    "artifacts": lambda a: check_artifacts(a.repo),
+    "speckit": lambda a: check_speckit(a.repo),
+    "mcp": lambda a: check_mcp(),
 }
 
 

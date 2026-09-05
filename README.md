@@ -1,6 +1,46 @@
 # ktkit
 
-Claude Code skills for reviewing documentation and for checking documentation against the thing it describes. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work. `spec-recon` adds the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control state, and hands each measurement back as a document the reviewers can read.
+Claude Code skills for spec-driven development: from a feature request or a bug report, to a
+reviewed specification, to the change itself, to a record of what was done.
+
+Thirteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on:
+
+| | Skill | What it is for |
+| - | ----- | -------------- |
+| **Understand** | [`analyze-feat`](#the-sdd-pipeline) | a feature request → an analysis, before any spec exists |
+| | [`rca`](#the-sdd-pipeline) | a bug report → root cause, by evidence rather than guesswork |
+| **Specify** | [`feat-req-specs`](#the-sdd-pipeline) | an analysed feature → a reviewed spec, then stop |
+| | [`bug-fix-specs`](#the-sdd-pipeline) | a diagnosed bug → a reviewed fix spec, then stop |
+| **Execute** | [`feat-req-execute`](#the-sdd-pipeline) | an approved spec → plan, tasks, code, report |
+| | [`bug-fix-execute`](#the-sdd-pipeline) | an approved fix spec → the fix, verified, reported |
+| **Audit** | [`docs-review`](#docs-review) | documents against a standard, against the repository, or against themselves |
+| | [`spec-recon`](#spec-recon) | measure what documents only claim: code, artifacts, version control |
+| **Survive** | [`ccompact`](#working-skills) | checkpoint in-flight state before `/compact` eats it |
+| | [`ccontinue`](#working-skills) | resume from that checkpoint, with the file outranking the summary |
+| **Decide** | [`escalation-ladder`](#working-skills) | resolve an unknown from the repository before asking a human |
+| | [`confirm-with-me`](#working-skills) | gate one irreversible step on an explicit yes |
+| **Translate** | [`translate-file`](#working-skills) | a file into Vietnamese, without touching one identifier |
+
+Two of them carry the heavier machinery. `docs-review` audits a document set with a team of agents
+that run concurrently and challenge each other's findings — every run ends with a review pass carried
+out in agents with their own context, not in the session that produced the work. `spec-recon` adds
+the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control
+state, and hands each measurement back as a document the reviewers can read.
+
+**Three rules hold across all thirteen.** They are worth reading once, because they are what make the
+skills composable rather than merely co-located.
+
+- **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in
+  `prompts/` · `analyze/` · `specs/` · `pipeline/` · `implemented/` · `compacts/`. A repository that
+  does not have it gets one. No skill probes for an alternative layout, asks you where to write, or
+  writes anywhere outside `<repo-root>/.claude/` — and creating a missing directory is the only
+  filesystem change any of them makes on its own.
+- **A preflight before the first token.** Each skill probes exactly what it is about to use and
+  stops, with the fix command, if something required is absent. A capability is proved with a real
+  request, never with a tool's opinion of itself.
+- **speckit is optional.** Four skills use it when a repository has been initialised with it, and run
+  an internalised equivalent when it has not. `--no-speckit` picks that path deliberately. The
+  artifacts are the same either way, and the run always says which path it took.
 
 ## docs-review
 
@@ -82,6 +122,80 @@ ktkit:spec-recon docs/ --probe code,artifact           # fully offline, no forge
 ktkit:spec-recon docs/ --handoff off                   # stop at evidence, read it yourself
 ```
 
+## The SDD pipeline
+
+Six skills, one road. Each stops at a gate you control, and each hands the next one a file rather
+than a conversation — so the pipeline survives a compaction, a new session, or a different person
+picking it up tomorrow.
+
+```text
+        a feature request                      a bug report
+                │                                    │
+     /ktkit:analyze-feat                        /ktkit:rca
+     → analyze/<name>.analyze.md          → analyze/<name>.analyze.md
+                │                                    │
+     /ktkit:feat-req-specs                 /ktkit:bug-fix-specs
+     → specs/<base>/spec.md                → specs/<base>/spec.md
+                │                                    │
+          ── HARD STOP: you review the spec and approve it ──
+                │                                    │
+    /ktkit:feat-req-execute               /ktkit:bug-fix-execute
+    → plan.md, tasks.md, code             → the fix, verified
+    → implemented/<base>.implt.md         → implemented/<name>.implt.md
+```
+
+- **`analyze-feat`** — reads a feature request and works out what it touches, what it conflicts with,
+  and what is genuinely unknown, *before* anyone writes a spec. Unknowns go through the escalation
+  ladder rather than into an interview: what the repository can answer is answered, and what reaches
+  you comes as at most three rows, each with a default already applied and a recommendation.
+- **`rca`** — a bug report to a root cause through five Whys, each link carrying evidence, plus an
+  explicit blast radius. It writes a report and hands off; it never fixes anything.
+- **`feat-req-specs` / `bug-fix-specs`** — turn that analysis into a specification with acceptance
+  criteria, scenarios and a quality checklist that tests *the spec*, not the running system. Both
+  stop dead afterwards. No plan, no tasks, no code.
+- **`feat-req-execute` / `bug-fix-execute`** — take an approved spec and carry it out. Both refuse
+  format-only edits; both read the repository's own test command instead of guessing it; and
+  `feat-req-execute` detects a repository that has its own execution runbook and hands the decision
+  back to you rather than silently running generic speckit over it.
+
+Every one of them writes its output under the artifact root and tells you the path. Nothing is
+printed into the conversation twice.
+
+## Working skills
+
+The other five are small, and are used from inside the six above as much as directly.
+
+- **`ccompact` / `ccontinue`** — a long pipeline outlives its context window. `ccompact` writes the
+  state that exists *only* in the conversation — decisions and the reasons for them, rejected
+  options, half-finished work, traps already hit — to a durable file, then hard-stops and prints the
+  exact `/compact` line to paste. `ccontinue` picks it up on the far side, compares the recorded
+  branch and HEAD against reality, and reports every place the compaction summary and the file
+  disagree. **The file always wins.** It never copies the spec into the checkpoint: intent is
+  already on disk, and the whole point is to save what is not.
+- **`escalation-ladder`** — five tiers between "I do not know" and asking you. Search what is
+  openable; challenge a disagreement once; look up an authoritative external fact; assume the
+  better-evidenced reading **with a falsifier written down**; and only then ask, with a default
+  already applied so that silence is a valid answer. A question that reaches you has failed four
+  cheaper attempts first.
+- **`confirm-with-me`** — when the literal phrase `confirm with me` appears anywhere in the active
+  context, this gate blocks that one step until you reply `confirm`, `abort` or `modify: <change>`.
+  One marker, one gate: approval of a large task never implies approval of a step inside it.
+  ⚠️ Claude Code triggers this from the skill's description alone, which is a ranking hint rather
+  than an order. For a hard gate, add a line to your own `CLAUDE.md` telling Claude to invoke
+  `/ktkit:confirm-with-me` whenever that phrase appears.
+- **`translate-file`** — translates a file's prose into Vietnamese and leaves everything else
+  untouched: identifiers, code, paths, commands, URLs, JSON keys, brand names. Japanese proper nouns
+  that stay untranslated get an English gloss. It confirms the source file before starting, writes
+  `<stem>_vi.<ext>` beside the original, and never edits the original. It is the one skill here that
+  writes outside the artifact root, because output beside the source is the point.
+
+### A note on language
+
+`analyze-feat`, `rca`, both `*-specs` and both `*-execute` skills write their **reports and specs in
+Vietnamese**, keeping every identifier, path, snippet and technical term in English. That is
+deliberate: the reviewer reads Vietnamese, and prose in Vietnamese removes friction without costing
+any precision. The skill files themselves, and everything they write to a forge, are English.
+
 ## Install
 
 ### Option A — Plugin marketplace (recommended)
@@ -101,19 +215,33 @@ Or via the interactive UI:
 /plugin install ktkit@ktkit
 ```
 
-Installing as a plugin is what registers the twelve `docs-review` agents. Verify them after install:
+Installing as a plugin is what registers the eighteen agents and the MCP server. Verify after
+install:
 
 ```text
-/context          # Custom agents should list ktkit:docs-review-*
+/context          # Custom agents: ktkit:docs-review-* and ktkit:spec-recon-*
+                  # MCP tools:     mcp__plugin_ktkit_sequential-thinking__sequentialthinking
 ```
 
-### Option B — Manual (copy the skill)
+**What installing costs you, before you run anything.** Two of the thirteen skills use
+sequential-thinking for their reasoning step, so the plugin ships that server itself in `.mcp.json`
+rather than asking you to install it — a hand-installed copy registers under a different tool name
+and the skills would not find it. The price is that its schema sits in **every** session that has
+`ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen
+role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
+
+### Option B — Manual (copy a skill)
 
 ```bash
 cp -R skills/docs-review ~/.claude/skills/docs-review
 ```
 
-Copying skips `agents/`, so `docs-review` falls back to a single generic reviewer. It still runs and still says so — the report's first line reads `DEGRADED` and `## Review team` marks the rows — but the roles no longer see the documents independently, and the generic agent has no structured search tools. Prefer Option A for `docs-review`.
+Copying works for any skill here, but it skips three things the plugin provides: `agents/`,
+`.mcp.json`, and `${CLAUDE_PLUGIN_ROOT}`. Concretely — `docs-review` falls back to a single generic
+reviewer (it still runs and still says so: the report's first line reads `DEGRADED` and
+`## Review team` marks the rows, but the roles no longer see the documents independently);
+`bug-fix-specs` and `feat-req-specs` lose their reasoning tool; and every skill's preflight loses the
+shared `scripts/preflight.py` it resolves through the plugin root. Prefer Option A.
 
 ## Update
 
@@ -146,6 +274,30 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 3.0.0 — ktkit became a toolkit
+
+Up to 2.1.0 this plugin was two skills that audit documents. 3.0.0 adds eleven more and turns it into
+the whole spec-driven path: analyse, specify, execute, audit. Nothing about `docs-review` or
+`spec-recon` changed in the process — the same commands, flags and outputs.
+
+Four things are new, and all four affect skills you already had:
+
+- **A fixed artifact root.** Every skill writes under `<repo-root>/.claude/claude/`, creating it when
+  the repository has none. `ccompact` in particular no longer probes for a `.claude/claude` layout
+  and fall back to `.claude/` — one rule, everywhere. **Checkpoints written by an older `ccompact`
+  under `.claude/compacts/` are not moved.** Point `/ktkit:ccontinue` at the old path and it reads
+  them fine; new ones land under the artifact root.
+- **An MCP server ships with the plugin.** See the note under *Install* for what it costs you.
+- **Skills call each other by namespace.** Every internal call is written `/ktkit:<name>` in full, so
+  a skill never silently reaches a same-named copy in `~/.claude/skills/`. If you keep your own
+  `/rca` or `/ccompact` there, both continue to work and stay independent — pick whichever you want,
+  they cannot shadow each other.
+- **speckit is now optional everywhere.** `bug-fix-specs`, `feat-req-specs` and `feat-req-execute`
+  used to stop and ask when `.specify/` was missing. They now run an internalised path that produces
+  the same files at the same paths, and report which path they took. `--no-speckit` chooses it up
+  front. If you *want* the old hard stop, the preflight still gives it to you: it fails when
+  scaffolding is absent, and names both ways forward.
 
 ### Upgrading to 1.9.0 — `--team off` does something again
 
@@ -561,10 +713,27 @@ skills/spec-recon/
   scripts/probe_xlsx.py           — .xlsx via zipfile + ElementTree; no openpyxl anywhere
   scripts/check_evidence.py       — rejects unlabelled numbers and untraceable evidence files
   tests/                          — preflight, planner, evidence lint, docs-review invariance
-scripts/preflight.py              — shared by both skills: capability gate before any spend
+skills/analyze-feat/SKILL.md      — feature request → analysis, before any spec
+skills/rca/SKILL.md               — bug report → root cause, five Whys with evidence
+skills/feat-req-specs/SKILL.md    — analysis → reviewed spec, then hard stop
+skills/bug-fix-specs/SKILL.md     — root cause → reviewed fix spec, then hard stop
+skills/feat-req-execute/SKILL.md  — approved spec → plan, tasks, code, report
+skills/bug-fix-execute/SKILL.md   — approved fix spec → the fix, verified, reported
+skills/ccompact/SKILL.md          — checkpoint in-flight state before /compact
+skills/ccontinue/SKILL.md         — resume from it; the file outranks the summary
+skills/escalation-ladder/SKILL.md — five tiers before a question reaches a human
+skills/confirm-with-me/SKILL.md   — one marker, one gate, one explicit yes
+skills/translate-file/SKILL.md    — prose → Vietnamese, identifiers untouched
+scripts/preflight.py              — shared by every skill: capability gate before any spend
+                                    groups: runtime write read vcs forge artifacts speckit mcp
+.mcp.json                         — the sequential-thinking server the plugin ships
 .claude-plugin/plugin.json        — Claude Code plugin manifest
 .claude-plugin/marketplace.json   — plugin marketplace manifest
 ```
+
+The eleven single-file skills carry no `references/` or `scripts/` of their own — they share
+`scripts/preflight.py` and resolve it through `${CLAUDE_PLUGIN_ROOT}`, which is why Option A of the
+install matters for them too.
 
 `SKILL.md` stays small on purpose — the references load only when the workflow needs them, so a
 session that never touches Japanese text never pays for `i18n-jp.md`.

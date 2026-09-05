@@ -1,6 +1,6 @@
 {
   "name": "ktkit",
-  "description": "Marketplace for the docs-review skill",
+  "description": "Marketplace for the ktkit spec-driven development toolkit",
   "owner": {
     "name": "kanechan25"
   },
@@ -8,14 +8,16 @@
     {
       "name": "ktkit",
       "source": "./",
-      "description": "Documentation auditing with a reviewer agent team: critique a single file against the repository, check documents against a standard, or investigate a question across a document set.",
+      "description": "Spec-driven development from request to record: analyse a feature or a bug, write a reviewed spec, execute it, audit the documents against the repository, measure what the documents only claim, and survive compaction along the way.",
       "category": "development",
       "tags": [
+        "spec-driven-development",
         "documentation",
         "audit",
         "agents",
         "review",
-        "spec"
+        "spec",
+        "root-cause-analysis"
       ]
     }
   ]

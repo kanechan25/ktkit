@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ktkit",
-  "description": "Documentation review and specification reconnaissance for Claude Code. docs-review audits a document set with a team of agents that run concurrently and challenge each other's findings, in three shapes: critique one file against the repository and itself, check documents against a standard, or investigate a question across a document set. spec-recon adds the axis a document reviewer cannot reach — it measures source code, binary artifacts and version-control state, writes each measurement out as an evidence document, and gates every claim that something is missing behind an agent that opens the code and refutes it. Separate roles derive requirements, verify every citation, attack Missing verdicts, attack the audit itself, adjudicate findings and gate edits — plus a five-tier ladder that resolves unknowns from the repository before asking you, a preflight that proves a capability with a real request instead of trusting a tool's own error message, and lints that recompute convergence and reject an unlabelled number instead of trusting the report.",
-  "version": "2.1.0",
+  "description": "A spec-driven development toolkit for Claude Code: thirteen skills covering the path from a feature request or a bug report to a reviewed spec, an executed change, and a durable record of both. docs-review audits a document set with a team of agents that run concurrently and challenge each other's findings. spec-recon adds the axis a document reviewer cannot reach — it measures source code, binary artifacts and version-control state, and gates every claim that something is missing behind an agent that tries to refute it. analyze-feat, rca, feat-req-specs and bug-fix-specs turn a request into a reviewed specification; feat-req-execute and bug-fix-execute carry it out; ccompact and ccontinue keep a long pipeline alive across compaction; escalation-ladder resolves unknowns from the repository before asking you; confirm-with-me gates a single irreversible step; translate-file translates a file without touching its identifiers. Every skill writes to one fixed artifact root, runs a preflight that proves a capability with a real request instead of trusting a tool's own error message, and works whether or not speckit is installed.",
+  "version": "3.0.0",
   "author": {
     "name": "kanechan25"
   },
@@ -11,6 +11,7 @@
   "license": "MIT",
   "keywords": [
     "skills",
+    "spec-driven-development",
     "docs-review",
     "spec-recon",
     "documentation",
@@ -20,10 +21,12 @@
     "subagents",
     "code-review",
     "spec",
+    "root-cause-analysis",
     "gap-analysis",
     "reconnaissance",
     "evidence",
     "xlsx",
-    "preflight"
+    "preflight",
+    "compaction"
   ]
 }
