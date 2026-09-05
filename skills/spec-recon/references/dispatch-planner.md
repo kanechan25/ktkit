@@ -22,14 +22,19 @@ different plans, this boundary is wrong.*
 
 | Source | Rule | Cap |
 | ------ | ---- | --: |
-| text document | one agent per ≤700 lines, or per top-level section, whichever is smaller | 12/wave |
-| HTML document | one agent, and **strip tags to a temp file first** — an agent reading raw markup spends its budget on markup | 1 |
+| text document | one agent per **≤96 KB**, with an explicit `offset`/`limit` — **bytes, never lines**: one line of minified markup carries 50 KB while a line of prose carries 60 bytes, so a line-based shard billed anywhere from 20 KB to 2 MB for the same nominal size | 12/wave |
+| small documents | anything under **24 KB** is **packed with others** up to one shard. Sizing cuts both ways and only the first half is obvious: measured on a real set, 38 documents under 12 KB were each getting their own agent to carry 100 KB between them | 12/wave |
+| HTML document | sharded by bytes like any other bulk, but **strip tags to a temp file first** and apply the ranges to the stripped file — an agent reading raw markup spends its budget on markup | 12/wave |
 | baseline document | one agent per document, **never split**: a change surface needs continuity | 1/doc |
 | binary artifacts | one agent for the whole group; measuring in bulk is cheaper than per file | 2 |
 | code questions | one agent per **topic cluster**, never one per identifier | 4 |
 | vcs | exactly one agent — the rate limit is shared | 1 |
 
 **Hard cap: twelve agents per message.** More than that runs in batches inside the same wave.
+
+⚠️ **Every range ships with `NEEDS-WIDER`.** An agent whose answer lies outside its slice returns
+that instead of guessing, and the lead widens and re-dispatches. A range without the escape hatch
+turns "not in my slice" into "not present" silently — the exact failure `R-ARTIFACT` exists to stop.
 
 ## Three rules inherited from large sets, not to be reinvented
 

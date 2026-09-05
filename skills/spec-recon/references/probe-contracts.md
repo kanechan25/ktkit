@@ -14,6 +14,7 @@ the agent files, so the two cannot drift.
 | probe-runtime | `ktkit:spec-recon-probe-runtime` | `Read, Bash` | sonnet |
 | state-extract | `ktkit:spec-recon-state-extract` | `Read, Write, Grep, Glob` | sonnet |
 | arbiter-impl | `ktkit:spec-recon-arbiter-impl` | `Read, Grep, Glob` | inherit |
+| gap-design | `ktkit:spec-recon-gap-design` | `Read, Grep, Glob` | inherit |
 
 Only three tool sets appear, and that is not tidiness. Tool grants on this harness are **not
 monotonic**: a role declaring `Read, Grep, Glob, Bash` receives `Read, Bash`, with `Grep` and `Glob`
@@ -52,7 +53,7 @@ agents and roughly half a million tokens.
 **Producer** — `state-extract`, `probe-artifact`, `probe-vcs`, `probe-runtime`:
 
 ```text
-Read: <paths it may open>
+Read: <path> offset=<n> limit=<n>     # one range per agent; see §2b
 Scope: <the caller's own words, verbatim>
 Output language: <language>
 Write to: <base>/evidence/probe-<kind>-<topic>.md
@@ -62,11 +63,36 @@ Return: the file path and a one-line count, nothing else
 **Reviewer** — `probe-code`, `arbiter-impl`:
 
 ```text
-Read: <paths it may open>
+Read: <path> offset=<n> limit=<n>
 Items: <the identifiers or verdict ids, one per line>
 Output language: <language>
 # reviewers return rows in the reply; they have no Write and must not be asked for a file
 ```
+
+### 2b. Ranges, and the escape hatch that keeps them honest
+
+`plan_fleet.py` sizes shards in **bytes** and emits an explicit `offset`/`limit` per agent. Pass them
+through. Two reasons, and the second is the expensive one:
+
+1. **A line is not a unit of cost.** One line of minified markup can carry 50 KB while a line of
+   prose carries 60 bytes, so a line-based shard billed anywhere from 20 KB to 2 MB for the same
+   nominal size.
+2. **An agent given a range reads once.** An agent given only a file gropes toward what it needs --
+   grep, read, grep again -- and every earlier result rides along in its context for the rest of its
+   life. The range does not change *what* it sees, only *how many times it pays to see it*.
+
+⚠️ **A range without `NEEDS-WIDER` is not an optimisation, it is a defect.** An agent that cannot
+find something inside its slice must return
+
+```text
+NEEDS-WIDER  <path>  <what it searched for>  <why it likely lies outside>
+```
+
+and the lead widens the range and dispatches again. Absence inside a slice is a fact about the
+slice. Every reading role's body carries this; if you write a new one, carry it too.
+
+**HTML**: strip tags to a temp file **first**, then apply the ranges to the stripped file. Measured
+on a real 729 KB page, stripping removed 29%; the planner already accounts for that when sizing.
 
 Never put the lead's reasoning in a dispatch block. A prober told what answer is expected finds it.
 
@@ -80,6 +106,7 @@ Never put the lead's reasoning in a dispatch block. A prober told what answer is
 | probe-vcs | a state table + the endpoint per row, written to a file | any write to the forge |
 | probe-runtime | raw rows + the exact query, written to a file | substituting seed or fixture data |
 | state-extract | baseline + change surface + stated-as-future + gaps, written to a file | comparing against a spec |
+| gap-design | `GAP` + `ANCHOR <path>:<line>` + `SHAPE` + `NEIGHBOUR` + `UNKNOWN` | an anchor it did not read; effort estimates; code |
 
 ## 4. Rules every probe carries
 

@@ -15,10 +15,14 @@ Falsifier for that boundary: if two runs over one recon.json produce different
 plans, the boundary is wrong and belongs back with the model.
 
 Sharding rules
-    text document      1 agent per <= 700 lines, capped per wave
-    html document      1 agent, and the caller must strip tags to a temp file
-                       first -- an agent that reads raw markup spends its whole
-                       budget on it
+    text document      1 agent per <= 96 KB, with an explicit offset/limit, so
+                       the agent Reads once instead of groping toward what it
+                       needs. Bytes, never lines: one line of minified markup
+                       carries 50 KB, one line of prose carries 60 bytes
+    small document     under 24 KB it is packed with others up to one shard --
+                       spawning an agent costs more than it would read
+    html document      sharded like any other bulk, but the caller strips tags
+                       to a temp file first and applies the ranges to that
     snapshot document  1 agent per document, never split: a change-surface index
                        needs the whole document in one context
     binary artifacts   1 agent for the whole group; measuring in bulk is cheaper
@@ -47,7 +51,40 @@ SET_A = "Read, Grep, Glob"
 SET_B = "Read, Bash"
 SET_C = "Read, Write, Grep, Glob"
 
-LINES_PER_MAPPER = 700
+# Shards are sized in BYTES, not lines. A line is not a unit of cost: one line
+# of minified HTML can carry 50 KB while a line of prose carries 60 bytes, so
+# "700 lines per agent" produced shards that differed by three orders of
+# magnitude and billed accordingly. Bytes are what an agent actually reads.
+# Calibrated against a real 62-document set, not chosen for roundness. Swept
+# 40/64/80/96/120/160 KB against that set:
+#
+#   shard   agents   largest slice   base floor
+#    40 KB      91          56 KB         774k
+#    64 KB      59          81 KB         554k
+#    96 KB      43         121 KB         444k     <- chosen
+#   160 KB      30         182 KB         354k
+#
+# 96 KB is where both curves are still favourable: 43 agents against the 79 the
+# line rule produced on the same set, and a largest slice of 121 KB -- roughly
+# 40k tokens, which an agent reads whole. Going further trades that away: at
+# 160 KB the largest slice is ~60k tokens, and an agent carrying that much raw
+# document is back to paying for it repeatedly.
+#
+# For contrast, the line rule handed one agent a 729 KB file. That is not merely
+# expensive, it is infeasible -- the agent silently reads part of it and reports
+# as though it read all of it.
+BYTES_PER_MAPPER = 96 * 1024
+
+# Below this, a document does not deserve an agent of its own: spawning one
+# costs more than what it would read. Measured on the same set, 38 documents
+# under 12 KB were each getting an agent to carry 100 KB between them; packed,
+# they ride in 3.
+GROUP_BELOW_BYTES = 24 * 1024
+
+# Kept only to size a shard when a file's byte count is unavailable. Never the
+# primary unit.
+FALLBACK_BYTES_PER_LINE = 60
+
 MAX_PARALLEL = 12
 
 # Per-wave ceilings from the design. They cap fan-out, they do not choose roles:
@@ -81,6 +118,25 @@ def ceil_div(a, b):
     return -(-a // b)
 
 
+def pack(items, budget):
+    """Group (record, size) pairs into batches of at most `budget` bytes.
+
+    First-fit over a largest-first ordering: good enough, and deterministic,
+    which matters more here than optimal packing. A single item larger than the
+    budget still gets its own batch rather than being dropped.
+    """
+    batches = []
+    for rec, size in items:
+        for b in batches:
+            if b[1] + size <= budget:
+                b[0].append((rec, size))
+                b[1] += size
+                break
+        else:
+            batches.append([[(rec, size)], size])
+    return [b[0] for b in batches]
+
+
 def plan(recon, probes, baseline_paths, max_parallel, rounds):
     inputs = recon.get("inputs", [])
     baseline = set(baseline_paths or [])
@@ -92,19 +148,52 @@ def plan(recon, probes, baseline_paths, max_parallel, rounds):
 
     tasks = []
 
-    # --- documents -> mappers, sharded by line count ------------------------
+    # --- documents -> mappers, sharded by BYTES, with explicit ranges --------
+    #
+    # Each shard carries the byte range its agent must read, so the agent issues
+    # one Read instead of grepping its way around the file. What it sees is
+    # unchanged; how many times it pays to see it is not. An agent whose answer
+    # lies outside its range must return NEEDS-WIDER rather than guess -- that
+    # escape hatch is what keeps this lossless, and it lives in the agent bodies.
     shards = 0
+    small = []                       # documents too small to deserve an agent each
     for r in docs:
-        lines = r.get("lines") or 0
-        n = max(1, ceil_div(lines, LINES_PER_MAPPER)) if lines else 1
+        size = r.get("bytes") or ((r.get("lines") or 0) * FALLBACK_BYTES_PER_LINE)
         html = r["ext"] in (".html", ".htm")
-        if html:
-            n = 1
+        # Markup is stripped to a temp file before an agent reads it; measured on
+        # a real 729 KB page, stripping removed 29%. Shard the stripped size.
+        effective = int(size * 0.71) if html else size
+
+        # Sizing cuts both ways, and only the first half is obvious. Splitting a
+        # large file stops one agent being handed more than it can actually read.
+        # Grouping small ones stops forty agents being spawned to read a hundred
+        # kilobytes between them -- measured on a real set, forty files under
+        # 5 KB cost forty base charges to carry less than one shard of content.
+        if effective < GROUP_BELOW_BYTES:
+            small.append((r, size))
+            continue
+
+        n = max(1, ceil_div(effective, BYTES_PER_MAPPER))
         shards += n
+        step = ceil_div(size, n)
+        ranges = [{"offset": i * step, "limit": min(step, size - i * step)}
+                  for i in range(n)]
         tasks.append({"role": "doc-extract", "count": n, "path": r["path"],
-                      "lines": lines,
-                      "note": ("strip tags to a temp file before reading"
-                               if html else None)})
+                      "bytes": size, "lines": r.get("lines"),
+                      "ranges": ranges,
+                      "note": ("strip tags to a temp file first, then apply the "
+                               "ranges to the stripped file" if html else None)})
+
+    # Pack the small ones into batches that add up to about one shard each.
+    # Sorted largest-first so a batch fills before a new one opens.
+    for group in pack(sorted(small, key=lambda x: -x[1]), BYTES_PER_MAPPER):
+        shards += 1
+        tasks.append({"role": "doc-extract", "count": 1, "path": None,
+                      "bytes": sum(sz for _r, sz in group),
+                      "paths": [r["path"] for r, _sz in group],
+                      "ranges": [{"offset": 0, "limit": sz} for _r, sz in group],
+                      "note": "%d small documents in one agent; read each whole"
+                              % len(group)})
     over = shards - CAP["doc-extract"]
     if over > 0:
         tasks.append({"role": "_note", "count": 0, "path": None,

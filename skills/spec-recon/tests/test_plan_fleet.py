@@ -66,19 +66,95 @@ def test_plan_is_deterministic():
           json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True))
 
 
-def test_text_documents_shard_by_line_count():
+def test_documents_shard_by_bytes_not_lines():
+    """A line is not a unit of cost, and treating it as one produced shards that
+    differed by three orders of magnitude."""
     p = pf.plan(SAMPLE, {"code"}, [], 12, 3)
     t = [x for x in p["waves"][0]["tasks"]
          if x["role"] == "doc-extract" and x["path"] == "a.md"][0]
-    check("1400 lines becomes 2 mappers at 700 each", t["count"] == 2, t)
+    expect = pf.ceil_div(1400 * 40, pf.BYTES_PER_MAPPER)
+    check("shard count follows byte size", t["count"] == max(1, expect), t)
 
 
-def test_html_is_one_agent_and_carries_the_strip_instruction():
-    p = pf.plan(SAMPLE, {"code"}, [], 12, 3)
-    t = [x for x in p["waves"][0]["tasks"] if x["path"] == "c.html"][0]
-    check("a 9000-line html document is still one agent", t["count"] == 1, t)
-    check("html task says to strip tags first",
+def test_one_huge_line_is_sharded_like_any_other_bulk():
+    """The case the line rule got wrong: one line of minified markup, 800 KB."""
+    r = recon([{"path": "min.html", "bytes": 800 * 1024, "mtime": 0,
+                "ext": ".html", "is_binary": False, "md5": "x" * 32,
+                "lines": 1, "lang": "en", "revision_markers": {},
+                "git_tracked": True, "last_commit": None}])
+    p = pf.plan(r, {"code"}, [], 12, 3)
+    t = [x for x in p["waves"][0]["tasks"] if x["role"] == "doc-extract"][0]
+    expect = pf.ceil_div(int(800 * 1024 * 0.71), pf.BYTES_PER_MAPPER)
+    check("a single 800 KB line is sharded by size, not left as one",
+          t["count"] == expect and t["count"] > 1, (t["count"], expect))
+    check("html still carries the strip-first instruction",
           t.get("note") and "strip tags" in t["note"], t)
+
+
+def test_ten_thousand_short_lines_are_not_over_sharded():
+    """The mirror case: many lines, little content. The line rule over-split it."""
+    r = recon([{"path": "many.md", "bytes": 30 * 1024, "mtime": 0, "ext": ".md",
+                "is_binary": False, "md5": "x" * 32, "lines": 10000,
+                "lang": "en", "revision_markers": {}, "git_tracked": True,
+                "last_commit": None}])
+    p = pf.plan(r, {"code"}, [], 12, 3)
+    t = [x for x in p["waves"][0]["tasks"] if x["role"] == "doc-extract"][0]
+    check("10,000 short lines stay one agent (30 KB < one shard)",
+          t["count"] == 1, t["count"])
+
+
+BIG = recon([{"path": "big.md", "bytes": 500 * 1024, "mtime": 0, "ext": ".md",
+              "is_binary": False, "md5": "x" * 32, "lines": 12000, "lang": "en",
+              "revision_markers": {}, "git_tracked": True, "last_commit": None}])
+
+
+def test_a_split_file_gets_contiguous_ranges_covering_it_exactly():
+    """C1: the agent Reads once at a given offset instead of grepping around."""
+    t = [x for x in pf.plan(BIG, {"code"}, [], 12, 3)["waves"][0]["tasks"]
+         if x["role"] == "doc-extract"][0]
+    rs = t["ranges"]
+    check("a split file has one range per shard", len(rs) == t["count"], t)
+    check("ranges start at 0", rs[0]["offset"] == 0, rs[0])
+    check("ranges are contiguous",
+          all(rs[i]["offset"] + rs[i]["limit"] == rs[i + 1]["offset"]
+              for i in range(len(rs) - 1)), rs)
+    check("ranges cover the file exactly",
+          rs[-1]["offset"] + rs[-1]["limit"] == t["bytes"], (rs[-1], t["bytes"]))
+    check("no zero-length range", all(r["limit"] > 0 for r in rs), rs)
+
+
+def test_small_documents_are_packed_instead_of_one_agent_each():
+    """Sizing cuts both ways: 40 tiny files must not become 40 agents."""
+    r = recon([{"path": "t%02d.csv" % i, "bytes": 2500, "mtime": 0,
+                "ext": ".csv", "is_binary": False, "md5": "x" * 32,
+                "lines": 40, "lang": "en", "revision_markers": {},
+                "git_tracked": True, "last_commit": None} for i in range(40)])
+    de = [x for x in pf.plan(r, {"code"}, [], 12, 3)["waves"][0]["tasks"]
+          if x["role"] == "doc-extract"]
+    agents = sum(x["count"] for x in de)
+    check("40 files of 2.5 KB do not become 40 agents", agents <= 4, agents)
+    carried = sum(len(x.get("paths", [])) for x in de)
+    check("every small file is still carried by some agent", carried == 40, carried)
+    for x in de:
+        check("a packed batch names the files it carries",
+              x.get("paths") and len(x["ranges"]) == len(x["paths"]), x)
+        check("a packed batch stays within one shard",
+              x["bytes"] <= pf.BYTES_PER_MAPPER, x["bytes"])
+
+
+def test_a_packed_batch_reads_each_file_whole():
+    """Grouped files are read entire, so their ranges start at 0 each."""
+    r = recon([{"path": "s%d.md" % i, "bytes": 5000, "mtime": 0, "ext": ".md",
+                "is_binary": False, "md5": "x" * 32, "lines": 80, "lang": "en",
+                "revision_markers": {}, "git_tracked": True,
+                "last_commit": None} for i in range(3)])
+    t = [x for x in pf.plan(r, {"code"}, [], 12, 3)["waves"][0]["tasks"]
+         if x["role"] == "doc-extract"][0]
+    check("a packed batch is one agent", t["count"] == 1, t)
+    check("each carried file is read from its start",
+          all(rg["offset"] == 0 for rg in t["ranges"]), t["ranges"])
+    check("each carried file is read whole",
+          all(rg["limit"] == 5000 for rg in t["ranges"]), t["ranges"])
 
 
 def test_snapshots_are_never_split():

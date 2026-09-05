@@ -69,6 +69,22 @@ their rules. The prompts are already at ~700 words, and the rules in them are wh
 expensive mistakes — a wrongly upheld absence claim costs more than every token this skill will ever
 spend on a run.
 
+## What was deliberately not done
+
+Three cheaper designs were considered and rejected. They are recorded here because each looks
+attractive from a cost table and each fails the same way — by losing something no later check can
+detect.
+
+| Rejected | Why |
+| -------- | --- |
+| One slice per agent, agent dies after writing | Keeps every word but breaks the *thread*: the fourth agent inherits none of the first one's reasoning, and cross-slice contradictions stop being visible to anyone |
+| A hard cap on tool calls | An agent out of quota concludes early rather than declaring itself unfinished, and a shallow answer reads exactly like a complete one |
+| Passing a 5% distillate downstream instead of the extract | Compression at that ratio drops qualifying clauses, the link between distant passages, and anything the extracting agent could not tell was load-bearing — invisibly |
+
+Together they would have saved perhaps another 15% over what is implemented, in exchange for two
+failure modes that no reviewer, lint or convergence recount can see. This skill exists to stop
+confident wrong conclusions; a saving that makes them likelier is not a saving.
+
 ## Estimating before you start
 
 `plan_fleet.py` prints a floor:

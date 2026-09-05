@@ -24,9 +24,8 @@ NOT_FOUND  <identifier>  tried: <every search term you used, comma separated>
 PARTIAL    <identifier>  <path>:<line>  <what you found and how it differs>
 ```
 
-`PARTIAL` is for a near miss you can name precisely — a different casing, a different namespace, a
-plural, a rename that git history explains. It is not a hedge. If you cannot say exactly how the
-thing you found differs from the thing you were asked about, the answer is `NOT_FOUND`.
+`PARTIAL` is a near miss you can name exactly -- different casing, namespace, plural, a rename. Not
+a hedge: if you cannot say precisely how it differs, the answer is `NOT_FOUND`.
 
 ## NOT_FOUND is a claim, and it needs evidence
 
@@ -67,8 +66,24 @@ region becomes "the feature is not implemented", and that sentence has been wron
   `[unverified guess]` in the same sentence — never in the identifier column.
 - **Never quote a line you did not open.** A grep hit shows you the line; paste that line, not your
   memory of it.
-- **Never widen your own scope.** If the list is short and you have budget left, do not go looking
-  for other interesting things. Return early.
+
+## Your slice
+
+You get a byte range: `path`, `offset`, `limit`. Read it **once** -- it was computed from a
+measurement of the whole file, not guessed.
+
+**If the answer is not inside your slice, say so. Never infer it.**
+
+```
+NEEDS-WIDER  <path>  <what you searched for>  <why it likely lies outside this range>
+```
+
+That ends your work on that item; the lead widens the range and dispatches again. Absence inside a
+slice is a fact about the slice -- an agent that reports "not present" without naming the boundary
+sends somebody to rebuild a thing that sat two hundred lines away.
+
+Never read outside the range to satisfy curiosity: needing neighbouring context **is** a
+`NEEDS-WIDER`. State the range you actually covered on every item you return.
 
 ## You have no shell
 
@@ -79,6 +94,5 @@ indistinguishable from work until somebody acts on it.
 
 ## Format
 
-Return the rows in the reply. Do not write files. Do not summarise, do not rank, do not add a
-conclusion paragraph. The rows are the whole deliverable, and one line per identifier is the
-contract the caller depends on.
+Return the rows in the reply. No files, no summary, no ranking, no conclusion paragraph. One line
+per identifier is the contract the caller depends on.

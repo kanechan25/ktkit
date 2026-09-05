@@ -23,7 +23,7 @@ first-class sources. The invariant is not broken; the reviewers are handed more 
 | -------- | ------- | ------- |
 | `<path>...` | — | Documents, directories, or a repository root. Several allowed. |
 | `--scope <text>` | — | The business question, in your words. Passed verbatim to every agent. |
-| `--baseline <path>...` | — | Documents describing **current state** rather than intent. Turns on `state-extract`. |
+| `--baseline <path>...` | — | Documents describing **current state** rather than intent. Turns on `state-extract`. ⭐ Near-required when `--scope` asks what to **add**: without a change surface, `gap-design` has to reconstruct the present itself. Say so in one line before dispatching rather than refusing. |
 | `--probe code,artifact,vcs,runtime` | `code,artifact,vcs` | Which probe layers run. `runtime` is **never** in the default and is never inferred — it touches a live system, so it runs only when you type its name. Fully offline: `--probe code,artifact`. |
 | `--rounds N \| auto` | `auto` = 3 | Ceiling on review waves. Convergence may end sooner; the ceiling never forces an extra one. |
 | `--incremental` | on when a prior report is found | Analyse only what changed since that report. |
@@ -112,6 +112,13 @@ agents and roughly half a million tokens.
 **Never put your own reasoning in a phase-1 dispatch.** A prober told what answer is expected finds
 it.
 
+**A soft budget, and it is a thermometer rather than a knife.** At its sixth tool call an agent
+prints one line naming what it still lacks, and may continue if it genuinely needs to, saying why.
+An agent finishing past twelve calls means its slice was cut too coarsely, and the report says so.
+⛔ **Never make this a hard cap.** An agent out of quota concludes early instead of declaring itself
+unfinished, and a shallow answer is indistinguishable from a complete one — which is worse than the
+tokens it saved.
+
 ## 3. The lead does not read documents
 
 1. **Never read a document.** Dispatch mappers. This holds for six documents as much as for sixty.
@@ -122,6 +129,16 @@ it.
 3. The boundary is exact: **reading a file is forbidden, reading a measurement is not.** If the
    output would not fit in about thirty lines, it is a file, and it belongs to an agent.
 4. **Concatenate shard files; never read-then-rewrite.** `cat` them into the collect step.
+4b. **Hand every reading agent a byte range**, not just a path. `plan_fleet.py` computes
+   `offset`/`limit` per shard from `recon.json`; pass them through. This does not change what an
+   agent sees — only how many times it pays to see it. It is only safe because every reading role
+   can answer `NEEDS-WIDER` when the answer lies outside its slice; a range without that escape
+   hatch turns "not in my slice" into "not present".
+4c. **After wave 1, later waves read `steps/03-extract-*.md`, not the raw documents.** Those files
+   already exist and are a full structured pass, not a summary, so nothing is lost by preferring
+   them. A reviewer that needs the original may ask for it by `path:line` and the lead supplies that
+   line — but **`verify_citations.py` and the `evidence` role always open the real file**, because
+   checking a quote character by character cannot be done against anything but the source.
 5. Precompute what agents cannot reach: `git log` per document into `docs-history.md`, `git diff`
    into a file for fix review. Agents `Read` those. No agent needs a shell to get history.
 6. **Every large step ends in a file.** The next step's input is that file plus a list of paths —
@@ -161,6 +178,14 @@ Wave 2: 5 agents · ~340k tokens · 11m · running ~1.2M · 1 wave left in the c
 and returns `REFUTED` with a `path:line`, `UPHELD` with the search terms that failed **and** the
 regions it could not reach, or `UNSAFE` when the answer lives somewhere it cannot go. A verdict of
 that shape from a document-only reviewer is `needs-probe`, and `needs-probe` is not a verdict.
+
+**An upheld gap then routes once more.** `UPHELD` answers *what is missing* and stops; nobody in the
+fleet is allowed to answer *where would it go*, because every probe is forbidden from concluding. So
+upheld verdicts go to `spec-recon-gap-design`, which returns `GAP` plus an **`ANCHOR`** — a
+`path:line` it opened and read — plus a one-sentence `SHAPE` and a `NEIGHBOUR` where this codebase
+already does something similar. No anchor means `UNKNOWN`, not `GAP`: `check_report.py` opens every
+anchor and rejects the row if the line is not there. A `GAP` row is **input to
+`ktkit:feat-req-specs`**, not a design decision — say that in the report.
 
 Unknowns go through the five-tier ladder in `docs-review/references/self-clarify.md` — unchanged,
 except that tier 1 gains a fifth source: **this run's own probe results**. Do not build a second
@@ -221,7 +246,7 @@ directory. That is the supported way to use this skill on its own.
 | `references/probe-contracts.md` | dispatching any `spec-recon-*` agent |
 | `references/step-protocol.md` | writing step files, or resuming a crashed run |
 | `references/dispatch-planner.md` | sharding, routing evidence types to probes, caps |
-| `references/arbitration.md` | a verdict claims something is absent |
+| `references/arbitration.md` | a verdict claims something is absent, or an upheld gap needs an anchor |
 | `references/evidence-format.md` | writing or reviewing an evidence file |
 | `references/handoff.md` | handing off to `docs-review` |
 | `references/cost-model.md` | estimating, or writing the per-wave cost line |
