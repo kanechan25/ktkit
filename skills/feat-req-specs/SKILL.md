@@ -53,6 +53,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
 
 Drop `speckit` from `--groups` when the user passed `--no-speckit` — that flag *is* the decision to
 take the internalised path, so probing for scaffolding the run will not use would block for nothing.
+The flag holds **even when speckit is installed and scaffolded**: it selects the path, it does not
+merely relax the check.
+
+⛔ **Without that flag, a missing half stops the run.** Never fall back to the internalised path on
+your own. Degrading silently ships something other than what was asked for, under the same name.
 
 **Exit 1 → STOP before STEP 0b.** Print what is missing and both ways forward, then wait:
 
@@ -157,7 +162,7 @@ Run for each known integration point from STEP 1.
 *unknown*: it goes T1 → T2 → T3 → T3.5 first, and only what survives as genuine T4 becomes a
 candidate row for the single gate at the HARD STOP.
 
-Delegate the searching: **`Agent(subagent_type: "escalation-resolver")`, one question per call**,
+Delegate the searching: **`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per call**,
 several in one message when independent. ⛔ The lead does not open files.
 
 ⛔ **STEP 3 blocks on nothing.** Both blocking gates that used to sit here are removed on purpose — they cost 2 of
@@ -572,7 +577,7 @@ not exhausted**: go back to STEP 3, dispatch more resolvers, and ⛔ do not open
 Whenever anything is unknown — a term that cannot be found, two sources disagreeing, a sentence with
 two readings, a fact about a library — **invoke skill `/ktkit:escalation-ladder`** and follow it.
 
-Delegate the searching: **`Agent(subagent_type: "escalation-resolver")`, one question per call**,
+Delegate the searching: **`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per call**,
 several in one message when independent. ⛔ The lead does not open files — it holds the question, the
 `Tier`, and a one-line conclusion with its citation.
 

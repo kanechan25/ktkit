@@ -94,7 +94,7 @@ T3 lookup, T3.5 evidenced assumption — **before** anybody considers asking the
 ⛔ **This phase asks the user nothing.** What survives the ladder as genuine T4 becomes a candidate
 row in report §10, batched into a single gate downstream — it does not stop this phase.
 
-Do the searching by **dispatching `Agent(subagent_type: "escalation-resolver")`, one question per
+Do the searching by **dispatching `Agent(subagent_type: "ktkit:escalation-resolver")`, one question per
 call**, several in one message when they are independent. ⛔ Do not open the files yourself: lead
 context is re-sent every turn, and touching a source file also pulls in the repo's auto-loaded
 conventions.
@@ -653,7 +653,7 @@ Whenever anything in this analysis is unknown — a term that cannot be found, t
 disagreeing, a sentence with two readings, a fact about a library — **invoke skill
 `escalation-ladder`** and follow it.
 
-The searching itself is delegated: **`Agent(subagent_type: "escalation-resolver")`, one question per
+The searching itself is delegated: **`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per
 call**, several in one message when independent. ⛔ The lead does not open files; it holds the
 question, the `Tier`, and a one-line conclusion with its citation.
 

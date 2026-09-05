@@ -87,9 +87,9 @@ a file read at turn 3 with twenty turns to go is paid for twenty more times. Wor
 can pull in the project's own auto-loaded conventions — tens of thousands of tokens — into the
 context you keep.
 
-So: **one unknown, one resolver subagent.** Dispatch `escalation-resolver` (or
-`<plugin>:escalation-resolver` when installed as a plugin), giving it exactly one question, the
-paths it may read, and nothing else.
+So: **one unknown, one resolver subagent.** Dispatch `ktkit:escalation-resolver`, giving it exactly
+one question, the paths it may read, and nothing else. The resolver holds `Read, Bash` and **no**
+`Grep`/`Glob` — declaring `Bash` removes them on this harness — so it searches through the shell.
 
 ⛔ **Never pass it your own reasoning or your candidate answer.** Shared analysis is what makes a
 subagent confirm your blind spot instead of testing it.
