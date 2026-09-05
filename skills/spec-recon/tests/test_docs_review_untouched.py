@@ -107,12 +107,22 @@ def test_reviewers_still_declare_they_have_no_shell():
     check("reviewers still state they have no shell", hits >= 1, "%d files" % hits)
 
 
-def test_scripts_are_byte_identical_to_the_last_commit():
-    """The strongest form of "unchanged", and the only one worth asserting.
+# `upsert_block.py` gained a `--marker` parameter so the chain workflow can own
+# a second block in the same document. The change is additive and the default is
+# the old marker name, so docs-review behaviour is unchanged -- but "unchanged"
+# is asserted by skills/docs-review/tests/test_upsert_block.py running the
+# script, not by diffing it. Every other script here is still frozen.
+SCRIPTS_ALLOWED = {
+    "skills/docs-review/scripts/upsert_block.py",
+}
 
-    The extensions are documentation-only: no docs-review script was touched.
-    Ask git rather than grepping for a word, because `evidence` is also the name
-    of a reviewer role and appears in these files for older reasons.
+
+def test_scripts_are_byte_identical_to_the_last_commit():
+    """The strongest form of "unchanged", for every script but the one listed.
+
+    The evidence extensions are documentation-only: they touched no script at
+    all. Ask git rather than grepping for a word, because `evidence` is also the
+    name of a reviewer role and appears in these files for older reasons.
     """
     import subprocess
     rel = "skills/docs-review/scripts"
@@ -127,7 +137,8 @@ def test_scripts_are_byte_identical_to_the_last_commit():
         check("git could compare against HEAD", False, "rc=%d" % p.returncode)
         return
     changed = [l for l in out.decode("utf-8").split("\n") if l.strip()]
-    check("no docs-review script differs from HEAD", not changed, changed)
+    unexpected = [l for l in changed if l not in SCRIPTS_ALLOWED]
+    check("no unlisted docs-review script differs from HEAD", not unexpected, unexpected)
 
 
 def test_only_two_docs_review_files_changed():
@@ -149,6 +160,11 @@ def test_only_two_docs_review_files_changed():
         # exists to prevent.
         "skills/docs-review/references/critique-mode.md",
         "skills/docs-review/references/solo-loop.md",
+        # the marker parameter, and the test that proves the default did not
+        # move. Listed for the same reason as the two above: a scope expansion
+        # nobody can see is exactly what this test exists to prevent.
+        "skills/docs-review/scripts/upsert_block.py",
+        "skills/docs-review/tests/test_upsert_block.py",
     }
     p = subprocess.Popen(["git", "-C", ROOT, "diff", "--name-only", "HEAD", "--",
                           "skills/docs-review"],
