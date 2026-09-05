@@ -1,8 +1,22 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ktkit",
-  "description": "A spec-driven development toolkit for Claude Code: thirteen skills covering the path from a feature request or a bug report to a reviewed spec, an executed change, and a durable record of both. docs-review audits a document set with a team of agents that run concurrently and challenge each other's findings. spec-recon adds the axis a document reviewer cannot reach — it measures source code, binary artifacts and version-control state, and gates every claim that something is missing behind an agent that tries to refute it. analyze-feat, rca, feat-req-specs and bug-fix-specs turn a request into a reviewed specification; feat-req-execute and bug-fix-execute carry it out; ccompact and ccontinue keep a long pipeline alive across compaction; escalation-ladder resolves unknowns from the repository before asking you; confirm-with-me gates a single irreversible step; translate-file translates a file without touching its identifiers. Every skill writes to one fixed artifact root, runs a preflight that proves a capability with a real request instead of trusting a tool's own error message, and works whether or not speckit is installed.",
-  "version": "3.0.1",
+  "description": "A spec-driven development toolkit for Claude Code: fourteen skills covering the path from a feature request or a bug report to a reviewed spec, an executed change, and a durable record of both. chain runs that path as one closed loop -- it resolves the open questions each phase raises by dispatching resolver subagents, records every answer in an append-only ledger the later phases read instead of re-deriving, and stops only for what could not be settled and would be expensive to get wrong. docs-review audits a document set with a team of agents that run concurrently and challenge each other's findings. spec-recon adds the axis a document reviewer cannot reach — it measures source code, binary artifacts and version-control state, and gates every claim that something is missing behind an agent that tries to refute it. analyze-feat, rca, feat-req-specs and bug-fix-specs turn a request into a reviewed specification; feat-req-execute and bug-fix-execute carry it out; ccompact and ccontinue keep a long pipeline alive across compaction; escalation-ladder resolves unknowns from the repository before asking you; confirm-with-me gates a single irreversible step; translate-file translates a file without touching its identifiers. Every skill writes to one fixed artifact root, runs a preflight that proves a capability with a real request instead of trusting a tool's own error message, and works whether or not speckit is installed.",
+  "version": "3.1.0",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/confirm-marker.py\"",
+            "timeout": 5,
+            "statusMessage": "Arming the ktkit confirm marker..."
+          }
+        ]
+      }
+    ]
+  },
   "author": {
     "name": "kanechan25"
   },
@@ -27,6 +41,10 @@
     "evidence",
     "xlsx",
     "preflight",
-    "compaction"
+    "compaction",
+    "chain",
+    "ledger",
+    "escalation",
+    "self-clarify"
   ]
 }

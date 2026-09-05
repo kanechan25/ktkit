@@ -3,10 +3,11 @@
 Claude Code skills for spec-driven development: from a feature request or a bug report, to a
 reviewed specification, to the change itself, to a record of what was done.
 
-Thirteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on:
+Fourteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on:
 
 | | Skill | What it is for |
 | - | ----- | -------------- |
+| **Chain** | [`chain`](#chain) | a requirement → analysis → spec → plan, as one run instead of four commands |
 | **Understand** | [`analyze-feat`](#the-sdd-pipeline) | a feature request → an analysis, before any spec exists |
 | | [`rca`](#the-sdd-pipeline) | a bug report → root cause, by evidence rather than guesswork |
 | **Specify** | [`feat-req-specs`](#the-sdd-pipeline) | an analysed feature → a reviewed spec, then stop |
@@ -27,7 +28,7 @@ out in agents with their own context, not in the session that produced the work.
 the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control
 state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all thirteen.** They are worth reading once, because they are what make the
+**Three rules hold across all fourteen.** They are worth reading once, because they are what make the
 skills composable rather than merely co-located.
 
 - **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in
@@ -38,8 +39,10 @@ skills composable rather than merely co-located.
 - **A preflight before the first token.** Each skill probes exactly what it is about to use and
   stops, with the fix command, if something required is absent. A capability is proved with a real
   request, never with a tool's opinion of itself.
-- **speckit is optional.** Four skills use it when a repository has been initialised with it, and run
-  an internalised equivalent when it has not. `--no-speckit` picks that path deliberately. The
+- **speckit is required unless you say otherwise.** Four skills use it, and a missing `.specify/` or
+  missing speckit skills **stops the run** at its preflight, with the command that fixes it. Passing
+  `--no-speckit` selects the internalised equivalent instead — it chooses a path, it does not relax a
+  check, and it holds even where speckit is installed. Nothing ever degrades on its own: the
   artifacts are the same either way, and the run always says which path it took.
 
 ## docs-review
@@ -122,6 +125,100 @@ ktkit:spec-recon docs/ --probe code,artifact           # fully offline, no forge
 ktkit:spec-recon docs/ --handoff off                   # stop at evidence, read it yourself
 ```
 
+## chain
+
+The six pipeline skills below are meant to be driven one at a time, and that is often right — you
+read each artifact before the next one is written. `chain` is for when it is not: one requirement,
+one command, and you read the spec at the end.
+
+```bash
+/ktkit:chain .claude/claude/prompts/2472-share-links/expiry-rules.md
+/ktkit:chain <file> --to B                 # stop at the spec
+/ktkit:chain <file> --plan no --execute    # skip the plan, apply the change
+```
+
+It runs the same skills, writes the same artifacts to the same paths, and adds exactly two things
+they cannot add alone.
+
+**A ledger of what has already been settled.** Each phase runs its own escalation ladder. Left alone
+they re-derive the same unknowns: the spec step pays a resolver to answer what the analysis step
+already answered, and can reach a different conclusion than the artifact above it. So every settled
+unknown goes into one append-only file — question, tier, conclusion, citation, and which phase
+settled it — and every phase looks there before dispatching anything. A lookup is a grep; the
+cheapest resolver spawn measured on this harness is 6,619 tokens before it has read a line. A
+conclusion that changes writes a new row and leaves the old one in place, so what was believed, and
+when it stopped being believed, stays in the file.
+
+**One place where the run stops.** A clean run has no gate at all. At most there are two: what a
+resolver could not settle and would be expensive to get wrong, and a CRITICAL finding during
+execution. Both use the ladder's three tables — at most three rows to answer, each with a default
+that is *already applied* so silence is a valid reply, each with a recommendation.
+
+Two defaults worth knowing before the first run:
+
+- **Implementation is off.** Without `--execute` the chain stops after the plan. Applying a change
+  nobody reviewed the spec for is a decision, so it is a flag you type rather than a default you
+  inherit.
+- **There is no token ceiling**, but a cost line is printed after every step. `--budget` adds a
+  ceiling, and it stops at a step boundary — never mid-step, which would leave a half-written
+  artifact that reads as finished.
+
+A crashed run resumes: `manifest.md` records every step and its status, and `--resume` restarts at
+the first row that is `missing` or `partial`. A step marked `complete` is never re-run, because its
+IDs are cited by every later row.
+
+`--plan no` stops after the spec, which is what you want in a repository that generates its own
+execution runbook — the chain hands over rather than running generic planning over it.
+
+### Using it
+
+```bash
+# the ordinary case: requirement in, reviewed spec and plan out
+/ktkit:chain .claude/claude/prompts/2472-share-links/expiry-rules.md
+
+# a bug report — name the arm rather than letting it be asked
+/ktkit:chain <prompt.md> --bug
+
+# stop at the spec; you will generate the plan some other way
+/ktkit:chain <prompt.md> --plan no
+
+# pick up a run that was interrupted
+/ktkit:chain <prompt.md> --resume
+
+# apply the change as well
+/ktkit:chain <prompt.md> --execute
+```
+
+The filename carries through the whole run: a requirement at
+`prompts/<group>/<name>.md` produces `analyze/<group>/<name>.analyze.md`, then
+`specs/<group>/<name>/spec.md`, then `plan.md` beside it. Nothing is re-slugified, so the trees
+mirror each other and anything is findable at the matching path.
+
+**Which arm it runs.** Three sources, first one that answers wins: `--bug`/`--feature` on the
+command line, then `type: bug` / `type: feature` in the input file's frontmatter, then it asks. There
+is no fourth — it never routes itself from the prose, because the wrong arm produces a plausible
+artifact of the wrong kind and no later gate catches that. Put `type:` in your requirement template
+and the question never comes up.
+
+**Where it stops.** A bare `/ktkit:chain <file>` runs analysis, spec and plan, then stops — `--to`
+already defaults to `C` and `--execute` already defaults to off, so neither needs typing. `--to B`
+and `--to A` stop earlier; `--execute` is the only thing that writes code.
+
+**Answering a gate.** The gate is answer-by-exception: every row already has its default applied, so
+saying nothing accepts them and the run continues. Answer by row number — `1: allow reads, no
+writes` — when you disagree. A reply that addresses no row ("ok, go on") is not an answer, and the
+gate is re-posted.
+
+**When it says `BELOW-FLOOR`.** The chain has decided it did not try hard enough and is refusing to
+open a gate. That is the mechanism working, not a failure. `--rounds 3` gives it another pass;
+`TOO-MANY-OPEN` alongside it almost always means the requirement is missing a section, and the fix is
+to write that section rather than to answer four questions.
+
+**Reading the result.** `spec.md` is the deliverable. Two files are there when you want to check its
+reasoning rather than trust it: the analysis' unknowns table, and `chain/<group>/<name>/resolved.md`
+— every question, the tier that settled it, and the `path:line` that settles it, including the ones
+that were later overturned.
+
 ## The SDD pipeline
 
 Six skills, one road. Each stops at a gate you control, and each hands the next one a file rather
@@ -180,9 +277,10 @@ The other five are small, and are used from inside the six above as much as dire
 - **`confirm-with-me`** — when the literal phrase `confirm with me` appears anywhere in the active
   context, this gate blocks that one step until you reply `confirm`, `abort` or `modify: <change>`.
   One marker, one gate: approval of a large task never implies approval of a step inside it.
-  ⚠️ Claude Code triggers this from the skill's description alone, which is a ranking hint rather
-  than an order. For a hard gate, add a line to your own `CLAUDE.md` telling Claude to invoke
-  `/ktkit:confirm-with-me` whenever that phrase appears.
+  A description alone is a ranking hint, not an order, so the plugin ships a `SessionStart` hook
+  that states the rule in every session where `ktkit` is installed. It writes nothing to your
+  `CLAUDE.md` — uninstalling the plugin removes the rule, which a line appended to your own rule file
+  would not. It costs about 190 tokens per session.
 - **`translate-file`** — translates a file's prose into Vietnamese and leaves everything else
   untouched: identifiers, code, paths, commands, URLs, JSON keys, brand names. Japanese proper nouns
   that stay untranslated get an English gloss. It confirms the source file before starting, writes
@@ -274,6 +372,42 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 3.1.0 — the chain, and the half of the ladder that was missing
+
+Additive, with one behaviour change worth reading before you run `rca` again.
+
+**`/ktkit:chain` is new.** Nothing else changed to accommodate it: it calls the existing skills and
+writes the existing artifacts to the existing paths. Its own trace lives under
+`.claude/claude/chain/`, which is new and is created on first use.
+
+**`rca` and `bug-fix-specs` now use the escalation ladder.** They did not before, and `rca` carried a
+constraint that said the opposite in as many words — *"if the expected behavior is ambiguous, STOP
+and ask the user"*. So half the pipeline resolved its own unknowns and half interviewed you, and
+nothing said which half you were in.
+
+Both now route an unknown by what being wrong would cost: what the repository can settle is settled
+by a resolver, a cheap-if-wrong reading becomes an assumption **with a falsifier written down**, and
+only an expensive-if-wrong ambiguity reaches you — at most three rows, each with a default already
+applied. If you relied on `rca` stopping to ask about business rules, it still does, but only for the
+ones where being wrong is expensive. A test now enforces the adoption across all four analysis
+skills, so it cannot drift back to half.
+
+**`escalation-resolver` now ships with the plugin.** Two skills dispatched it by bare name while it
+existed only as a user-level agent — on any other machine that dispatch found nothing. It is now
+`ktkit:escalation-resolver`, and its declared tool set was corrected from `Read, Grep, Glob, Bash` to
+`Read, Bash`: this harness silently drops `Grep` and `Glob` when `Bash` is granted, so the agent had
+been searching without them while its prompt still told it to grep.
+
+**The `confirm with me` marker is armed by a hook.** A `SessionStart` hook states the rule in every
+session that has this plugin, at about 190 tokens. It writes nothing to your `CLAUDE.md` — and if you
+added a line there yourself when the README suggested it, you can remove it; the hook covers it, and
+removing the plugin now removes the rule.
+
+**`--no-speckit` is documented as what it always was.** A missing `.specify/` stops the run; the flag
+selects the internalised path deliberately, including on machines where speckit is present. No
+behaviour changed here, only the wording — the old text read as though the fallback might happen on
+its own.
 
 ### Upgrading to 3.0.0 — ktkit became a toolkit
 
@@ -696,6 +830,7 @@ agents/                           — the roles, registered by the plugin
   spec-recon-probe-runtime.md       read-only queries against a live system, on request only
   spec-recon-state-extract.md       one current-state document → baseline + change surface
   spec-recon-arbiter-impl.md        upholds or refutes every claim that something is missing
+  escalation-resolver.md            settles one unknown from the repository, returns one line
 skills/spec-recon/
   SKILL.md                        — the five phases, arguments, rules
   references/preflight.md         — the hard gate, and the fix command for every failure
@@ -713,6 +848,12 @@ skills/spec-recon/
   scripts/probe_xlsx.py           — .xlsx via zipfile + ElementTree; no openpyxl anywhere
   scripts/check_evidence.py       — rejects unlabelled numbers and untraceable evidence files
   tests/                          — preflight, planner, evidence lint, docs-review invariance
+skills/chain/
+  SKILL.md                        — the seven steps, the flags, and where the run may stop
+  references/ledger.md            — the columns, the lookup, and what closes a row
+  references/self-loop.md         — step 02 in full, and the five places tokens are saved
+  scripts/ledger.py               — append-only record of every settled unknown; recomputes the ratio
+  tests/test_ledger.py            — lookup, superseding, the falsifier rule, the metric floor
 skills/analyze-feat/SKILL.md      — feature request → analysis, before any spec
 skills/rca/SKILL.md               — bug report → root cause, five Whys with evidence
 skills/feat-req-specs/SKILL.md    — analysis → reviewed spec, then hard stop
@@ -722,16 +863,18 @@ skills/bug-fix-execute/SKILL.md   — approved fix spec → the fix, verified, r
 skills/ccompact/SKILL.md          — checkpoint in-flight state before /compact
 skills/ccontinue/SKILL.md         — resume from it; the file outranks the summary
 skills/escalation-ladder/SKILL.md — five tiers before a question reaches a human
+  tests/test_ladder_adoption.py    — every analysis skill routes unknowns through the ladder
 skills/confirm-with-me/SKILL.md   — one marker, one gate, one explicit yes
 skills/translate-file/SKILL.md    — prose → Vietnamese, identifiers untouched
 scripts/preflight.py              — shared by every skill: capability gate before any spend
                                     groups: runtime write read vcs forge artifacts speckit mcp
+hooks/confirm-marker.py           — SessionStart: states the `confirm with me` rule, writes nothing
 .mcp.json                         — the sequential-thinking server the plugin ships
 .claude-plugin/plugin.json        — Claude Code plugin manifest
 .claude-plugin/marketplace.json   — plugin marketplace manifest
 ```
 
-The eleven single-file skills carry no `references/` or `scripts/` of their own — they share
+The ten single-file skills carry no `references/` or `scripts/` of their own — they share
 `scripts/preflight.py` and resolve it through `${CLAUDE_PLUGIN_ROOT}`, which is why Option A of the
 install matters for them too.
 

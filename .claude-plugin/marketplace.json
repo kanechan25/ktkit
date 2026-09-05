@@ -8,7 +8,7 @@
     {
       "name": "ktkit",
       "source": "./",
-      "description": "Spec-driven development from request to record: analyse a feature or a bug, write a reviewed spec, execute it, audit the documents against the repository, measure what the documents only claim, and survive compaction along the way.",
+      "description": "Spec-driven development from request to record: chain a requirement through analysis, spec and plan in one run, audit the documents against the repository, measure what the documents only claim, and survive compaction along the way.",
       "category": "development",
       "tags": [
         "spec-driven-development",
@@ -17,7 +17,9 @@
         "agents",
         "review",
         "spec",
-        "root-cause-analysis"
+        "root-cause-analysis",
+        "chain",
+        "escalation"
       ]
     }
   ]
