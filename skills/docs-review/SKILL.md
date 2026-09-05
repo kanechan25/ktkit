@@ -53,6 +53,7 @@ Parse the invocation before anything else, and echo back what you parsed.
 | `--max-questions N` | Cap on rows that may reach the user. Default **3**. |
 | `--ask-only` | Diagnostic: skip tiers 1–3 of the ladder and surface every unknown. Never the default; the report says it ran this way. |
 | `--fix` | Enter fix mode after the loop. |
+| `--evidence <dir>` | Load every `.md` under `<dir>` into the document set, marked in `## Source inventory` as **evidence produced by a probing run** rather than as a pre-existing document. Written by `ktkit:spec-recon`, which measures code, binary artifacts and forge state and writes each measurement out as a document — so a reviewer can reason about those things without ever gaining a shell. Optional and inert: without it, nothing in this skill behaves differently. |
 | `--out <path>` | Report path. Default `docs-review.md`. |
 | `--silent` | Print the report path and nothing else. |
 | `--keep-scratch` | Keep `<base>/scratch/` after a clean run. For debugging this skill. |

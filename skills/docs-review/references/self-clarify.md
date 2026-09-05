@@ -37,8 +37,8 @@ documentation gap from a search that stopped early — the two are indistinguish
 
 ## T1 — search before you conclude
 
-Four sources, in this order. A `Missing` verdict or a T4 escalation that skipped any of them is a
-search failure reported as a finding.
+Four sources, in this order — five when the run was given `--evidence`. A `Missing` verdict or a T4
+escalation that skipped any of them is a search failure reported as a finding.
 
 1. **The documents, using the documents' vocabulary.** Not the spec's. A spec saying "second
    approver" will never match a manual saying "dual sign-off". Build the term set from
@@ -52,6 +52,14 @@ search failure reported as a finding.
    available as a readable artifact. When it does not answer the question, the reviewer asks for
    more with `HISTORY-NEEDED: <path> — <what to look for>`, and the lead runs it.
 4. **The previous report**, if one exists. A question answered in the last run is answered.
+5. **This run's probe results**, when `--evidence <dir>` was given. Those files hold measurements of
+   things no document states — what the code actually contains, what a binary artifact actually
+   holds, what state an issue or a milestone is actually in. An unknown a probe already settled is
+   answered here rather than escalated. Two cautions decide whether this source helps or misleads:
+   read the label on every number — `[measured]` is an observation, `[derived]` is arithmetic over
+   other numbers, `[quoted]` is somebody's sentence — and read the file's `Not accessed` section
+   before concluding anything from its silence. A probe that could not reach something says so, and
+   that is a gap, not a finding.
 
 If the index shows a section whose topic matches but whose wording does not, **read that section**
 rather than trusting the grep.
