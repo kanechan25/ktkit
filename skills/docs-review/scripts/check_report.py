@@ -10,6 +10,7 @@ Usage:
 Exit code 1 if any check fails. Warnings do not fail the run.
 """
 import argparse
+import os
 import re
 import sys
 from collections import Counter
@@ -231,6 +232,50 @@ def main():
         for rid in dict.fromkeys(material_ids):
             if rid not in resolved:
                 fail("R3 resolution-missing", f"{rid} is material with no '### {rid}' in ## Resolutions")
+
+    # --- R4 every GAP row anchors to a line that exists ----------------------
+    #
+    # `gap-design` says where a change would go. That is the most useful thing
+    # this toolkit produces and the easiest to fabricate: "add a column to the
+    # `estimates` table" reads like analysis and costs a week when that table
+    # does not exist. So a GAP row is allowed only with an anchor, and the anchor
+    # is opened here rather than trusted.
+    for name in ("## Gaps", "## Gap design"):
+        if name not in sections:
+            continue
+        for cells in table(sections[name])[1]:
+            if not cells or not re.match(r"^G-\d{3}$", cells[0]):
+                continue
+            gid, row = cells[0], " | ".join(cells)
+            m = re.search(r"([\w./\-]+\.\w+):(\d+)", row)
+            if not m:
+                fail("R4 gap-unanchored",
+                     f"{gid} states a gap with no <path>:<line> anchor — a gap "
+                     "without an anchor is a guess, and belongs in UNKNOWN")
+                continue
+            path, line = m.group(1), int(m.group(2))
+            root = os.path.dirname(os.path.abspath(args.report))
+            for cand in (path, os.path.join(root, path)):
+                if os.path.isfile(cand):
+                    try:
+                        with open(cand, encoding="utf-8", errors="replace") as fh:
+                            n_lines = sum(1 for _ in fh)
+                    except OSError:
+                        n_lines = 0
+                    if line < 1 or line > n_lines:
+                        fail("R4 gap-unanchored",
+                             f"{gid} anchors at {path}:{line} but that file has "
+                             f"{n_lines} lines")
+                    break
+            else:
+                fail("R4 gap-unanchored",
+                     f"{gid} anchors at {path}:{line} — no such file, so nobody "
+                     "read that line")
+            if re.search(r"\b(\d+\s*(?:day|days|week|weeks|hour|hours)|"
+                         r"small|medium|large)\b", row, re.I):
+                fail("R4 gap-estimated",
+                     f"{gid} carries an effort estimate; that needs team context "
+                     "this run does not have, and it gets quoted as measured")
 
     # --- round log: C1, C2, C3 -----------------------------------------------
     totals = []

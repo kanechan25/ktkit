@@ -114,6 +114,11 @@ def test_reviewers_still_declare_they_have_no_shell():
 # script, not by diffing it. Every other script here is still frozen.
 SCRIPTS_ALLOWED = {
     "skills/docs-review/scripts/upsert_block.py",
+    # check_report.py gained R4: it opens the anchor on every `## Gaps` row and
+    # rejects the row when the line is not there. docs-review never emits that
+    # section, so the check cannot fire on its reports -- and
+    # test_r4_is_inert_for_docs_review below proves that rather than assuming it.
+    "skills/docs-review/scripts/check_report.py",
 }
 
 
@@ -141,6 +146,29 @@ def test_scripts_are_byte_identical_to_the_last_commit():
     check("no unlisted docs-review script differs from HEAD", not unexpected, unexpected)
 
 
+def test_r4_is_inert_for_docs_review():
+    """R4 was added to a shared script, so prove it cannot touch this skill.
+
+    The check keys off a `## Gaps` section, which only `spec-recon` produces.
+    Asserting that is cheap; assuming it is how a shared lint starts failing
+    somebody else's reports.
+    """
+    import subprocess
+    fixdir = os.path.join(DR, "tests", "fixtures")
+    script = os.path.join(DR, "scripts", "check_report.py")
+    checked = 0
+    for name in sorted(os.listdir(fixdir)):
+        if not name.endswith(".md") or name.startswith("gap-"):
+            continue
+        checked += 1
+        p = subprocess.Popen([sys.executable, script, os.path.join(fixdir, name)],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        out, _ = p.communicate()
+        body = out.decode("utf-8")
+        check("R4 stays silent on %s" % name, "R4" not in body, body)
+    check("the inertness check actually read some fixtures", checked >= 5, checked)
+
+
 def test_only_two_docs_review_files_changed():
     """Exactly the two extensions, and nothing else in the skill."""
     import subprocess
@@ -165,6 +193,9 @@ def test_only_two_docs_review_files_changed():
         # nobody can see is exactly what this test exists to prevent.
         "skills/docs-review/scripts/upsert_block.py",
         "skills/docs-review/tests/test_upsert_block.py",
+        # R4, and the two fixtures that exercise it. Additive: see
+        # test_r4_is_inert_for_docs_review.
+        "skills/docs-review/scripts/check_report.py",
     }
     p = subprocess.Popen(["git", "-C", ROOT, "diff", "--name-only", "HEAD", "--",
                           "skills/docs-review"],

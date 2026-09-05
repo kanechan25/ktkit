@@ -68,6 +68,41 @@ weakness in the report:
 An `UPHELD` with an empty `unsearched` field is only correct when the whole surface was genuinely
 searched, which is rare. An empty field with a wide claim is itself a defect.
 
+## After UPHELD — where does the change go?
+
+An upheld absence answers *what is missing* and stops there. The question a reader actually has next
+is *where would it go*, and no probe is allowed to answer it: every one of them is forbidden from
+concluding, for the good reason that a prober who knows the wanted answer finds it.
+
+So upheld verdicts route once more, to `spec-recon-gap-design`:
+
+```
+UPHELD -> gap-design (Read, Grep, Glob) — given the verdict, the evidence and the change surface,
+                                          NOT the specification
+          |- GAP + ANCHOR <path>:<line>  the change lands here
+          |- SHAPE                       one sentence, never a diff
+          |- NEIGHBOUR <path>:<line>     where this codebase already does something similar
+          `- UNKNOWN                     no anchor, or a person must decide
+```
+
+Three rules make this safe rather than generative:
+
+1. **It never runs in parallel with the arbiter.** A gap that has not survived `UPHELD` is not a gap,
+   and designing for one wastes the most expensive role in the fleet.
+2. **`ANCHOR` must be a line that was opened and read.** No anchor, no `GAP` — `UNKNOWN` instead.
+   `check_report.py` rejects a `GAP` row whose anchor cannot be verified. "Add a column to the
+   `estimates` table" reads like analysis and costs a week if that table does not exist.
+3. **It is not given the specification.** The requirement's meaning was already settled; handing it
+   the spec invites designing from the spec's wording rather than from what the code does.
+
+⚠️ **A `GAP` row is input to `ktkit:feat-req-specs`, not a design decision.** Say so in the report.
+`SHAPE` is one sentence about shape; sequencing gaps into a plan needs an interview step that
+`spec-recon` deliberately does not have.
+
+⭐ `--baseline` matters most here. Without a change surface, `gap-design` has to reconstruct the
+current state itself — expensive and less certain. When `--scope` asks what to *add* and no
+`--baseline` was given, say so in one line before dispatching.
+
 ## The disposition
 
 Lean towards refuting. Not because absence claims are usually wrong, but because the costs are
