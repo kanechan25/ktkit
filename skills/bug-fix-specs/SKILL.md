@@ -52,6 +52,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
 
 Drop `speckit` from `--groups` when the user passed `--no-speckit` — that flag *is* the decision to
 take the internalised path, so probing for scaffolding the run will not use would block for nothing.
+The flag holds **even when speckit is installed and scaffolded**: it selects the path, it does not
+merely relax the check.
+
+⛔ **Without that flag, a missing half stops the run.** Never fall back to the internalised path on
+your own. Degrading silently ships something other than what was asked for, under the same name.
 
 **Exit 1 → STOP before STEP 0b.** Print what is missing and both ways forward, then wait:
 
@@ -294,21 +299,40 @@ The spec file must cover:
 
 ---
 
-### STEP 4.6 — CLARIFY
-> Goal: tighten spec before user reviews
+### STEP 4.6 — RESOLVE, THEN (MAYBE) ASK
+> Goal: tighten the spec by **resolving** what is unclear, not by interviewing the user
 
-In mode `speckit`, invoke `/speckit.clarify` focused on bug-fix scope. In mode `internalised`, do the
-same scan yourself and write the answers back into `spec.md` — the questions below are the whole of
-it, and nothing about them needs a shell script. Either way the taxonomy scan prioritises:
-- Is reproduction case unambiguous and step-by-step verifiable?
-- Is expected vs actual behavior measurable (not just "it doesn't work")?
-- Is fix scope clearly bounded — what NOT to change?
-- Are rollback / revert requirements defined if fix causes regression?
-- Are affected roles / permissions documented?
+**Invoke skill `/ktkit:escalation-ladder` and follow it for this whole step.** Each item below is an
+*unknown*: it goes T1 → T2 → T3 → T3.5 first, and only what survives as genuine T4 becomes a
+candidate row for the single gate at the HARD STOP.
 
-Generates ≤5 high-impact questions → encodes answers back into spec file.
+Delegate the searching: **`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per
+call**, several in one message when independent. ⛔ The lead does not open files.
 
-**Hard gate**: Complete clarification loop before HARD STOP.
+⛔ **This step blocks on nothing.** The scan prioritises:
+
+| # | Unclear thing | Usually settled by |
+|---|---|---|
+| 1 | Is the reproduction case unambiguous and step-by-step verifiable? | T1 — the report, the failing test, the log |
+| 2 | Is expected vs actual measurable, not "it doesn't work"? | T1, else T3.5 with a falsifier |
+| 3 | Is fix scope bounded — what must NOT change? | T1 — blast radius from STEP 3 |
+| 4 | Are rollback / revert requirements defined? | T1 — how the repo reverts, from its history |
+| 5 | Are affected roles / permissions documented? | T1 — the auth layer; **T4 when being wrong widens access** |
+
+Route each one:
+
+| Ladder outcome | Where it goes |
+|---|---|
+| T1 / T2 — resolved from repo, docs, history, prior run | spec §Settled, with `file:line` |
+| T3 — external fact; three portable steps fail | spec §Settled as `Undecided` — ⛔ never a question |
+| T3.5 — one reading better evidenced, cheap if wrong | spec §Assumptions, with falsifier |
+| T4 — undecidable **and** expensive if wrong | **pool for the HARD STOP gate** (max 3 total) |
+
+In mode `speckit` you may still invoke `/speckit.clarify` for its taxonomy, but its questions go
+through the ladder before any of them reaches the user. In mode `internalised` run the scan yourself
+and write the conclusions back into `spec.md`.
+
+**No gate here.** Merge the surviving T4 rows into the HARD STOP pool and continue.
 
 ---
 
@@ -364,9 +388,32 @@ LOW  <  LOW–MEDIUM  <  MEDIUM  <  MEDIUM–HIGH  <  HIGH  <  CRITICAL
 
 ---
 
-## HARD STOP
+## HARD STOP — the single gate
 
-**After STEP 4.6: do NOT proceed to fix.** Output the following and wait:
+**After STEP 4.6: do NOT proceed to fix.**
+
+This is the **only** gate in the workflow. It is answer-by-exception, not an interview:
+
+- **Max 3 rows.** More T4 candidates than that ⇒ ⛔ do not list them all; report one row
+  `N ambiguities of the same kind` with three representatives, and say the bug report is missing a
+  section.
+- **Every row carries a Default that is already applied**, phrased so **silence is a valid answer**.
+- **Every row carries a Recommendation.** A question without one hands the whole task back.
+- Rows come from the merged T4 pool: the `.analyze.md` unknowns table + STEP 4.6. Drop any row the
+  ladder settled in the meantime.
+
+```markdown
+## ⛔ CẦN CHỐT — im lặng = nhận default (≤3 dòng)
+| # | Câu | Default áp luôn | Khuyến nghị | Sai thì mất gì | Đổi ở đâu |
+
+## ✅ ĐÃ TỰ CHỐT (T1/T2/T3) — chỉ đọc, không cần trả lời
+| Câu | Tier | Kết luận | Bằng chứng (file:line) |
+
+## 🟡 GIẢ ĐỊNH CÓ BẰNG CHỨNG (T3.5)
+| ASM | Cách đọc đã chọn | Bằng chứng | Falsifier | Blast radius |
+```
+
+Then output the following and wait:
 
 ```
 ## Spec Ready for Review
@@ -380,5 +427,35 @@ LOW  <  LOW–MEDIUM  <  MEDIUM  <  MEDIUM–HIGH  <  HIGH  <  CRITICAL
 **Clarifications**: <N questions answered / "no critical ambiguities detected">
 **Fix quality checklist (STEP 4.7)**: <"risk = <band>, N items, M spec defects fixed, K left open" | "risk = <band> < MEDIUM — skipped">
 
+**Escalation metric**: `self_resolve_ratio=0.xx · self_resolved=N · needs_user=M · assumptions=K · gates=1`
+
 ➡️ Review the spec above. When ready, run `/ktkit:bug-fix-execute` to apply the fix (STEP 5→7 only, no re-investigation).
 ```
+
+`self_resolve_ratio = self_resolved / (self_resolved + needs_user)`. **Below 0.70 ⇒ tiers 1–3 were
+not exhausted**: go back to STEP 4.6, dispatch more resolvers, and ⛔ do not open the gate yet.
+`needs_user` must be ≤ 3, and every T3.5 row must have a non-empty Falsifier.
+
+---
+
+## Unknown handling (bindingly, before any question reaches the user)
+
+Whenever anything is unknown — a symbol that cannot be found, two sources disagreeing, a report with
+two readings, a fact about a library — **invoke skill `/ktkit:escalation-ladder`** and follow it.
+
+Delegate the searching: **`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per
+call**, several in one message when independent. ⛔ The lead does not open files — it holds the
+question, the `Tier`, and a one-line conclusion with its citation.
+
+⛔ Nothing reaches the user before the ladder has run, and the workflow opens **exactly one** gate
+(the HARD STOP), capped at 3 rows, every row with a default and a recommendation.
+
+Budget, per `/ktkit:escalation-ladder`: at most **5 resolvers per round, 2 rounds per question**. Out
+of budget is not a reason to escalate — it moves the unknown to T3.5 if one reading is better
+evidenced, or leaves it `Undecided`.
+
+**Fallback** — `/ktkit:escalation-ladder` ships with this plugin, so it is present wherever this
+skill is. If it somehow cannot be loaded, apply the tiers inline: T1 resolve from repo with a
+citation · T2 one round of challenge · T3 external fact, else `Undecided` · T3.5 decide with a
+mandatory falsifier · T4 the single gate. ⛔ A missing skill is never a reason to reinstate the
+interview.

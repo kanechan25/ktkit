@@ -23,10 +23,25 @@ Perform a disciplined, evidence-based root cause analysis. **NO guessing. NO ass
 
 - **Evidence-first**: You MUST run at least one tool call (Grep, Read, GitNexus query) to verify **every** causal claim before stating it.
 - **Sequential only**: Do NOT run investigation steps in parallel. Each step's output feeds the next.
+  This governs *steps*. Inside one step, several `ktkit:escalation-resolver` subagents answering
+  independent questions **are** dispatched in one message — that is one step, not several.
 - **No fix yet**: This command investigates only. Code changes happen in `/ktkit:bug-fix-specs` → `/ktkit:bug-fix-execute`.
 - **Stop condition**: If blast radius returns HIGH or CRITICAL → stop, present report, wait for user confirmation before proceeding.
 - **Data Provenance**: If a bug is traced to input data (params/props), you MUST identify its source. Distinguish between **Missing Logic** (data was never updated/calculated) and **Faulty Logic** (update logic exists but is incorrect). 
-- **No Assumption on Requirements**: If the expected behavior/requirement is ambiguous, STOP and ask the user for confirmation. Never assume the "correct" business logic.
+- **No Assumption on Requirements** — never *assume*, but resolving is not assuming. An ambiguous
+  expected behaviour is an **unknown**: run it through `/ktkit:escalation-ladder` and route it by
+  what being wrong would cost. Only the last row stops the run.
+
+  | The ambiguity is about | Tier | Example |
+  |---|---|---|
+  | Something the repository can settle — which branch runs, what a field holds, which config wins | **T1** — dispatch a resolver | "which handler owns retry?" |
+  | Observable behaviour — what the log says, which test fails | **T1** | |
+  | A business rule where one reading is better evidenced **and** being wrong is cheap and reversible | **T3.5** — decide, record a **falsifier** | "round half up or half down?" |
+  | A business rule where being wrong is expensive — money, data loss, access — or hard to reverse | **T4** — the single gate | "may an expired user still read old records?" |
+
+  ⛔ A guess with no falsifier is still an assumption; that is what this constraint forbids. Asking
+  the user before the tiers below are exhausted is the other failure, and costs a round-trip per
+  question.
 - **Historical Context**: For any suspected code, ask: "Why was this NOT a bug before?". Use Git history at current branch to examine the last 2-3 changes to those specific lines to understand the original intent and context.
 - **Surgical Precision**: Focus ONLY on the bug. Do NOT refactor, reformat (Prettier), or change style in unrelated lines. If formatting is severely broken, flag it to the user instead of auto-fixing.
 
@@ -122,9 +137,12 @@ If you reach WHY 5 and the root cause is still unclear, state: `ROOT CAUSE INCON
 **Trigger — run ONLY if one of these is true.** Otherwise skip silently and go to Step 4:
 
 - Step 3 ended in `ROOT CAUSE INCONCLUSIVE`, OR
-- the *expected* behavior is ambiguous — the Operating Constraint "No Assumption on Requirements" already forces a stop here.
+- the T4 pool is non-empty after the ladder ran — i.e. an ambiguity about *expected* behaviour
+  survived T1, T2, T3 and T3.5.
 
-Both cases already halt the run, so this step costs no extra interruption. Never run it just to be thorough — RCA is a one-shot flow.
+Neither case is reached by an ambiguity the ladder could settle, so this step no longer costs an
+interruption for anything a resolver could have answered. Never run it just to be thorough — RCA is
+a one-shot flow.
 
 **Scan** the bug report + evidence chain against these 5 categories (the subset of the clarify taxonomy that can change a root-cause verdict). Mark each `Clear` / `Partial` / `Missing`:
 
@@ -136,11 +154,25 @@ Both cases already halt the run, so this step costs no extra interruption. Never
 | Completion Signals | How is "fixed" verified? Is the expected result measurable, not "it works"? |
 | Terminology & Consistency | Same concept named differently across report / code / docs — a frequent source of false root causes |
 
-**Ask** — at most **5 questions total**, **one at a time**, waiting for each answer. Each must be answerable by a short multiple-choice (2–5 mutually exclusive options) or a ≤5-word answer. Only ask what would change the root-cause verdict, the AgentRx class, or the fix boundary. Skip a category whose answer would not change any of those.
+**Resolve first.** Every `Partial` or `Missing` category is an unknown, not a question: dispatch
+`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per call, several in one message
+when independent. ⛔ The lead does not open files. Only what survives as genuine T4 reaches the user.
 
-**Write back** into the `## Root Cause Analysis` section of the report file (Step 6) — add a `### Clarifications` subsection recording question, answer, and which conclusion it changed. An answer that invalidates a WHY step means that step must be re-run with evidence, not patched in prose.
+**Then ask, once** — **at most 3 rows**, in a single block, answer-by-exception. Every row carries a
+default that is **already applied**, so silence is a valid answer, and a recommendation. Only ask
+what would change the root-cause verdict, the AgentRx class, or the fix boundary. More than 3
+survivors ⇒ ⛔ do not list them all: report one row `N ambiguities of the same kind` with three
+representatives, and say the bug report is missing a section.
 
-**If the user declines to answer**: record `UNRESOLVED — <question>` and carry it into the *Recommended Fix Approach* section as a precondition. Do not guess the intended behavior.
+**Write back** into the `## Root Cause Analysis` section of the report file (Step 6), under
+`### Unknowns and how each was settled` — one row per unknown, in the table its tier belongs to. An
+answer, or a resolver verdict, that invalidates a WHY step means that step must be re-run with
+evidence, not patched in prose.
+
+**If the user says nothing**: the default stated in the row is what was applied — that is the point
+of writing it. Record it as a T3.5 row with its falsifier and carry the falsifier into *Recommended
+Fix Approach* as a precondition. ⛔ A row whose default you cannot state is not ready to be asked:
+send it back to T1.
 
 ### Step 4: AGENTX CLASSIFICATION
 
@@ -240,14 +272,30 @@ base_file: [.claude/claude/prompts/<rel-dir>/<base-name>.md — omit if none]
 **AgentRx Category**: [category from Step 4]
 **Risk Level**: LOW / MEDIUM / HIGH / CRITICAL
 
-### Clarifications
-[Only if Step 3.5 ran. One row per question. Omit the whole subsection when Step 3.5 was skipped.]
+### Unknowns and how each was settled
 
-| Question | Answer | What it changed |
-|---|---|---|
-| [question asked] | [user's answer, verbatim] | [which WHY / verdict / fix boundary it altered — or "confirmed existing reading"] |
+Three tables, per `/ktkit:escalation-ladder`. Omit a table only when it is genuinely empty — an
+absent table reads as "nothing was decided", which is never true.
 
-[Record any `UNRESOLVED — <question>` here too, and carry it into Recommended Fix Approach as a precondition.]
+#### ⛔ CẦN CHỐT — im lặng = nhận default (≤3 dòng)
+| # | Câu | Default áp luôn | Khuyến nghị | Sai thì mất gì | Đổi ở đâu |
+|---|---|---|---|---|---|
+
+#### ✅ ĐÃ TỰ CHỐT (T1/T2/T3) — chỉ đọc, không cần trả lời
+| Câu | Tier | Kết luận | Bằng chứng (file:line) |
+|---|---|---|---|
+
+#### 🟡 GIẢ ĐỊNH CÓ BẰNG CHỨNG (T3.5)
+| ASM | Cách đọc đã chọn | Bằng chứng | Falsifier | Blast radius |
+|---|---|---|---|---|
+
+**Escalation metric**: `self_resolve_ratio=0.xx · self_resolved=N · needs_user=M · assumptions=K · gates=1`
+
+`self_resolve_ratio = self_resolved / (self_resolved + needs_user)`. **Below 0.70 ⇒ tiers 1–3 were
+not exhausted**: dispatch more resolvers before writing this file. Every 🟡 row must carry a
+non-empty Falsifier, and every ⛔ row a Default that is already applied.
+
+[Carry each Falsifier into Recommended Fix Approach as a precondition.]
 
 ### Evidence Chain (5 Whys)
 
@@ -280,6 +328,32 @@ base_file: [.claude/claude/prompts/<rel-dir>/<base-name>.md — omit if none]
 ```
 
 After writing the file, inform the user of the file path created.
+
+---
+
+## Unknown handling (bindingly, before any question reaches the user)
+
+Whenever anything is unknown — a symbol that cannot be found, two sources disagreeing, a bug report
+with two readings, a fact about a library — **invoke skill `/ktkit:escalation-ladder`** and follow
+it. An ambiguous *expected behaviour* is covered by the table in Operating Constraints above.
+
+Delegate the searching: **`Agent(subagent_type: "ktkit:escalation-resolver")`, one question per
+call**, several in one message when independent. ⛔ The lead does not open files — it holds the
+question, the `Tier`, and a one-line conclusion with its citation. The resolver has `Read, Bash` and
+no `Grep`/`Glob`; it searches through the shell.
+
+⛔ Nothing reaches the user before the ladder has run, and this workflow opens **exactly one**
+gate — Step 3.5 — capped at 3 rows, every row with a default and a recommendation.
+
+Budget, per `/ktkit:escalation-ladder`: at most **5 resolvers per round, 2 rounds per question**. Out
+of budget is not a reason to escalate — it moves the unknown to T3.5 if one reading is better
+evidenced, or leaves it `Undecided`.
+
+**Fallback** — `/ktkit:escalation-ladder` ships with this plugin, so it is present wherever this
+skill is. If it somehow cannot be loaded, apply the tiers inline: T1 resolve from repo with a
+citation · T2 one round of challenge · T3 external fact, else `Undecided` · T3.5 decide with a
+mandatory falsifier · T4 the single gate. ⛔ A missing skill is never a reason to reinstate the
+interview.
 
 ---
 
