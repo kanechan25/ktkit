@@ -1,6 +1,6 @@
 {
   "name": "ktkit",
-  "description": "Marketplace for the testcase, docs-review and playwright-notion skills",
+  "description": "Marketplace for the docs-review skill",
   "owner": {
     "name": "kanechan25"
   },
@@ -8,14 +8,14 @@
     {
       "name": "ktkit",
       "source": "./",
-      "description": "Manual test-case generation, spec-versus-documentation auditing with a reviewer agent team, and Notion-to-markdown export through a logged-in browser.",
+      "description": "Documentation auditing with a reviewer agent team: critique a single file against the repository, check documents against a standard, or investigate a question across a document set.",
       "category": "development",
       "tags": [
-        "qa",
-        "testing",
         "documentation",
+        "audit",
         "agents",
-        "notion"
+        "review",
+        "spec"
       ]
     }
   ]
