@@ -1,6 +1,6 @@
 # ktkit
 
-Claude Code skills for reviewing documentation. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work.
+Claude Code skills for reviewing documentation and for checking documentation against the thing it describes. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work. `spec-recon` adds the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control state, and hands each measurement back as a document the reviewers can read.
 
 ## docs-review
 
@@ -29,6 +29,52 @@ ktkit:docs-review 3 notes/analysis.md          # one file → critique it, 3 sel
 ktkit:docs-review 3 spec.md ./docs             # standard + documents → gap analysis
 ktkit:docs-review 3 spec.md ./docs --fix       # …and apply the fixable rows
 Read ./docs and tell me what happens when the provider returns 409
+```
+
+## spec-recon
+
+`docs-review` deliberately never touches the code — its reviewers are told *"you have no shell and no
+web access"*, and that boundary is what makes them trustworthy. It is also their ceiling. A
+document-only reviewer once reported a whole area as an unimplemented gap; the code had implemented
+it months earlier, and nothing in a document-to-document review could have caught that.
+
+`spec-recon` supplies the missing axis. It measures what documents cannot show, writes each
+measurement out as an **evidence document**, and hands those to `docs-review` as first-class
+sources. The invariant is not broken — the reviewers are simply given more to read.
+
+- **Measures four kinds of thing** — source code (does this identifier exist, and where), binary
+  artifacts (what sheets and named ranges a shipped `.xlsx` actually contains), version control
+  (what state an issue, pull request or milestone is really in), and — only when you type its
+  name — a live system. `--probe code,artifact` runs entirely offline
+- **Absence claims are gated** — any verdict of the shape *not implemented / missing / not covered*
+  is routed to an arbiter that opens the code and returns `REFUTED` with a `path:line`, or `UPHELD`
+  carrying both the search terms that failed **and** the regions it could not reach. A verdict of
+  that shape from a document-only reviewer is not a verdict, it is a routing state
+- **Freshness is measured before anything is read** — revision markers live *inside* documents as
+  per-section changelog tokens, and the signal is the **largest** one, not the first. An audit built
+  on a superseded revision is wrong at the foundation and nothing downstream can detect it
+- **One artifact, several copies** — the source, a copy under `bin/`, a test fixture, a hand-edited
+  spare. Build output and stand-ins are disqualified; when more than one candidate survives the run
+  refuses to choose and says so, and copies that differ by `md5` are themselves a finding
+- **Every number carries one label** — `[measured]`, `[quoted]` or `[derived]`, and
+  `check_evidence.py` fails a row that mixes them. The rule exists because a computed figure was
+  once read as an observation, acted on, and had to be retracted mid-run
+- **A preflight that proves capability instead of asking about it** — it does not run
+  `gh auth status`, which inside a sandbox reports an invalid token for a perfectly valid one; it
+  takes a token and makes one real request. A tool's error message is not evidence about its own
+  cause. Anything genuinely unreachable becomes `not-accessed` with the reason, never a finding
+- **Every large step ends in a file** — a crashed run resumes from the last completed step. The run
+  this was modelled on lost an agent that had gathered everything in context and planned to write at
+  the end; it lost all of its work
+- **The fleet is planned by a script** — how many agents of which roles is deterministic and locked
+  by a test, because a fleet that comes out different on every run is not dynamic, it is
+  unreproducible. What each agent is *asked* stays with the session
+
+```text
+ktkit:spec-recon docs/ --scope "does the export template match the published form?"
+ktkit:spec-recon spec.md ./docs --baseline design.md   # compare intent against current state
+ktkit:spec-recon docs/ --probe code,artifact           # fully offline, no forge
+ktkit:spec-recon docs/ --handoff off                   # stop at evidence, read it yourself
 ```
 
 ## Install
@@ -487,6 +533,29 @@ agents/                           — the roles, registered by the plugin
   docs-review-claims.md             Mode C: inventories a file's own statements
   docs-review-verify.md             Mode C: settles them against the repository
   docs-review-implication.md        Mode C: what follows, and what contradicts
+  spec-recon-probe-code.md          does this identifier exist, and where
+  spec-recon-probe-artifact.md      measures binary artifacts with the stdlib
+  spec-recon-probe-vcs.md           issues, PRs, milestones, history
+  spec-recon-probe-runtime.md       read-only queries against a live system, on request only
+  spec-recon-state-extract.md       one current-state document → baseline + change surface
+  spec-recon-arbiter-impl.md        upholds or refutes every claim that something is missing
+skills/spec-recon/
+  SKILL.md                        — the five phases, arguments, rules
+  references/preflight.md         — the hard gate, and the fix command for every failure
+  references/probe-contracts.md   — what each probe is handed and must return; the role table
+  references/step-protocol.md     — step files, the manifest, resuming a crashed run
+  references/dispatch-planner.md  — sharding, caps, evidence type → probe routing
+  references/arbitration.md       — how an absence claim is gated, and what UPHELD must carry
+  references/evidence-format.md   — the labelling rule, reproduce lines, "not accessed"
+  references/handoff.md           — passing evidence to docs-review --evidence
+  references/cost-model.md        — measured base costs and the per-wave spend line
+  references/incremental.md       — what is re-derived when a prior report exists
+  scripts/recon.py                — freshness, revision markers, duplicate-source resolution
+  scripts/plan_fleet.py           — recon.json → a fleet plan, deterministic and tested
+  scripts/probe_xlsx.py           — .xlsx via zipfile + ElementTree; no openpyxl anywhere
+  scripts/check_evidence.py       — rejects unlabelled numbers and untraceable evidence files
+  tests/                          — preflight, planner, evidence lint, docs-review invariance
+scripts/preflight.py              — shared by both skills: capability gate before any spend
 .claude-plugin/plugin.json        — Claude Code plugin manifest
 .claude-plugin/marketplace.json   — plugin marketplace manifest
 ```
