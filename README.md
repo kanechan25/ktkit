@@ -3,7 +3,8 @@
 Claude Code skills for spec-driven development: from a feature request or a bug report, to a
 reviewed specification, to the change itself, to a record of what was done.
 
-Fourteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on:
+Fifteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on.
+`/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
 
 | | Skill | What it is for |
 | - | ----- | -------------- |
@@ -21,6 +22,7 @@ Fourteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:do
 | **Decide** | [`escalation-ladder`](#working-skills) | resolve an unknown from the repository before asking a human |
 | | [`confirm-with-me`](#working-skills) | gate one irreversible step on an explicit yes |
 | **Translate** | [`translate-file`](#working-skills) | a file into Vietnamese, without touching one identifier |
+| **Help** | [`help`](#help) | the index, and one page per skill |
 
 Two of them carry the heavier machinery. `docs-review` audits a document set with a team of agents
 that run concurrently and challenge each other's findings — every run ends with a review pass carried
@@ -28,7 +30,7 @@ out in agents with their own context, not in the session that produced the work.
 the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control
 state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all fourteen.** They are worth reading once, because they are what make the
+**Three rules hold across all fifteen.** They are worth reading once, because they are what make the
 skills composable rather than merely co-located.
 
 - **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in
@@ -306,6 +308,29 @@ The other five are small, and are used from inside the six above as much as dire
 Vietnamese**, keeping every identifier, path, snippet and technical term in English. That is
 deliberate: the reviewer reads Vietnamese, and prose in Vietnamese removes friction without costing
 any precision. The skill files themselves, and everything they write to a forge, are English.
+
+## help
+
+```bash
+/ktkit:help                  # the index: every skill, one line each
+/ktkit:help chain            # one skill's page — cases, flags, output, anti-patterns
+/ktkit:help --all            # every page, end to end
+/ktkit:chain --help          # the same page, CLI-style
+```
+
+`--help`, `-h` and `help` work on **any** ktkit skill as long as it is the only argument; with other
+arguments present the skill runs normally, so `/ktkit:chain req.md --help` runs chain. The protocol
+is installed by the plugin's SessionStart hook rather than pasted into fifteen skill bodies — one
+rule, paid once per session, instead of fifteen copies paid on every run.
+
+Each page lives beside the skill it documents, at `skills/<name>/references/help.md`, and the index
+is assembled from those files by `scripts/help.py` — so a skill added to this plugin appears in the
+index without anyone editing a list.
+
+**The pages are checked against the skills.** `skills/spec-recon/tests/test_help.py` compares every
+page with that skill's own `## Arguments` section in both directions: a flag a page documents that
+the skill does not accept fails the suite, and so does a flag the skill accepts that no page
+mentions. Help that is merely written drifts; help that is checked cannot drift without going red.
 
 ## Install
 
