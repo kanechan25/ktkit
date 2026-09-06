@@ -196,6 +196,13 @@ def test_only_two_docs_review_files_changed():
         # R4, and the two fixtures that exercise it. Additive: see
         # test_r4_is_inert_for_docs_review.
         "skills/docs-review/scripts/check_report.py",
+        # The skill's help page. It is read only when somebody asks for help,
+        # never during a review, so it changes no behaviour -- but this list is
+        # where a change inside the skill directory is declared, and a new file
+        # that nobody declared is exactly what the check is for. Its contents
+        # are held to the skill's own `## Arguments` table by
+        # skills/spec-recon/tests/test_help.py.
+        "skills/docs-review/references/help.md",
     }
     p = subprocess.Popen(["git", "-C", ROOT, "diff", "--name-only", "HEAD", "--",
                           "skills/docs-review"],

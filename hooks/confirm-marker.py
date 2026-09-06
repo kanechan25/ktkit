@@ -17,6 +17,12 @@ The obvious way to install such a rule is to append it to the user's own
 A SessionStart hook has neither problem. It prints the rule, the rule is in
 context for that session only, and removing the plugin removes the rule.
 
+The same reasoning now carries a second rule. `--help` is not a flag any skill
+declares, so nothing in a SKILL.md tells the model what to do with it -- and the
+alternative, a help gate pasted into all fifteen skill bodies, is paid on every
+run of every skill and would have to be kept in step fifteen times. One rule
+here is paid once per session and lives in one place.
+
 Contract: whatever this writes to stdout is added to the session context. So it
 must stay short -- it is paid for in every session, used or not -- and it must
 never fail loudly: a hook that errors on session start is worse than a missing
@@ -39,6 +45,17 @@ out the step that phrase annotates.
 - Do not batch several markers into one confirm block.
 
 Off for a session when the user says so, e.g. "stop confirm-with-me".
+
+[ktkit] Help protocol.
+
+When a ktkit skill is invoked with `--help`, `-h` or `help` as its ONLY
+argument, do not run the skill. Run
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/help.py" <skill-name>
+
+print that output verbatim, and stop. Any other argument alongside it means the
+skill runs normally. `/ktkit:help` with no argument prints the index of every
+skill.
 """
 
 
