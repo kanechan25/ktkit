@@ -119,7 +119,7 @@ a diff, never an effort estimate; the lint rejects a row carrying one.
 | `--max-questions N` | `3` | Ceiling on questions that reach you, across the **whole run**. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed. |
 | `--patterns <file>` | — | A JSON file merged over the shipped conventions. How a house revision syntax is recognised **without editing code**. |
-| `--budget <tokens>` | **`4000000`** | ⭐ **Hard ceiling for the run.** Checked at every step boundary against what agents actually reported — never an estimate. Reaching it stops the run **at a boundary**, with everything finished on disk and a resume command printed. |
+| `--budget <tokens>` | **`4000000`** | ⭐ **Hard ceiling — raise it freely.** `8000000` for a large corpus, `2000000` to keep a run small. Checked at every boundary against what agents actually reported, never an estimate. Reaching it stops the run **at a boundary**, work on disk, resume command printed. |
 | `--relevance <n>` | `0.01` | Minimum hits per KB before an agent reads an input. `0` reads everything. Measured on a real 64-file corpus: **48 mapper agents become 20**. |
 | `--relevance-add <term>` | — | A term the scope wording lacks — usually the corpus's own language. Repeatable. |
 | `--quota-gate <pct>` | `85` | Also stop when the subscription window is at or above this, whatever the token budget says. |
@@ -143,10 +143,32 @@ STOP  after 03-extract b3   2,756,000 / 4,000,000  ·  last step 927,500
 another 927k extraction and then allowed a 305k arbitration, so the verdicts land even when the
 extraction cannot continue.
 
-⚠️ At ~450k tokens per agent, 4M is about **8–9 agents**. The ceiling does **not** make a large wave
+### Raising it
+
+The default is a default, not a limit. A large corpus is `--budget 8000000`; a quick check is
+`--budget 2000000`. Same spend, four ceilings, and the arithmetic is the only thing deciding:
+
+```
+spent 2,908,000 · last step 2,908,000 · a step like that needs 4,362,000
+
+  --budget 2000000   STOP    --budget 6000000   STOP
+  --budget 4000000   STOP    --budget 8000000   GO    (5,092,000 left)
+```
+
+⭐ **And the run tells you whether the window can hold the ceiling you asked for** — from its own
+measured rate, never a stored one:
+
+```
+window allows about 14,505,000 tokens in total, at this run's own rate of
+151,166 per 1%  [measured here, not stored]
+  ⇒ the 20,000,000 ceiling will not be reachable in this window;
+    raise it only if you also wait for the reset
+```
+
+⚠️ At ~450k tokens per agent, 4M is about **8–9 agents**. A ceiling does **not** make a large wave
 fit; it guarantees the run stops cleanly with work banked instead of dying mid-wave and losing every
-verdict. To make a run *fit*, narrow it: `--relevance`, `--rounds 2`, `--probe code,artifact`, fewer
-inputs, a tighter `--scope`.
+verdict. To make a run *fit* rather than merely survive, narrow it: `--relevance`, `--rounds 2`,
+`--probe code,artifact`, fewer inputs, a tighter `--scope`.
 
 ## Reading only what the question is in
 

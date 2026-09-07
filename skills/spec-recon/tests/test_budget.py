@@ -7,12 +7,21 @@ what they must not do is subtler than what they must:
 
   B1  the ceiling stops the run at a boundary, from measured spend
   B2  a cheap step still passes where an expensive one does not
-  B3  nothing is forecast -- both terms of the decision are observations
+  B3  the decision rests on observations, and no rate outlives the run
   B4  STOP names the reset time and the resume command
   B5  the relevance gate excludes on density, not on presence
   B6  it declines when its vocabulary does not fit the corpus
   B7  it rescues a revision-marked document rather than cutting it
   B8  an excluded file is listed, never silently dropped
+
+B3 changed shape once and the reason is worth keeping. It used to ban the string
+`tokens_per_percent`, because an earlier design measured how many tokens one
+percent of the quota window buys and *stored* it -- a figure only true for the
+account and tier it came from, and signing in with a different account moved the
+window from 94% used to 6% while that work was in progress. The rate itself was
+never the defect; persisting it was. So the check now asserts the property: a
+rate may be computed from this run's own ledger and printed, and it may not be
+written anywhere that outlives the run or read from anywhere that predates it.
 
 B2 is the ordering that matters. Extraction produces evidence; arbitration turns
 evidence into an answer. A run that stops with evidence and no verdicts has spent
@@ -117,17 +126,38 @@ def test_b2_a_cheap_step_passes_where_an_expensive_one_does_not():
             check("B2 a 305k step against 1.19M left continues", rc == 0, out[:240])
 
 
-def test_b3_nothing_is_forecast():
+def test_b3_the_decision_rests_on_observations():
     body = io.open(BUDGET, encoding="utf-8").read()
     check("B3 the spend comes from cost.jsonl", 'os.path.join(base, "cost.jsonl")' in body)
     check("B3 the step cost is a difference between boundaries",
           "spent - (prev.get" in body)
-    # Only identifiers: the prose explains at length what is *not* predicted,
-    # so matching the word itself would flag the explanation.
-    for banned in ("tokens_per_percent", "62074", "estimate_agents", "forecast("):
-        check("B3 %s does not appear" % banned, banned not in body)
-    check("B3 the docstring says so where the next reader will look",
+    check("B3 no constant stands in for a measured rate",
+          "62074" not in body and "62_074" not in body)
+    check("B3 the docstring says what is not predicted",
           "Nothing here forecasts" in body)
+    # The rate is computed from the run's own ledger, and the only file this
+    # script writes is inside the run directory.
+    check("B3 the rate is derived from the ledger, not a stored figure",
+          "def rate(rows)" in body and "step_percent" in body)
+    check("B3 the rate is labelled as belonging to this run only",
+          "never stored" in body and "never carried between runs" in body)
+    writes = [l for l in body.split("\n") if 'io.open(' in l and '"a"' in l or 'io.open(' in l and '"w"' in l]
+    check("B3 every file it writes is inside the run directory",
+          all("base" in l or "LEDGER" in l for l in writes), writes)
+    check("B3 it reads no state from outside the run",
+          "expanduser" not in body, [l for l in body.split("\n") if "expanduser" in l])
+
+
+def test_b3_the_lookahead_survives_a_repeated_check():
+    """A boundary checked twice must not silently lose its guard."""
+    with Run() as r:
+        r.spend("m1,C,1400000,30000,30,200", "m2,C,1450000,28000,31,205")
+        rc1, out1 = r.gate("03-extract", budget=4000000)
+        check("B3 the first check sees the step and stops", rc1 == 1, out1[:240])
+        rc2, out2 = r.gate("03-extract", budget=4000000)
+        check("B3 the same boundary checked again still stops", rc2 == 1, out2[:300])
+        check("B3 and says which step the estimate came from",
+              "the last step that cost anything" in out2, out2[:400])
 
 
 def test_b4_stopping_says_what_to_do_next():

@@ -33,7 +33,7 @@ first-class sources. The invariant is not broken; the reviewers are handed more 
 | `--max-questions N` | `3` | Ceiling on rows that reach you. Counts across the **whole run**, not per round. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed from the inputs. |
 | `--patterns <file>` | — | JSON merged over `data/recon-patterns.json`. How a house convention this toolkit has never seen — a revision syntax, a build directory, an extension — is recognised **without editing any code**. |
-| `--budget <tokens>` | **`4000000`** | ⭐ **Hard ceiling for the whole run.** Checked at every step boundary against `cost.jsonl` — what agents actually reported, never an estimate. Reaching it stops the run **at a boundary**, with everything finished on disk and a resume command printed. A run that has to stop is not a failure; a run that dies mid-wave and loses its verdicts is. |
+| `--budget <tokens>` | **`4000000`** | ⭐ **Hard ceiling for the whole run — raise it freely.** `--budget 8000000` for a large corpus, `--budget 2000000` to keep a run small. Checked at every step boundary against `cost.jsonl` — what agents actually reported, never an estimate. Reaching it stops the run **at a boundary**, with everything finished on disk and a resume command printed. A run that has to stop is not a failure; a run that dies mid-wave and loses its verdicts is. |
 | `--relevance <n>` | `0.01` | Minimum hits per KB an input needs before an agent reads it. `0` reads everything. The gate **declines on its own** when the vocabulary plainly does not fit the corpus, and it never removes a document carrying revision markers. |
 | `--relevance-add <term>` | — | A term the scope wording does not contain — most often the corpus's own language. Repeatable. |
 | `--quota-gate <pct>` | `85` | Also stop when the subscription window is at or above this percentage, whatever the token budget says. |
@@ -281,7 +281,24 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/budget.py" \
 
 **It forecasts nothing.** The arithmetic is `spent + last_step × 1.5 > budget`, and both terms are
 measurements: `spent` from `cost.jsonl`, `last_step` from the difference since the previous boundary.
-A step may cost more than the one before it, so the margin asks for that much again plus half.
+A step may cost more than the one before it, so the margin asks for that much again plus half. If a
+boundary is checked twice, the difference is zero — the estimate then falls back to the last step
+that did cost something, and says which, rather than letting a zero switch the guard off.
+
+⭐ **Raising the ceiling is normal, and the run says whether the window can hold it.** Once a step has
+reported both tokens and a window percentage, `budget.py` prints this run's own rate — tokens per
+percent of window, for this account, this tier, this corpus — and what the remaining window therefore
+allows in total:
+
+```text
+window allows about 14,505,000 tokens in total, at this run's own rate of
+151,166 per 1%  [measured here, not stored]
+```
+
+Past that figure it says so outright: *the 20,000,000 ceiling will not be reachable in this window;
+raise it only if you also wait for the reset.* ⛔ The rate is **never stored and never carried between
+runs** — it is two observations from the run in front of you, and it stops being true the moment the
+account, the tier or the corpus changes.
 
 ⭐ **A cheap step still passes when an expensive one does not**, and that ordering is deliberate.
 Measured on the gate: at 3.17M of a 4M budget it refused another 927k extraction batch and then

@@ -55,6 +55,39 @@ previous boundary, recorded in `budget.jsonl` beside it. Both are `[measured]`.
 before it, so the check asks for that much again plus half. Lower and a run dies inside a step;
 higher and it stops with budget unspent.
 
+A boundary checked twice sees no difference, and a zero difference would switch the lookahead off
+while still printing `GO`. The estimate therefore falls back to **the last step that actually cost
+something**, and names it. That failed silently in the first version, which is the failure mode this
+whole file exists to remove.
+
+### Raising the ceiling — and knowing whether the window can hold it
+
+The default is a default. `--budget 8000000` for a large corpus, `--budget 2000000` for a quick
+check. Measured, same spend, four ceilings:
+
+```
+spent 2,908,000 · last step 2,908,000 · a step like that needs 4,362,000
+
+  --budget 2000000   STOP    --budget 6000000   STOP
+  --budget 4000000   STOP    --budget 8000000   GO    (5,092,000 left)
+```
+
+Once a step has reported both tokens and a window percentage, the run knows its **own rate** and says
+what the remaining window allows:
+
+```
+window allows about 14,505,000 tokens in total, at this run's own rate of
+151,166 per 1%  [measured here, not stored]
+  ⇒ the 20,000,000 ceiling will not be reachable in this window;
+    raise it only if you also wait for the reset
+```
+
+⛔ **That rate is never stored and never carried between runs.** It is two observations from the run
+in front of you. An earlier design measured the same ratio once and persisted it — and signing in
+with a different account moved the window from 94% used to 6% while the work was in progress, which
+would have left the stored figure silently wrong. Measuring it inside the run costs nothing and
+cannot go stale, because it is discarded with the run.
+
 ### A cheap step passes where an expensive one does not
 
 This ordering is the point, not a side effect. Measured on the gate:

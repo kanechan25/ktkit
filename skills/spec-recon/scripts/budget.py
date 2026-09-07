@@ -38,6 +38,20 @@ cost more than the one before it, so the check asks for that much again plus
 half. Set it lower and a run dies inside a step; set it higher and it stops with
 budget unspent.
 
+The estimate is **the last step that actually cost something**, not literally the
+last row. Called twice at the same spend -- a retry, a boundary checked again --
+the difference is zero, and a zero would switch the lookahead off while still
+printing GO. That failed silently in the first version of this, and silence is
+the failure mode the whole file exists to remove.
+
+⭐ **Raising the ceiling is the point of `--budget`, and it is measured against
+this run.** Once a step has reported both tokens and a window percentage, the
+run knows its own rate -- tokens per percent of window, for this account, this
+tier, this corpus -- and can say whether a larger ceiling is reachable before it
+is spent. That rate is **never stored** and never carried between runs: it is two
+observations from the run in front of you, and it stops being true the moment
+either changes.
+
 Stdlib only, Python 3.9.
 """
 import argparse
@@ -132,6 +146,34 @@ def last_step(rows):
     return rows[-1] if rows else None
 
 
+def last_real_step(rows):
+    """The most recent step that actually cost tokens.
+
+    Called twice at the same spend, the difference is zero -- and a zero need
+    would turn the lookahead off while still printing GO. The last step that cost
+    something is still a measurement, and it is the honest stand-in.
+    """
+    for r in reversed(rows):
+        if (r.get("step_tokens") or 0) > 0:
+            return r
+    return None
+
+
+def rate(rows):
+    """(tokens_per_percent, from_step) measured in THIS run, or (None, None).
+
+    Two observations from the run in front of you -- never stored, never carried
+    between runs, because the ratio depends on the account, the tier and what the
+    agents are reading.
+    """
+    best = None
+    for r in rows:
+        tk, pc = r.get("step_tokens") or 0, r.get("step_percent") or 0
+        if tk > 0 and pc > 0:
+            best = (tk / pc, r.get("step"))
+    return best if best else (None, None)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="budget.py",
@@ -157,6 +199,15 @@ def main(argv=None):
     prev = last_step(rows)
 
     step_tokens = spent - (prev.get("spent", 0) if prev else 0)
+    # A boundary checked twice sees no difference; fall back to the last step
+    # that did cost something rather than losing the lookahead entirely.
+    estimate = step_tokens
+    stale = None
+    if estimate <= 0:
+        fallback = last_real_step(rows)
+        if fallback:
+            estimate = fallback.get("step_tokens") or 0
+            stale = fallback.get("step")
     step_pct = (pct - prev["percent"]) if (prev and prev.get("percent") is not None
                                           and pct is not None) else None
 
@@ -164,17 +215,17 @@ def main(argv=None):
                     "agents": agents, "percent": pct,
                     "step_tokens": step_tokens, "step_percent": step_pct})
 
-    need = max(step_tokens, 0) * a.safety
+    need = max(estimate, 0) * a.safety
     remaining = a.budget - spent
     reasons = []
     if remaining <= 0:
         reasons.append("the ceiling is spent: %s of %s tokens"
                        % (format(spent, ","), format(a.budget, ",")))
     elif need and remaining < need:
-        reasons.append("%s tokens left, and a step like the last one needs %s "
-                       "(%s x %.1f)"
-                       % (format(int(remaining), ","), format(int(need), ","),
-                          format(int(step_tokens), ","), a.safety))
+        which = ("a step like `%s`" % stale) if stale else "a step like the last one"
+        reasons.append("%s tokens left, and %s needs %s (%s x %.1f)"
+                       % (format(int(remaining), ","), which, format(int(need), ","),
+                          format(int(estimate), ","), a.safety))
     if a.quota_gate is not None and pct is not None and pct >= a.quota_gate:
         reasons.append("session window at %.0f%% (gate %.0f%%)" % (pct, a.quota_gate))
     if step_pct and headroom is not None and headroom < step_pct * a.safety:
@@ -182,10 +233,21 @@ def main(argv=None):
                        "took %.0f%%" % (headroom, step_pct))
 
     verdict = "STOP" if reasons else "GO"
+    per_pct, from_step = rate(rows + [{"step_tokens": step_tokens,
+                                       "step_percent": step_pct,
+                                       "step": a.step}])
+    affordable = None
+    if per_pct and headroom is not None:
+        affordable = spent + headroom * per_pct
+
     out = {"verdict": verdict, "step": a.step, "spent": spent, "budget": a.budget,
            "remaining": max(int(remaining), 0), "agents": agents,
            "agents_missing_usage": missing, "step_tokens": int(step_tokens),
+           "estimate_used": int(estimate), "estimate_from": stale,
            "window_percent": pct, "window_headroom": headroom,
+           "tokens_per_window_percent": int(per_pct) if per_pct else None,
+           "rate_from_step": from_step,
+           "window_allows_about": int(affordable) if affordable else None,
            "resets_in_minutes": resets, "quota_note": note, "reasons": reasons}
 
     if a.json:
@@ -209,6 +271,18 @@ def main(argv=None):
                      (" · resets in %.0f min" % resets) if resets else ""))
         elif note:
             print("  window   %s   <- not a stop; the run continues and says so" % note)
+        if stale:
+            print("  (no spend since the last check; the lookahead uses `%s`, "
+                  "the last step that cost anything)" % stale)
+        if affordable:
+            verb = "allows" if affordable >= a.budget else "⚠️ allows only"
+            print("  window %s about %s tokens in total, at this run's own rate "
+                  "of %s per 1%%  [measured here, not stored]"
+                  % (verb, n(affordable), n(per_pct)))
+            if affordable < a.budget:
+                print("           ⇒ the %s ceiling will not be reachable in this "
+                      "window; raise it only if you also wait for the reset"
+                      % n(a.budget))
         if missing:
             print("  ⚠️ %d agent(s) reported no usage: the spend above is a floor" % missing)
         for r in reasons:
