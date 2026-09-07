@@ -19,6 +19,11 @@ ktkit:docs-review <spec> <docs>... --evidence <base>/evidence/ --rounds N --out 
 `--evidence <dir>` loads every `.md` under the directory into the document set, marked as artifacts
 this run produced.
 
+⭐ **`<report>` is the path Phase 0 step 0 settled — the same one, passed straight through.** Never
+`docs-review`'s own default, and never a path invented here. With the handoff on, that file is the
+only report the run produces, so letting it fall back to a default would put the deliverable
+somewhere the user never agreed to and this skill never mentions again.
+
 ## Before handing over
 
 1. `check_evidence.py <base>/evidence/` exits 0. An evidence file with an unlabelled number or no

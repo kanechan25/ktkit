@@ -309,6 +309,21 @@ Vietnamese**, keeping every identifier, path, snippet and technical term in Engl
 deliberate: the reviewer reads Vietnamese, and prose in Vietnamese removes friction without costing
 any precision. The skill files themselves, and everything they write to a forge, are English.
 
+### Where a `spec-recon` run writes
+
+A reconnaissance run produces a **directory** — a report, a `recon.json`, seven step files, one
+evidence file per probe — and every later phase cites paths inside it. So the location is settled
+before anything is measured: without `--out`, the run prints a suggested path together with the tree
+it would create, and **stops for an answer**. The suggestion is derived from the inputs by the same
+mirror algorithm `ccompact` uses, never built from `--scope` and never re-slugified. A path outside
+`.claude/` is rejected with the reason.
+
+Until 3.4.0 it was not like that. `--out` defaulted to the bare string `spec-recon.md`, which
+resolves against the working directory, so a run put its report and its whole directory at the
+repository root — outside `.claude/`, against the rule every skill here follows. Nothing failed and
+no check fired; the files simply appeared in the wrong place.
+`skills/spec-recon/tests/test_out_path.py` is that defect turned into sixteen assertions.
+
 ## help
 
 ```bash

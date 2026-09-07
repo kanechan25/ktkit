@@ -30,8 +30,20 @@ Three things fall out of it, and only the first is obvious:
     scratch/
 ```
 
-`<base>` comes from `--out`: a report at `<dir>/<base>.md` puts everything under `<dir>/<base>/`.
-This is the same convention `docs-review` uses. Do not invent a second one.
+`<base>` comes from `--out`: a report at `<dir>/<base>.recon.md` puts everything under
+`<dir>/<base>/`. `<base>` is the report's filename with the first matching suffix stripped —
+`.recon.md`, `.spec.md`, `.analyze.md`, `.pipeline.md`, `.md`, in that order — which is the list
+`skills/ccompact/SKILL.md` §A1 strips and the list `scripts/resolve_out.py` implements. So the report
+carries the marker and the directory beside it does not:
+
+```
+--out .claude/claude/analyze/<batch>/export-flows.recon.md
+  → .claude/claude/analyze/<batch>/export-flows.recon.md      the report
+    .claude/claude/analyze/<batch>/export-flows/              everything else
+```
+
+This is the same convention `docs-review` uses. Do not invent a second one, and do not re-slugify
+`<base>` — it is an exact string.
 
 ## Rules
 

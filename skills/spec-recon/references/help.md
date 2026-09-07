@@ -112,22 +112,62 @@ a diff, never an effort estimate; the lint rejects a row carrying one.
 | `--probe ...,runtime` | **never default** | Touches a live system. Runs only when you type its name. |
 | `--rounds N \| auto` | `auto` = 3 | A small document set converges at `2`. |
 | `--incremental` | on when a prior report exists | Re-run after the documents changed. Wave 1 is about two thirds of the cost, so this is the biggest lever. |
-| `--out <path>` | `spec-recon.md` | Where the report goes. Working files live in `<dir>/<base>/`. |
+| `--out <path>` | **asked, never assumed** | Where the run writes — the report, and with it the whole directory. Omit it and step 0 prints a suggested path with the tree it would create, then **stops for your answer**; nothing is measured and no directory is created until you confirm. A path outside `.claude/` is rejected with the reason. |
 | `--handoff on\|off` | `on` | `off` stops after evidence — use it to look before the review waves spend anything. |
 | `--max-questions N` | `3` | Ceiling on questions that reach you, across the **whole run**. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed. |
 | `--patterns <file>` | — | A JSON file merged over the shipped conventions. How a house revision syntax is recognised **without editing code**. |
 | `--keep-scratch` | off | Keep the working directory. For debugging this skill. |
 
-## What you get
+## Where it writes — it asks first
+
+A run produces a **directory**, not a file, and every later phase cites paths inside it. So the
+location is settled before anything is measured. Without `--out`:
 
 ```
-<dir>/<base>.md                  ← the report, the thing you read
-<dir>/<base>/
-    evidence/probe-*.md          ⭐ the measurements themselves, readable on their own
-    steps/manifest.md            the index — read this if a run stopped
-    steps/                       internals
+OUT-UNSET  the run writes a directory, so the location is settled before anything is measured.
+
+Suggested:
+  report   .claude/claude/analyze/<batch>.recon.md
+  folder   .claude/claude/analyze/<batch>/
+
+Derived: mirrored from .claude/claude/docs/<batch> under .claude/claude/analyze/
+Confirm this path, or give another under .claude/claude/.
 ```
+
+Then it stops. Confirm, or name another path. The suggestion is **derived** from the inputs by the
+mirror algorithm `ktkit:ccompact` already uses — never built out of `--scope`, never re-slugified —
+so a run lands beside the artifacts of whatever it was run on. A path outside `.claude/` is rejected
+with the reason rather than quietly accepted.
+
+## What you get — a directory, not a file
+
+The report is the way in; the measurements are the substance, and each one is readable on its own.
+
+```
+<dir>/<base>.recon.md            ← the report (written here only with --handoff off; see below)
+<dir>/<base>/
+    recon.json                   freshness, surface, and which copy of an artifact is the source
+    steps/manifest.md            ⭐ the index — read this first if a run stopped
+         00-preflight.md         the capability gate, with every SKIP and its reason
+         01-recon.md             revision marker, mtime and git log per input
+         02-fleet-plan.md        what the planner decided, and why that many agents
+         03-extract-<slice>.md   one per mapper
+         04-state-<doc>.md       one per --baseline document
+         05-collect.md · 06-handoff.md
+    evidence/probe-code-*.md     ⭐ the measurements, each with a reproduce command
+             probe-artifact-*.md
+             probe-vcs-*.md
+    scratch/                     removed after a clean run unless --keep-scratch
+```
+
+**Two modes, two different reports.** With `--handoff on` (the default) the report is written by
+`ktkit:docs-review`, which owns the report schema, the citation check and the lint — this skill
+deliberately does not grow a second one. With `--handoff off` the run stops after the evidence lint
+passes and `spec-recon` writes the report itself. Either way `<base>/` is the same.
+
+The path you confirm is the path used in **both** modes: with the handoff on it is passed straight
+through to `docs-review`, so the deliverable never falls back to that skill's own default.
 
 ## Do not
 
@@ -137,6 +177,7 @@ a diff, never an effort estimate; the lint rejects a row carrying one.
 | Treat `SHAPE` as a settled design | It is one sentence, and it is input to `feat-req-specs`. |
 | Ignore `unsearched` on an `UPHELD` row | Empty plus a broad claim is a defect, not evidence. |
 | Read `NEEDS-WIDER` as an error | It is the guard that stops "not in my slice" becoming "not in the codebase". |
+| Answer the path question with something outside `.claude/` | It is rejected with the reason. Every artifact this plugin writes stays inside `.claude/`, so one run landing elsewhere is one run nothing else can find. |
 | Delete `<base>/checklist.md` to "run clean" | IDs re-mint from 001 and every citation in the old report silently repoints. |
 | `--scope "review docs"` | The agents have nothing to look for. |
 

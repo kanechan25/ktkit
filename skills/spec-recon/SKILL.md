@@ -27,7 +27,7 @@ first-class sources. The invariant is not broken; the reviewers are handed more 
 | `--probe code,artifact,vcs,runtime` | `code,artifact,vcs` | Which probe layers run. `runtime` is **never** in the default and is never inferred — it touches a live system, so it runs only when you type its name. Fully offline: `--probe code,artifact`. |
 | `--rounds N \| auto` | `auto` = 3 | Ceiling on review waves. Convergence may end sooner; the ceiling never forces an extra one. |
 | `--incremental` | on when a prior report is found | Analyse only what changed since that report. |
-| `--out <path>` | `spec-recon.md` | **The report file.** Working files live in `<dir>/<base>/` — `steps/`, `evidence/`, `scratch/` — never loose beside it. |
+| `--out <path>` | **asked, never assumed** | **The report file, and with it the whole output directory.** A run writes a directory — report, `recon.json`, seven step files, one evidence file per probe — and every later phase cites paths inside it. So without this flag the run does not pick a location: step 0 prints a suggestion and **stops for your answer**. Working files live in `<dir>/<base>/`, never loose beside the report. |
 | `--handoff on\|off` | `on` | Hand phases 3–4 to `ktkit:docs-review --evidence <dir>`. `off` stops after evidence, which is also how this skill is tested. |
 | `--max-questions N` | `3` | Ceiling on rows that reach you. Counts across the **whole run**, not per round. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed from the inputs. |
@@ -44,16 +44,48 @@ first-class sources. The invariant is not broken; the reviewers are handed more 
 4  EMIT      hand off to docs-review, or stop at evidence     -> the report
 ```
 
-## 1. Phase 0 — the gate, then the measurement
+## 1. Phase 0 — where it writes, then the gate, then the measurement
+
+### Step 0 — settle the output path. This is a gate.
+
+A run does not produce a file. It produces a **directory** whose paths every later phase cites, and
+whose report is read weeks later by something that has only the path. Choosing that location silently
+is therefore not a convenience, it is a defect — and it was one: `--out` used to default to the bare
+string `spec-recon.md`, which resolves against the working directory and put the entire run at the
+repository root, outside `.claude/`.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/resolve_out.py" \
+    --inputs <paths> --repo <repo> --out <path if the user gave one>
+```
+
+| Exit | Meaning | What you do |
+| ---- | ------- | ----------- |
+| `0` | `--out` was given and lands inside `.claude/` | Echo the two lines it printed, continue. |
+| `3` | no `--out` | ⛔ **Print its output verbatim and STOP.** Wait for the user to confirm the suggested path or name another. Measure nothing, spawn nothing, create no directory. |
+| `2` | `--out` was given and is not usable | Print the reason and the suggestion. Stop. Do not silently substitute. |
+
+The suggestion is derived, not invented: the mirror algorithm is the one in
+`skills/ccompact/SKILL.md` §A1, so a reconnaissance run lands beside the artifacts of the thing it
+was run on. `<base>` is an exact string — never re-slugified, never replaced by a folder name, never
+built out of `--scope`.
+
+⛔ **Never write the confirmed path into a rule file, an env var or a settings file.** It is an
+argument for this run.
+
+### Step 1 — the capability gate
 
 Run the shared preflight. One `FAIL` line means stop: print the table, print the fix commands, spawn
 nothing.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
-    --groups runtime,write,read,vcs,forge \
+    --groups runtime,write,read,vcs,forge,artifacts \
     --out <base> --inputs <paths> --repo <repo> --report <base>/steps/00-preflight.md
 ```
+
+The `artifacts` group is what makes `.claude/claude/` exist and proves it is writable. It was missing
+before, which is why nothing caught the report landing outside it.
 
 A `SKIP` is not a `FAIL`. It means a capability is unavailable for a reason the run can work
 around — most often an SSH remote inside a sandbox that denies the SSH agent. Every question a
@@ -225,6 +257,8 @@ directory. That is the supported way to use this skill on its own.
 
 ## Stop if you are about to
 
+- Measure, spawn, or create a directory before the output path is confirmed — see Phase 0 step 0
+- Substitute a path of your own when `resolve_out.py` rejected the one you were given
 - Spawn anything before preflight passed, or before freshness was measured
 - Tell a read-only reviewer to write a file
 - Conclude "not implemented" from an agent that only read documents
