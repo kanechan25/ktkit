@@ -9,6 +9,7 @@ what they must not do is subtler than what they must:
   B2  a cheap step still passes where an expensive one does not
   B3  the decision rests on observations, and no rate outlives the run
   B4  STOP names the reset time and the resume command
+  B9  a ceiling the window cannot reach is rejected, with the number that fits
   B5  the relevance gate excludes on density, not on presence
   B6  it declines when its vocabulary does not fit the corpus
   B7  it rescues a revision-marked document rather than cutting it
@@ -22,6 +23,15 @@ window from 94% used to 6% while that work was in progress. The rate itself was
 never the defect; persisting it was. So the check now asserts the property: a
 rate may be computed from this run's own ledger and printed, and it may not be
 written anywhere that outlives the run or read from anywhere that predates it.
+
+B9 is a hard rejection with a computed threshold, and the two halves matter
+equally. A ceiling above what the window can hold is not a ceiling: the run dies
+on the window long before reaching it, which is the original failure wearing a
+larger number. But the threshold cannot be a constant. It is
+`spent + headroom x rate`, and both terms move -- at 84% headroom one corpus
+allowed ~14.5M, at 20% headroom the same rate allows ~4.8M, and a lighter corpus
+at the same headroom allows ~35M. Writing any of those down would permit a run
+that cannot finish and refuse one that could.
 
 B2 is the ordering that matters. Extraction produces evidence; arbitration turns
 evidence into an answer. A run that stops with evidence and no verdicts has spent
@@ -323,6 +333,81 @@ def test_b8_threshold_zero_still_reports():
         check("B8 and still writes an auditable report", os.path.isfile(rep))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def with_rate(spent_before, pct_before, step_pct):
+    """A run directory whose ledger already holds one measured (tokens, percent)
+    pair, which is what the rate needs."""
+    import json as _json
+    import time as _time
+    d = tempfile.mkdtemp(prefix="budget-rate-")
+    io.open(os.path.join(d, "budget.jsonl"), "w", encoding="utf-8").write(
+        _json.dumps({"at": _time.time() - 600, "step": "b1",
+                     "spent": spent_before, "agents": 2, "percent": pct_before,
+                     "step_tokens": spent_before, "step_percent": step_pct}) + "\n")
+    return d
+
+
+def test_b9_an_unreachable_ceiling_is_rejected_with_a_usable_number():
+    d = with_rate(900000, 10.0, 9.0)
+    try:
+        rc, out = run(COST, "wave", "--base", d, "--wave", "1",
+                      "--row", "m1,C,440000,9000,13,90",
+                      "--row", "m2,C,450000,8000,14,95",
+                      "--row", "m0,C,890000,10000,20,150")
+        check("B9 the fixture spends", rc == 0, out[:160])
+
+        rc, out = run(BUDGET, "--base", d, "--budget", "200000000", "--step", "b2")
+        check("B9 an absurd ceiling is rejected", rc == 1, out[:300])
+        check("B9 it says the ceiling is unreachable",
+              "BUDGET-UNREACHABLE" in out, out[:400])
+        check("B9 it prints a --budget the window can hold",
+              "--budget " in out.split("BUDGET-UNREACHABLE")[-1], out[-500:])
+        check("B9 it offers waiting as the alternative",
+              "wait for the reset" in out, out[-500:])
+        check("B9 ⭐ it says the figure is computed, never fixed",
+              "computed now, not fixed" in out, out[-500:])
+
+        # The number it printed must itself be accepted.
+        tail = out.split("BUDGET-UNREACHABLE")[-1]
+        num = None
+        for tok in tail.replace("\n", " ").split():
+            if tok.isdigit():
+                num = tok
+                break
+        check("B9 a number was offered", num is not None, tail[:200])
+        if num:
+            rc2, out2 = run(BUDGET, "--base", d, "--budget", num, "--step", "b3")
+            check("B9 the number it offered is itself accepted", rc2 == 0,
+                  "rc=%d  %s" % (rc2, out2[:240]))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+def test_b9_the_threshold_is_never_a_constant():
+    body = io.open(BUDGET, encoding="utf-8").read()
+    check("B9 the limit is computed from spend and headroom",
+          "spent + headroom * per_pct" in body)
+    for constant in ("14000000", "14_000_000", "MAX_BUDGET =", "14505000"):
+        check("B9 %s is not written down" % constant, constant not in body)
+    check("B9 the docstring explains why a constant would be wrong",
+          "computed every time and never constant" in body)
+
+
+def test_b9_a_reachable_ceiling_still_passes():
+    d = with_rate(900000, 10.0, 9.0)
+    try:
+        run(COST, "wave", "--base", d, "--wave", "1",
+            "--row", "m1,C,440000,9000,13,90", "--row", "m2,C,450000,8000,14,95",
+            "--row", "m0,C,890000,10000,20,150")
+        rc, out = run(BUDGET, "--base", d, "--budget", "8000000", "--step", "b2")
+        check("B9 a ceiling inside the window is allowed", rc == 0, out[:300])
+        check("B9 and the rate is still reported",
+              "at this run's own rate" in out, out[:400])
+        check("B9 without claiming it is a limit",
+              "BUDGET-UNREACHABLE" not in out, out[:400])
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def main():

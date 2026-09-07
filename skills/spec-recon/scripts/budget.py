@@ -44,6 +44,19 @@ the difference is zero, and a zero would switch the lookahead off while still
 printing GO. That failed silently in the first version of this, and silence is
 the failure mode the whole file exists to remove.
 
+⭐ **A ceiling the window cannot reach is rejected outright.** Once the run knows
+its own rate it also knows what the remaining window allows, and a `--budget`
+above that figure is not a ceiling at all -- the run would die on the window long
+before reaching it, which is the original failure. So it stops with
+`BUDGET-UNREACHABLE` and prints the number that *is* reachable, for the user to
+pass back.
+
+⚠️ That number is **computed every time and never constant**. It is
+`spent + headroom x rate`, and both terms move: at 84% headroom this corpus
+allowed ~14.5M, at 20% headroom the same rate allows ~4.8M, and a lighter corpus
+at the same headroom allows ~35M. Writing any of those down as a limit would
+permit a run that cannot finish, and refuse one that could.
+
 ⭐ **Raising the ceiling is the point of `--budget`, and it is measured against
 this run.** Once a step has reported both tokens and a window percentage, the
 run knows its own rate -- tokens per percent of window, for this account, this
@@ -226,6 +239,18 @@ def main(argv=None):
         reasons.append("%s tokens left, and %s needs %s (%s x %.1f)"
                        % (format(int(remaining), ","), which, format(int(need), ","),
                           format(int(estimate), ","), a.safety))
+    per_pct, from_step = rate(rows + [{"step_tokens": step_tokens,
+                                       "step_percent": step_pct,
+                                       "step": a.step}])
+    affordable = None
+    if per_pct and headroom is not None:
+        affordable = spent + headroom * per_pct
+    unreachable = bool(affordable and a.budget > affordable)
+    if unreachable:
+        reasons.append("the %s ceiling is unreachable: this window allows about "
+                       "%s in total, at this run's own rate of %s per 1%%"
+                       % (format(a.budget, ","), format(int(affordable), ","),
+                          format(int(per_pct), ",")))
     if a.quota_gate is not None and pct is not None and pct >= a.quota_gate:
         reasons.append("session window at %.0f%% (gate %.0f%%)" % (pct, a.quota_gate))
     if step_pct and headroom is not None and headroom < step_pct * a.safety:
@@ -233,14 +258,9 @@ def main(argv=None):
                        "took %.0f%%" % (headroom, step_pct))
 
     verdict = "STOP" if reasons else "GO"
-    per_pct, from_step = rate(rows + [{"step_tokens": step_tokens,
-                                       "step_percent": step_pct,
-                                       "step": a.step}])
-    affordable = None
-    if per_pct and headroom is not None:
-        affordable = spent + headroom * per_pct
 
-    out = {"verdict": verdict, "step": a.step, "spent": spent, "budget": a.budget,
+    verdict = "STOP" if reasons else "GO"     # set after every reason is known
+    out = {"verdict": verdict, "budget_unreachable": unreachable, "step": a.step, "spent": spent, "budget": a.budget,
            "remaining": max(int(remaining), 0), "agents": agents,
            "agents_missing_usage": missing, "step_tokens": int(step_tokens),
            "estimate_used": int(estimate), "estimate_from": stale,
@@ -275,18 +295,23 @@ def main(argv=None):
             print("  (no spend since the last check; the lookahead uses `%s`, "
                   "the last step that cost anything)" % stale)
         if affordable:
-            verb = "allows" if affordable >= a.budget else "⚠️ allows only"
+            verb = "allows" if not unreachable else "⛔ allows only"
             print("  window %s about %s tokens in total, at this run's own rate "
                   "of %s per 1%%  [measured here, not stored]"
                   % (verb, n(affordable), n(per_pct)))
-            if affordable < a.budget:
-                print("           ⇒ the %s ceiling will not be reachable in this "
-                      "window; raise it only if you also wait for the reset"
-                      % n(a.budget))
         if missing:
             print("  ⚠️ %d agent(s) reported no usage: the spend above is a floor" % missing)
         for r in reasons:
             print("  ⛔ %s" % r)
+        if unreachable:
+            print("")
+            print("  BUDGET-UNREACHABLE. Re-run with a ceiling this window can hold:")
+            print("      --budget %d" % int(affordable))
+            print("  Or wait for the reset%s and keep the ceiling you wanted."
+                  % ((" in %.0f min" % resets) if resets else ""))
+            print("  ⚠️ That figure is computed now, not fixed: it is what has been")
+            print("     spent plus the remaining window at this run's measured rate,")
+            print("     so it moves as the window empties and differs per corpus.")
         if verdict == "STOP":
             print("")
             print("  Everything finished so far is on disk. Nothing in flight is lost.")

@@ -155,15 +155,22 @@ spent 2,908,000 · last step 2,908,000 · a step like that needs 4,362,000
   --budget 4000000   STOP    --budget 8000000   GO    (5,092,000 left)
 ```
 
-⭐ **And the run tells you whether the window can hold the ceiling you asked for** — from its own
-measured rate, never a stored one:
+⭐ **A ceiling the window cannot hold is refused, with the number that fits:**
 
 ```
-window allows about 14,505,000 tokens in total, at this run's own rate of
-151,166 per 1%  [measured here, not stored]
-  ⇒ the 20,000,000 ceiling will not be reachable in this window;
-    raise it only if you also wait for the reset
+STOP  after 03-extract
+  window ⛔ allows only about 11,103,750 tokens in total, at this run's own rate
+           of 113,375 per 1%  [measured here, not stored]
+
+  BUDGET-UNREACHABLE. Re-run with a ceiling this window can hold:
+      --budget 11103750
+  Or wait for the reset in 132 min and keep the ceiling you wanted.
 ```
+
+⚠️ That number is **computed each time, never fixed** — spend plus the remaining window at this run's
+own rate. The same rate allows ~14.5M at 84% headroom and ~4.8M at 20%, and a lighter corpus allows
+~35M; any of them written down as a limit would permit a run that cannot finish, or refuse one that
+could.
 
 ⚠️ At ~450k tokens per agent, 4M is about **8–9 agents**. A ceiling does **not** make a large wave
 fit; it guarantees the run stops cleanly with work banked instead of dying mid-wave and losing every

@@ -138,6 +138,11 @@ ktkit:spec-recon docs/ --scope "does the export template match the published for
 ktkit:spec-recon spec.md ./docs --baseline design.md   # compare intent against current state
 ktkit:spec-recon docs/ --probe code,artifact           # fully offline, no forge
 ktkit:spec-recon docs/ --handoff off                   # stop at evidence, read it yourself
+
+ktkit:spec-recon docs/ --scope "…"                     # 4M ceiling by default
+ktkit:spec-recon docs/ --scope "…" --budget 8000000    # a large corpus
+ktkit:spec-recon docs/ --scope "…" --budget 2000000    # a quick check
+ktkit:spec-recon --resume <base> --budget 6000000      # continue where a ceiling stopped
 ```
 
 ## chain
@@ -308,6 +313,66 @@ The other five are small, and are used from inside the six above as much as dire
 Vietnamese**, keeping every identifier, path, snippet and technical term in English. That is
 deliberate: the reviewer reads Vietnamese, and prose in Vietnamese removes friction without costing
 any precision. The skill files themselves, and everything they write to a forge, are English.
+
+### The ceiling on a `spec-recon` run
+
+A run defaults to a **4,000,000-token ceiling**, and `--budget` moves it: `8000000` for a large
+corpus, `2000000` for a quick check. It is checked at every step boundary against `cost.jsonl` —
+what agents actually reported, never an estimate — and nothing is forecast: the arithmetic is
+`spent + last_step × 1.5 > budget`, where `last_step` is the difference in spend since the previous
+boundary.
+
+Reaching it stops the run **between steps**, with everything finished on disk, `partial` in the
+manifest naming what was not reached, and a `--resume` command printed. A cheap step still passes
+where an expensive one does not — measured: at 3.17M of a 4M ceiling the gate refused another 927k
+extraction batch and then allowed a 305k arbitration, so the verdicts land even when the extraction
+cannot continue. That ordering is deliberate; a run that stops with evidence and no verdicts has
+spent everything and delivered nothing, which is exactly the failure this replaced.
+
+**A ceiling the window cannot reach is rejected outright**, and it hands back the number that fits:
+
+```text
+STOP  after 03-extract
+  window ⛔ allows only about 11,103,750 tokens in total, at this run's own rate
+           of 113,375 per 1%  [measured here, not stored]
+
+  BUDGET-UNREACHABLE. Re-run with a ceiling this window can hold:
+      --budget 11103750
+  Or wait for the reset in 132 min and keep the ceiling you wanted.
+```
+
+⚠️ That figure is **computed each time and is never a constant**. It is what has been spent plus the
+remaining subscription window at this run's own measured rate, so it moves as the window empties and
+differs per corpus: the same rate allows ~14.5M at 84% headroom and ~4.8M at 20%, and a lighter
+corpus at the same headroom allows ~35M. Writing any of those down as a limit would permit a run
+that cannot finish and refuse one that could. The rate is measured inside the run and discarded with
+it — never stored, because signing in with a different account moves the window from 94% used to 6%
+and a persisted ratio would survive that silently.
+
+`scripts/quota.py` reads the window on its own (`--gate <pct>`), and failing to read it never blocks
+a run: unreachable is not exhausted, and the report says `quota not-checked` with the reason.
+
+### Reading only what the question is in
+
+Before any agent is dispatched, `--scope` becomes a search vocabulary and each input is scored in
+hits per kilobyte. Measured on a real 64-file corpus, that takes wave 1 from **48 mapper agents to
+20** — 54 of those files contained not one occurrence of anything the question was about.
+
+Density, not presence: a 456 KB reference table with two incidental matches is not relevant, and an
+agent sent to find them is how a run reaches fifteen million tokens.
+
+⛔ **Narrowing is never silent.** `steps/01b-relevance.md` names every excluded file with its size
+and hit count, the report carries a `## Not read` section, and an absence claim resting on an
+excluded file is `not-accessed: cut by the relevance gate` — **never `UPHELD`**. Without that last
+rule the gate turns "I did not read it" into "it does not exist".
+
+**The gate declines rather than guess.** When the corpus is mostly in a script none of its terms are,
+or the vocabulary matched nothing anywhere, it keeps everything and prints why. Measured: a scope
+written in Vietnamese and English produced four ASCII terms against a corpus that is 68% Japanese,
+and would have excluded the two main specification documents — 729 KB and 223 KB, zero hits each,
+because the question said `export` and the document says `出力`. A document carrying revision markers
+is separately **rescued** whatever its density: cutting the specification on a question about the
+specification is the gate being wrong.
 
 ### What a `spec-recon` run cost
 
