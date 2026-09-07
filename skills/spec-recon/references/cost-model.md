@@ -1,5 +1,11 @@
 # Cost model
 
+> ⚠️ **This file estimates; it does not enforce.** The multiple below was measured on one run and
+> understated a later one by **4.2×** — that run spent 15.2M tokens and returned no verdict.
+> Enforcement lives in `references/budget.md`: a ceiling checked at every step boundary against what
+> agents actually reported. Read this to understand where the money goes; read that one to keep a run
+> inside a number.
+
 A run of this shape measured **2,754,748 tokens across 15 agents and 302 tool calls**. That is not a
 reason to avoid it — it replaced a week of manual reading — but it is a reason to make the spend
 visible while it is happening rather than afterwards.

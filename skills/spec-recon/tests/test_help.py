@@ -18,7 +18,7 @@ The checks, in the order a page is built:
   H5  `help.py --list` is exactly the set of skill directories
   H6  `help.py <name>` succeeds for every skill; an unknown name fails
   H7  the index lists every skill once, with a real tagline
-  H8  a page stays inside the budget it is paid from
+  H8  a page costs less than reading the skill it describes
   H9  the SessionStart hook names the script it tells the model to run
 
 H2 and H3 are the pair that matters. One direction alone lets help drift; both
@@ -43,7 +43,13 @@ HOOK = os.path.join(ROOT, "hooks", "confirm-marker.py")
 UNIVERSAL = {"--help", "--h"}
 FLAG_RE = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]+")
 KTKIT_RE = re.compile(r"ktkit:([a-z][a-z0-9-]*)")
-MAX_PAGE_LINES = 220
+# A page is read in full when it is asked for, so the thing to protect against is
+# a page that costs more than reading the skill would have. That property is
+# measurable, and it is what an earlier fixed line count was standing in for --
+# a number that had to be argued with every time a skill grew. The absolute cap
+# stays as a backstop, because "cheaper than a bloated skill" is not a defence.
+MAX_PAGE_SHARE = 0.75             # of the SKILL.md it documents
+MAX_PAGE_LINES = 300              # backstop, whatever the skill's size
 
 failures = []
 
@@ -233,17 +239,22 @@ def test_h7_the_index_carries_every_skill_with_a_written_tagline():
           not fallback, [f.strip()[:60] for f in fallback])
 
 
-def test_h8_a_page_stays_inside_its_budget():
-    """A page is read in full when it is asked for. Long pages are the failure
-    mode where help costs more than reading the skill would have."""
-    over = []
+def test_h8_a_page_costs_less_than_the_skill_it_describes():
+    """Asking for help must be cheaper than reading the instructions."""
+    over, huge = [], []
     for name in skill_names():
         if not os.path.isfile(page(name)):
             continue
         n = len(read(page(name)).split("\n"))
+        skill = len(skill_md(name).split("\n"))
+        if n > skill * MAX_PAGE_SHARE:
+            over.append("%s: %d lines against a %d-line skill (%.0f%%)"
+                        % (name, n, skill, 100.0 * n / skill))
         if n > MAX_PAGE_LINES:
-            over.append("%s: %d lines" % (name, n))
-    check("H8 no page exceeds %d lines" % MAX_PAGE_LINES, not over, over)
+            huge.append("%s: %d lines" % (name, n))
+    check("H8 no page exceeds %.0f%% of its skill" % (100 * MAX_PAGE_SHARE),
+          not over, over)
+    check("H8 no page exceeds the %d-line backstop" % MAX_PAGE_LINES, not huge, huge)
 
 
 def test_h9_the_hook_points_at_a_script_that_exists():

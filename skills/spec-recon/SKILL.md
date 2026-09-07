@@ -27,11 +27,16 @@ first-class sources. The invariant is not broken; the reviewers are handed more 
 | `--probe code,artifact,vcs,runtime` | `code,artifact,vcs` | Which probe layers run. `runtime` is **never** in the default and is never inferred — it touches a live system, so it runs only when you type its name. Fully offline: `--probe code,artifact`. |
 | `--rounds N \| auto` | `auto` = 3 | Ceiling on review waves. Convergence may end sooner; the ceiling never forces an extra one. |
 | `--incremental` | on when a prior report is found | Analyse only what changed since that report. |
+| `--resume <dir>` | — | ⭐ **Continue a run that stopped at a boundary.** Reads `<dir>/steps/manifest.md` and restarts at the first row marked `missing` or `partial`. Rows marked `complete` are never re-run — their ID allocations are cited by later rows, and re-minting them silently repoints every citation. This is what `budget.py` prints when a ceiling is reached; stopping is a normal outcome, so resuming has to be one too. |
 | `--out <path>` | **asked, never assumed** | **The report file, and with it the whole output directory.** A run writes a directory — report, `recon.json`, seven step files, one evidence file per probe — and every later phase cites paths inside it. So without this flag the run does not pick a location: step 0 prints a suggestion and **stops for your answer**. Working files live in `<dir>/<base>/`, never loose beside the report. |
 | `--handoff on\|off` | `on` | Hand phases 3–4 to `ktkit:docs-review --evidence <dir>`. `off` stops after evidence, which is also how this skill is tested. |
 | `--max-questions N` | `3` | Ceiling on rows that reach you. Counts across the **whole run**, not per round. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed from the inputs. |
 | `--patterns <file>` | — | JSON merged over `data/recon-patterns.json`. How a house convention this toolkit has never seen — a revision syntax, a build directory, an extension — is recognised **without editing any code**. |
+| `--budget <tokens>` | **`4000000`** | ⭐ **Hard ceiling for the whole run.** Checked at every step boundary against `cost.jsonl` — what agents actually reported, never an estimate. Reaching it stops the run **at a boundary**, with everything finished on disk and a resume command printed. A run that has to stop is not a failure; a run that dies mid-wave and loses its verdicts is. |
+| `--relevance <n>` | `0.01` | Minimum hits per KB an input needs before an agent reads it. `0` reads everything. The gate **declines on its own** when the vocabulary plainly does not fit the corpus, and it never removes a document carrying revision markers. |
+| `--relevance-add <term>` | — | A term the scope wording does not contain — most often the corpus's own language. Repeatable. |
+| `--quota-gate <pct>` | `85` | Also stop when the subscription window is at or above this percentage, whatever the token budget says. |
 | `--keep-scratch` | off | Keep the working directory after a clean run. |
 
 ## The five phases
@@ -72,6 +77,18 @@ built out of `--scope`.
 
 ⛔ **Never write the confirmed path into a rule file, an env var or a settings file.** It is an
 argument for this run.
+
+### Step 0b — is there room to start at all?
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/quota.py" --gate 80
+```
+
+| Exit | What you do |
+| ---- | ----------- |
+| `0` | Continue. |
+| `1` | ⛔ **Stop.** Print the percentage, the reset time, and say plainly that under 20% of a window is too little to begin something with this many steps. Do **not** offer flag combinations with token estimates attached — those are guesses. Offer waiting, and `--budget` if the user knows this run is small. |
+| `0` with `SKIP` | Continue, and write `quota not-checked: <reason>` into the report. ⭐ Failing to check is **not** the same as being out of quota, and a gate that stops the work on its own blindness is worse than no gate. |
 
 ### Step 1 — the capability gate
 
@@ -117,7 +134,53 @@ This settles three things before a single token is spent on reading:
   finding.
 - **Surface.** Bytes, lines, language, binary or not — the input the planner needs.
 
-## 2. Phase 1 — plan the fleet, then dispatch it
+### Step 0c — resuming
+
+With `--resume <dir>`, read `<dir>/steps/manifest.md` and nothing else: it is the index, and reading
+the step files themselves re-pays for work already done. Restart at the first row marked `missing` or
+`partial`, re-dispatch only that step's agents with the inputs the manifest records, and append the
+re-run rather than editing the failed row — what failed, and when, is part of the record.
+
+⛔ **Never re-run a row marked `complete` because it would be "safer".** `references/step-protocol.md`
+gives the reason: a completed step's requirement and claim IDs are referenced by every later row, and
+re-minting them repoints every citation in the previous report at a different thing, silently.
+
+The cost ledger is append-only, so a resumed run's `--budget` applies to the **whole** run, not to
+the remainder. Pass a new ceiling if you mean the remainder to have its own.
+
+## 2. Phase 1 — narrow to what the question is in, then plan
+
+### Step 1b — the relevance gate ⭐ the largest measured saving
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/relevance.py" <base>/recon.json \
+    --scope "<verbatim>" --threshold <n> --add <term>... \
+    --report <base>/steps/01b-relevance.md --out <base>/recon-relevant.json
+```
+
+Measured on a real 64-file corpus: **48 mapper agents become 20**. The reason it is worth this much
+is that fifty-three of those files contained nothing the question was about, and the planner was
+spawning an agent per shard to read all of them anyway.
+
+Then plan from `recon-relevant.json`, not `recon.json`.
+
+⛔ **Three rules, and the first is the one that makes the gate safe to have:**
+
+1. **Narrowing is never silent.** `steps/01b-relevance.md` lists every excluded file with its size
+   and hit count, and the report carries a `## Not read` section. `SKILL.md` already forbids the
+   alternative: *"Silently narrowing the scope and then reporting as though the whole job was done is
+   the one outcome worse than stopping."*
+2. ⭐ **An absence claim from an excluded file is `not-accessed: cut by the relevance gate`, never
+   `UPHELD`.** This is the `R-ARTIFACT` trap wearing a new hat: the gate turns *"I did not read it"*
+   into *"it does not exist"* unless this rule holds.
+3. **`GATE-DECLINED` is a result, not an error.** The gate refuses to act when the corpus is mostly
+   in a script none of its terms are, or when it would cut most of the corpus by size. Print its
+   reasons, pass every input to the planner, and continue — the run costs what it would have cost
+   without the gate. Measured: a scope written in Vietnamese and English produced four ASCII terms
+   and would have cut two Japanese specification documents of 729 KB and 223 KB, because the question
+   said `export` and the document says `出力`.
+
+### Step 2 — the fleet plan
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/plan_fleet.py" \
@@ -200,7 +263,34 @@ observation, acted on, and had to be retracted mid-run.
 
 Each wave dispatches the reviewers in one message, plus the arbiter.
 
-### After every wave, record the cost before anything else
+### ⭐ After every step: record the cost, then ask whether another step fits
+
+Two calls, in this order, at **every** step boundary — after each dispatch batch, after each
+arbitration, after each wave. This is the mechanism that keeps a run inside `--budget`, and it is
+the one thing that would have prevented a run spending 15.2M tokens and returning no verdict.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/budget.py" \
+    --base <base> --budget <tokens> --quota-gate <pct> --step <name>
+```
+
+| Exit | Meaning | What you do |
+| ---- | ------- | ----------- |
+| `0` | `GO` | Print its one line and continue. |
+| `1` | `STOP` | ⛔ **Stop at this boundary.** It has already printed the reason, the reset time and the resume command. Write `partial` into `manifest.md` naming exactly what was not reached. Dispatch nothing further. |
+
+**It forecasts nothing.** The arithmetic is `spent + last_step × 1.5 > budget`, and both terms are
+measurements: `spent` from `cost.jsonl`, `last_step` from the difference since the previous boundary.
+A step may cost more than the one before it, so the margin asks for that much again plus half.
+
+⭐ **A cheap step still passes when an expensive one does not**, and that ordering is deliberate.
+Measured on the gate: at 3.17M of a 4M budget it refused another 927k extraction batch and then
+allowed a 305k arbitration — so the verdicts still land when the extraction cannot continue.
+Arbitration is what turns evidence into an answer; it is the last thing that should be starved.
+
+### Recording the cost
+
+
 
 The spend used to exist only as a line of chat, which meant it existed until somebody scrolled. It is
 now an artifact of the run — written in **one call for the whole wave**, never one per agent:
@@ -293,6 +383,10 @@ directory. That is the supported way to use this skill on its own.
 
 ## Stop if you are about to
 
+- Dispatch a further step after `budget.py` returned `STOP` — the ceiling is the user's, not a suggestion
+- Report an `UPHELD` absence for a file the relevance gate excluded; that verdict is `not-accessed`
+- Narrow the input set without writing `steps/01b-relevance.md` and the report's `## Not read` section
+- Treat `GATE-DECLINED` or a quota `SKIP` as a failure — both mean *continue, and say so*
 - Measure, spawn, or create a directory before the output path is confirmed — see Phase 0 step 0
 - Substitute a path of your own when `resolve_out.py` rejected the one you were given
 - Report a token figure an agent actually returned as though you had estimated it, or fill a
@@ -322,6 +416,7 @@ directory. That is the supported way to use this skill on its own.
 | `references/evidence-format.md` | writing or reviewing an evidence file |
 | `references/handoff.md` | handing off to `docs-review` |
 | `references/cost-model.md` | estimating before a run, or recording what a wave cost |
+| `references/budget.md` | the ceiling, the boundary gate, and the relevance gate |
 | `references/incremental.md` | a prior report exists |
 | `data/recon-patterns.json` | this repository writes revisions, build paths or fixtures differently |
 | `docs-review/references/self-clarify.md` | any unknown, at any point |

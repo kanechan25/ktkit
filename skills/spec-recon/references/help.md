@@ -43,14 +43,16 @@ It is passed **verbatim** to every agent, and it decides what they go looking fo
 # ── "does the plan match what is measurably true?"
 /ktkit:spec-recon docs/plan/ --scope "is the export work actually attached to the Q3 milestone"
 
-# ── offline, or a repository with no forge
-/ktkit:spec-recon docs/ --probe code,artifact --scope "..."
+# ── keeping a run small, in order of effect
+/ktkit:spec-recon docs/ --scope "..." --relevance 0.05      # read less
+/ktkit:spec-recon docs/ --scope "..." --incremental         # only what changed
+/ktkit:spec-recon docs/ --scope "..." --rounds 2            # one fewer review wave
+/ktkit:spec-recon docs/ --scope "..." --probe code,artifact # offline, no forge
+/ktkit:spec-recon docs/ --scope "..." --handoff off         # stop at evidence
+/ktkit:spec-recon docs/ --scope "..." --budget 2000000      # a tighter ceiling
 
-# ── re-run after the documents changed
-/ktkit:spec-recon docs/ --incremental --scope "..."
-
-# ── stop after evidence and read it yourself, no review waves
-/ktkit:spec-recon docs/ --handoff off --scope "..."
+# ── continue a run the ceiling stopped
+/ktkit:spec-recon --resume .claude/claude/analyze/<batch>/export-flows
 
 # ── a repository with its own revision convention
 /ktkit:spec-recon docs/ --patterns my-conventions.json --scope "..."
@@ -87,7 +89,7 @@ UNKNOWN   G-001  which version is the default when the field is absent — code 
 | `NEIGHBOUR` | ⭐ Where this codebase already does something similar. Checkable, and it teaches the house style. |
 | `UNKNOWN` | Code cannot decide it. A real question, not a place to guess. |
 | `NEEDS-WIDER` | An agent looked past the edge of its slice and said so. **The system working**, not a failure. |
-| `not-accessed` | A source could not be reached, and the reason is given. Never silently converted into "it does not exist". |
+| `not-accessed` | A source could not be reached — unreachable, or excluded by the relevance gate — and the reason is given. **Never** silently converted into "it does not exist". |
 
 `GAP` is **input to `/ktkit:feat-req-specs`**, not a design decision. `SHAPE` is one sentence — never
 a diff, never an effort estimate; the lint rejects a row carrying one.
@@ -117,7 +119,51 @@ a diff, never an effort estimate; the lint rejects a row carrying one.
 | `--max-questions N` | `3` | Ceiling on questions that reach you, across the **whole run**. |
 | `--lang <code>` | inherit | Output language. Stated, never guessed. |
 | `--patterns <file>` | — | A JSON file merged over the shipped conventions. How a house revision syntax is recognised **without editing code**. |
+| `--budget <tokens>` | **`4000000`** | ⭐ **Hard ceiling for the run.** Checked at every step boundary against what agents actually reported — never an estimate. Reaching it stops the run **at a boundary**, with everything finished on disk and a resume command printed. |
+| `--relevance <n>` | `0.01` | Minimum hits per KB before an agent reads an input. `0` reads everything. Measured on a real 64-file corpus: **48 mapper agents become 20**. |
+| `--relevance-add <term>` | — | A term the scope wording lacks — usually the corpus's own language. Repeatable. |
+| `--quota-gate <pct>` | `85` | Also stop when the subscription window is at or above this, whatever the token budget says. |
 | `--keep-scratch` | off | Keep the working directory. For debugging this skill. |
+
+## ⭐ What it will cost, and where it stops
+
+Default ceiling **4,000,000 tokens**. Nothing is forecast: at every step boundary the run adds up
+what the agents reported and asks whether another step the size of the last one still fits.
+
+```
+GO    after 03-extract b2   1,828,500 / 4,000,000  ·  last step 916,500  ·  window 11%
+
+STOP  after 03-extract b3   2,756,000 / 4,000,000  ·  last step 927,500
+  ⛔ 1,244,000 tokens left, and a step like the last one needs 1,391,250 (927,500 x 1.5)
+  Everything finished so far is on disk. The window resets in 173 minutes.
+  Resume:  ktkit:spec-recon --resume <base> --budget <new>
+```
+
+⭐ **A cheap step passes where an expensive one does not** — measured: at 3.17M of 4M the gate refused
+another 927k extraction and then allowed a 305k arbitration, so the verdicts land even when the
+extraction cannot continue.
+
+⚠️ At ~450k tokens per agent, 4M is about **8–9 agents**. The ceiling does **not** make a large wave
+fit; it guarantees the run stops cleanly with work banked instead of dying mid-wave and losing every
+verdict. To make a run *fit*, narrow it: `--relevance`, `--rounds 2`, `--probe code,artifact`, fewer
+inputs, a tighter `--scope`.
+
+## Reading only what the question is in
+
+`--scope` becomes a search vocabulary; each input is scored in hits per kilobyte. Density, not
+presence — a 456 KB table with two incidental matches is not relevant, and an agent sent to find them
+is how a run reaches fifteen million tokens. Measured on a 64-file corpus: **48 mapper agents → 20**.
+
+⛔ **Narrowing is never silent.** `steps/01b-relevance.md` names every excluded file with its size and
+hit count, the report carries `## Not read`, and an absence claim resting on an excluded file is
+`not-accessed: cut by the relevance gate` — **never `UPHELD`**.
+
+⭐ **The gate declines rather than guess** — when the corpus is mostly in a script none of its terms
+are, or the vocabulary matched nothing anywhere, it keeps everything and prints why. A revision-marked
+document is **rescued** whatever its density: cutting the specification on a question about the
+specification is the gate being wrong.
+
+The full mechanism, and every measurement behind it, is in `references/budget.md`.
 
 ## Where it writes — it asks first
 
@@ -145,37 +191,27 @@ with the reason rather than quietly accepted.
 The report is the way in; the measurements are the substance, and each one is readable on its own.
 
 ```
-<dir>/<base>.recon.md            ← the report (written here only with --handoff off; see below)
+<dir>/<base>.recon.md            ← the report
 <dir>/<base>/
-    recon.json                   freshness, surface, and which copy of an artifact is the source
     steps/manifest.md            ⭐ the index — read this first if a run stopped
-         00-preflight.md         the capability gate, with every SKIP and its reason
-         01-recon.md             revision marker, mtime and git log per input
-         02-fleet-plan.md        what the planner decided, and why that many agents
-         03-extract-<slice>.md   one per mapper
-         04-state-<doc>.md       one per --baseline document
-         05-collect.md · 06-handoff.md
-    evidence/probe-code-*.md     ⭐ the measurements, each with a reproduce command
-             probe-artifact-*.md
-             probe-vcs-*.md
-    cost.jsonl                   ⭐ what the run cost, one append-only row per agent
-    cost.md                      the same, rendered: totals, per wave, per agent
+         00-preflight.md · 01-recon.md · 01b-relevance.md · 02-fleet-plan.md
+         03-extract-<slice>.md · 04-state-<doc>.md · 05-collect.md · 06-handoff.md
+    evidence/probe-*.md          ⭐ the measurements, each with a reproduce command
+    recon.json                   freshness, surface, which copy of an artifact is the source
+    cost.jsonl · cost.md         ⭐ what it cost, one append-only row per agent
+    budget.jsonl                 what each step cost, and the gate's verdict at each boundary
     scratch/                     removed after a clean run unless --keep-scratch
 ```
 
-**Cost is a file, not a line of chat.** `cost.md` carries the total, a per-wave table and a row per
-agent, every figure taken from the `usage` that agent reported. An agent that reported nothing is
-recorded as reporting nothing and the total says how many it excludes — so it reads as a floor, not
-as the bill. The lead's own turns are not in it and the file says so: an agent cannot measure the
-session that dispatched it.
+**Cost is a file, not a line of chat.** `cost.md` carries a total, a per-wave table and a row per
+agent, every figure from the `usage` that agent reported. An agent that reported nothing is recorded
+as such and the total names how many it excludes — so it reads as a floor, not the bill. The lead's
+own turns are not in it, and the file says so.
 
-**Two modes, two different reports.** With `--handoff on` (the default) the report is written by
-`ktkit:docs-review`, which owns the report schema, the citation check and the lint — this skill
-deliberately does not grow a second one. With `--handoff off` the run stops after the evidence lint
-passes and `spec-recon` writes the report itself. Either way `<base>/` is the same.
-
-The path you confirm is the path used in **both** modes: with the handoff on it is passed straight
-through to `docs-review`, so the deliverable never falls back to that skill's own default.
+**Two modes, one path.** With `--handoff on` (default) the report is written by `ktkit:docs-review`,
+which owns the report schema and the lint; with `off` the run stops after the evidence lint and
+writes the report itself. `<base>/` is the same either way, and the path you confirm is used in both
+— so the deliverable never falls back to another skill's default.
 
 ## Do not
 
@@ -185,6 +221,9 @@ through to `docs-review`, so the deliverable never falls back to that skill's ow
 | Treat `SHAPE` as a settled design | It is one sentence, and it is input to `feat-req-specs`. |
 | Ignore `unsearched` on an `UPHELD` row | Empty plus a broad claim is a defect, not evidence. |
 | Read `NEEDS-WIDER` as an error | It is the guard that stops "not in my slice" becoming "not in the codebase". |
+| Raise `--budget` to get past a `STOP` without looking at why | The stop names what was reached and what was not. Read that first; a bigger ceiling buys more of the same cost. |
+| Read `GATE-DECLINED` as an error | It means *continue, reading everything* — the gate refusing to be the reason a finding was missed. |
+| Trust an `UPHELD` on a file the gate excluded | It cannot exist: that verdict is `not-accessed`. If you see one, it is a defect. |
 | Answer the path question with something outside `.claude/` | It is rejected with the reason. Every artifact this plugin writes stays inside `.claude/`, so one run landing elsewhere is one run nothing else can find. |
 | Delete `<base>/checklist.md` to "run clean" | IDs re-mint from 001 and every citation in the old report silently repoints. |
 | `--scope "review docs"` | The agents have nothing to look for. |

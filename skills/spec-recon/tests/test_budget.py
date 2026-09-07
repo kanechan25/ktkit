@@ -1,0 +1,308 @@
+#!/usr/bin/env python3
+"""The ceiling holds, and the gate that narrows the reading never narrows it silently.
+
+A run spent 15.2M tokens across 34 agents, died inside its final wave, and
+produced no verdict. Two scripts now stand between a run and that outcome, and
+what they must not do is subtler than what they must:
+
+  B1  the ceiling stops the run at a boundary, from measured spend
+  B2  a cheap step still passes where an expensive one does not
+  B3  nothing is forecast -- both terms of the decision are observations
+  B4  STOP names the reset time and the resume command
+  B5  the relevance gate excludes on density, not on presence
+  B6  it declines when its vocabulary does not fit the corpus
+  B7  it rescues a revision-marked document rather than cutting it
+  B8  an excluded file is listed, never silently dropped
+
+B2 is the ordering that matters. Extraction produces evidence; arbitration turns
+evidence into an answer. A run that stops with evidence and no verdicts has spent
+everything and delivered nothing -- which is what happened. So the gate must let
+a cheap arbitration through after refusing an expensive extraction.
+
+B6 and B7 are the safety properties. Measured on the corpus this was built
+against, a scope written in Vietnamese and English produced four ASCII terms
+against a corpus that is 68% Japanese, and would have excluded the two main
+specification documents because the question said "export" and the document says
+"出力". A gate that removes the specification is worse than no gate.
+
+Run:  python3 skills/spec-recon/tests/test_budget.py
+"""
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+BUDGET = os.path.join(ROOT, "skills", "spec-recon", "scripts", "budget.py")
+COST = os.path.join(ROOT, "skills", "spec-recon", "scripts", "cost_log.py")
+RELEVANCE = os.path.join(ROOT, "skills", "spec-recon", "scripts", "relevance.py")
+
+sys.path.insert(0, os.path.join(ROOT, "skills", "spec-recon", "scripts"))
+import relevance                                               # noqa: E402
+
+failures = []
+
+
+def check(name, cond, detail=""):
+    if cond:
+        print("ok   %s" % name)
+    else:
+        print("FAIL %s %s" % (name, detail))
+        failures.append(name)
+
+
+def run(script, *args):
+    p = subprocess.Popen([sys.executable, script] + list(args),
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    out, _ = p.communicate()
+    return p.returncode, out.decode("utf-8")
+
+
+class Run(object):
+    """A run directory with a cost ledger, and no network in sight."""
+
+    def __enter__(self):
+        self.d = tempfile.mkdtemp(prefix="budget-")
+        return self
+
+    def __exit__(self, *_exc):
+        shutil.rmtree(self.d, ignore_errors=True)
+
+    def spend(self, *rows):
+        argv = [COST, "wave", "--base", self.d, "--wave", "1"]
+        for r in rows:
+            argv += ["--row", r]
+        rc, out = run(*argv)
+        assert rc == 0, out
+        return self
+
+    def gate(self, step, budget=4000000, extra=()):
+        return run(BUDGET, "--base", self.d, "--budget", str(budget),
+                   "--step", step, *extra)
+
+
+# --------------------------------------------------------------- the ceiling
+
+def test_b1_the_ceiling_stops_at_a_boundary():
+    with Run() as r:
+        rc, out = r.gate("00-preflight")
+        check("B1 a run with nothing spent may start", rc == 0, out[:200])
+        r.spend("m1,C,440000,9000,13,90", "m2,C,455000,8000,14,95")
+        rc, out = r.gate("03-extract-b1")
+        check("B1 912k of a 4M budget continues", rc == 0, out[:240])
+        check("B1 the spend is read from cost.jsonl", "912,000" in out, out[:240])
+        r.spend("m3,C,470000,9500,15,99", "m4,C,430000,7000,12,84")
+        rc, out = r.gate("03-extract-b2")
+        check("B1 1.83M continues", rc == 0, out[:240])
+        r.spend("m5,C,460000,9000,14,92", "m6,C,450000,8500,13,88")
+        rc, out = r.gate("03-extract-b3")
+        check("B1 2.76M with a 927k step stops", rc == 1, out[:300])
+        check("B1 the reason names what is left and what is needed",
+              "1,244,000" in out and "1,391,250" in out, out[:400])
+
+
+def test_b2_a_cheap_step_passes_where_an_expensive_one_does_not():
+    """Arbitration is the last thing that should be starved."""
+    with Run() as r:
+        r.spend("m1,C,900000,20000,20,120")
+        rc, _out = r.gate("03-extract", budget=1500000)
+        check("B2 a 920k step against 580k left stops", rc == 1)
+        with Run() as r2:
+            r2.spend("a1,A,290000,15000,9,60")
+            rc, out = r2.gate("05-arbitrate", budget=1500000)
+            check("B2 a 305k step against 1.19M left continues", rc == 0, out[:240])
+
+
+def test_b3_nothing_is_forecast():
+    body = io.open(BUDGET, encoding="utf-8").read()
+    check("B3 the spend comes from cost.jsonl", 'os.path.join(base, "cost.jsonl")' in body)
+    check("B3 the step cost is a difference between boundaries",
+          "spent - (prev.get" in body)
+    # Only identifiers: the prose explains at length what is *not* predicted,
+    # so matching the word itself would flag the explanation.
+    for banned in ("tokens_per_percent", "62074", "estimate_agents", "forecast("):
+        check("B3 %s does not appear" % banned, banned not in body)
+    check("B3 the docstring says so where the next reader will look",
+          "Nothing here forecasts" in body)
+
+
+def test_b4_stopping_says_what_to_do_next():
+    with Run() as r:
+        r.spend("m1,C,3900000,50000,40,300")
+        rc, out = r.gate("03-extract")
+        check("B4 an overspent run stops", rc == 1, out[:200])
+        check("B4 it says the finished work is safe", "on disk" in out, out)
+        check("B4 it prints a resume command", "--resume" in out, out)
+        check("B4 it does not pretend the ceiling was an estimate",
+              "ceiling is spent" in out or "tokens left" in out, out)
+
+
+def test_b4_a_missing_usage_report_makes_the_spend_a_floor():
+    with Run() as r:
+        r.spend("m1,C,440000,9000,13,90", "m2,B,,,,,no usage returned")
+        _rc, out = r.gate("03-extract")
+        check("B4 the gate says the spend is a floor",
+              "floor" in out and "no usage" in out.lower() or "reported no usage" in out,
+              out[:300])
+
+
+def test_b4_json_is_machine_readable():
+    with Run() as r:
+        r.spend("m1,C,440000,9000,13,90")
+        _rc, out = r.gate("03-extract", extra=("--json",))
+        d = json.loads(out)
+        for k in ("verdict", "spent", "budget", "remaining", "step_tokens", "reasons"):
+            check("B4 --json carries %s" % k, k in d, sorted(d))
+        check("B4 the verdict is GO or STOP", d["verdict"] in ("GO", "STOP"), d["verdict"])
+
+
+# ------------------------------------------------------------- the narrowing
+
+def recon(tmp, files, repo=None):
+    """A recon.json plus real files on disk, since the gate opens them."""
+    recs = []
+    for name, text, extra in files:
+        p = os.path.join(tmp, name)
+        io.open(p, "w", encoding="utf-8").write(text)
+        rec = {"path": name, "bytes": len(text.encode("utf-8")),
+               "ext": os.path.splitext(name)[1], "is_binary": False, "lang": "en"}
+        rec.update(extra or {})
+        recs.append(rec)
+    j = os.path.join(tmp, "recon.json")
+    io.open(j, "w", encoding="utf-8").write(
+        json.dumps({"schema": 1, "repo": repo or tmp, "inputs": recs}))
+    return j
+
+
+def test_b5_density_not_presence():
+    tmp = tempfile.mkdtemp(prefix="rel-")
+    try:
+        j = recon(tmp, [
+            ("relevant.md", "widget widget widget widget\n" * 20, None),
+            # Two incidental matches in a large table: present, not relevant.
+            # 6 bytes a line, so 60000 lines is ~350 KB and two hits is 0.006/KB.
+            ("table.csv", ("a,b,c\n" * 60000) + "widget\nwidget\n", None),
+        ])
+        rc, out = run(RELEVANCE, j, "--scope", "does the widget flow exist",
+                      "--threshold", "0.01")
+        check("B5 the gate runs", rc == 0, out[:200])
+        check("B5 the large low-density table is excluded",
+              "not read" in out and "RELEVANCE" in out, out[:300])
+        rows = relevance.classify(
+            json.load(io.open(j))["inputs"], ["widget"], 0.01, tmp)
+        verdicts = dict((r["path"], r["verdict"]) for r in rows)
+        check("B5 the dense file is kept", verdicts["relevant.md"] == "keep", verdicts)
+        check("B5 the sparse table is cut", verdicts["table.csv"] == "cut", verdicts)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_b6_it_declines_on_a_script_mismatch():
+    tmp = tempfile.mkdtemp(prefix="rel-")
+    try:
+        j = recon(tmp, [
+            ("spec.md", "出力 " * 4000, {"lang": "ja"}),
+            ("notes.md", "widget " * 10, {"lang": "en"}),
+        ])
+        rc, out = run(RELEVANCE, j, "--scope", "does the export flow exist",
+                      "--threshold", "0.01")
+        check("B6 declining is exit 0, not a failure", rc == 0, out[:200])
+        check("B6 it says it declined", "GATE-DECLINED" in out, out[:200])
+        check("B6 it names the script mismatch", "script mismatch" in out, out[:300])
+        check("B6 it asks for a term in the corpus's language",
+              "--relevance-add" in out, out[:400])
+        check("B6 nothing was excluded", "nothing excluded" in out, out[:200])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_b6_the_right_vocabulary_makes_it_act():
+    tmp = tempfile.mkdtemp(prefix="rel-")
+    try:
+        j = recon(tmp, [
+            ("spec.md", "出力 " * 4000, {"lang": "ja"}),
+            ("bulk.csv", "a,b,c\n" * 30000, {"lang": "ja"}),
+        ])
+        rc, out = run(RELEVANCE, j, "--scope", "export", "--add", "出力",
+                      "--threshold", "0.01")
+        check("B6 with a matching term the gate acts", rc == 0 and "RELEVANCE" in out,
+              out[:200])
+        check("B6 and excludes the bulk table", "not read" in out, out[:300])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_b7_a_revision_marked_document_is_rescued():
+    tmp = tempfile.mkdtemp(prefix="rel-")
+    try:
+        big = "unrelated prose\n" * 5000                       # > SPEC_BYTES
+        j = recon(tmp, [
+            ("spec.md", big, {"revision_markers": {"rev-dot": {"max": "03"}}}),
+            ("hits.md", "widget " * 500, None),
+        ])
+        rows = relevance.classify(
+            json.load(io.open(j))["inputs"], ["widget"], 0.01, tmp)
+        v = dict((r["path"], r["verdict"]) for r in rows)
+        check("B7 the revision-marked file is rescued, not cut",
+              v["spec.md"] == "rescued", v)
+        rc, out = run(RELEVANCE, j, "--scope", "does the widget flow exist",
+                      "--threshold", "0.01", "--report", os.path.join(tmp, "r.md"))
+        check("B7 the rescue is announced", "rescued" in out, out[:300])
+        report = io.open(os.path.join(tmp, "r.md"), encoding="utf-8").read()
+        check("B7 the report explains why it was rescued",
+              "## Rescued" in report and "specification" in report, report[:400])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_b8_an_excluded_file_is_always_listed():
+    tmp = tempfile.mkdtemp(prefix="rel-")
+    try:
+        j = recon(tmp, [("hits.md", "widget " * 500, None),
+                        ("bulk.csv", "a,b\n" * 30000, None)])
+        rep = os.path.join(tmp, "01b.md")
+        rc, out = run(RELEVANCE, j, "--scope", "widget flow", "--threshold", "0.01",
+                      "--report", rep)
+        check("B8 the gate wrote its report", os.path.isfile(rep), out[:200])
+        body = io.open(rep, encoding="utf-8").read()
+        check("B8 the excluded file is named", "bulk.csv" in body, body[:400])
+        check("B8 with its size and hit count",
+              "| KB | Hits | Path |" in body, body[:600])
+        check("B8 the report states the not-accessed rule",
+              "not-accessed" in body, body[:900])
+        check("B8 and the run says the same on stdout",
+              "not-accessed" in out, out[:400])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_b8_threshold_zero_still_reports():
+    tmp = tempfile.mkdtemp(prefix="rel-")
+    try:
+        j = recon(tmp, [("a.md", "x" * 100, None)])
+        rep = os.path.join(tmp, "r.md")
+        rc, out = run(RELEVANCE, j, "--scope", "widget", "--threshold", "0",
+                      "--report", rep)
+        check("B8 --threshold 0 exits 0", rc == 0, out[:200])
+        check("B8 it excludes nothing", "not read    0" in out.replace("   ", "  ")
+              or "not read" in out, out[:200])
+        check("B8 and still writes an auditable report", os.path.isfile(rep))
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def main():
+    for fn in sorted(
+            (v for k, v in globals().items() if k.startswith("test_")),
+            key=lambda f: f.__code__.co_firstlineno):
+        fn()
+    print("\n%d failure(s)" % len(failures))
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
