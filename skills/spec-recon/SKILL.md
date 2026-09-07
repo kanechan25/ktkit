@@ -198,12 +198,48 @@ observation, acted on, and had to be retracted mid-run.
 
 ## 5. Phase 3 — waves, and the arbitration that gates absence
 
-Each wave dispatches the reviewers in one message, plus the arbiter. After **every** wave print one
-line:
+Each wave dispatches the reviewers in one message, plus the arbiter.
+
+### After every wave, record the cost before anything else
+
+The spend used to exist only as a line of chat, which meant it existed until somebody scrolled. It is
+now an artifact of the run — written in **one call for the whole wave**, never one per agent:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/cost_log.py" wave \
+    --base <base> --wave N \
+    --row 'probe-code,A,148200,3100,14,96' \
+    --row 'probe-vcs,B,,,,,no usage returned'
+```
+
+Each `--row` is `agent,toolset,tokens_in,tokens_out,tool_calls,seconds[,note]`, and an **empty field
+means the agent did not report that number**.
+
+One call per wave, never one per agent: measured on a 43-agent wave, batching is **~520 tokens
+instead of ~4,100** — 0.019% of a 2.75M-token run rather than 0.149% — and one round trip instead of
+43. Tracking that eats a noticeable slice of what it tracks is not worth keeping. See
+`references/cost-model.md` for the measurement.
+
+Then print the line the script gives back — it is the running total, computed from the file:
 
 ```text
-Wave 2: 5 agents · ~340k tokens · 11m · running ~1.2M · 1 wave left in the cap
+Wave 2: 5 agents · 339,925 tokens · 11m · running 1,205,844
 ```
+
+Three rules, and they are the reason the file is worth having:
+
+1. **Numbers come from the `usage` each agent returned.** Never estimate a figure that was actually
+   reported — a `[derived]` total that could have been `[measured]` breaks the same rule the evidence
+   files are held to.
+2. **An agent that reported nothing is recorded as reporting nothing.** Omit the number flags and say
+   so in `--note`. The rendered total then states how many agents it excludes, so it reads as a floor
+   rather than as the bill. ⛔ Never fill a gap with an average.
+3. **`cost.jsonl` is append-only.** A wave that is re-run appends; it never overwrites. What the
+   first attempt cost is part of the record. A mistake is `cost_log.py correct --reason <why>`.
+
+`cost.md` beside it is a rendered view, regenerated on every append. It also states plainly that the
+lead's own turns are **not** in the total — an agent cannot measure the session that dispatched it,
+and a total that implies otherwise is worse than no total.
 
 **Absence claims do not reach the report unverified.** Any verdict of the shape *not implemented*,
 *missing*, *not present*, *not covered* is routed to `spec-recon-arbiter-impl`, which opens the code
@@ -259,6 +295,8 @@ directory. That is the supported way to use this skill on its own.
 
 - Measure, spawn, or create a directory before the output path is confirmed — see Phase 0 step 0
 - Substitute a path of your own when `resolve_out.py` rejected the one you were given
+- Report a token figure an agent actually returned as though you had estimated it, or fill a
+  missing one with an average — `cost_log.py` records a gap as a gap
 - Spawn anything before preflight passed, or before freshness was measured
 - Tell a read-only reviewer to write a file
 - Conclude "not implemented" from an agent that only read documents
@@ -283,7 +321,7 @@ directory. That is the supported way to use this skill on its own.
 | `references/arbitration.md` | a verdict claims something is absent, or an upheld gap needs an anchor |
 | `references/evidence-format.md` | writing or reviewing an evidence file |
 | `references/handoff.md` | handing off to `docs-review` |
-| `references/cost-model.md` | estimating, or writing the per-wave cost line |
+| `references/cost-model.md` | estimating before a run, or recording what a wave cost |
 | `references/incremental.md` | a prior report exists |
 | `data/recon-patterns.json` | this repository writes revisions, build paths or fixtures differently |
 | `docs-review/references/self-clarify.md` | any unknown, at any point |

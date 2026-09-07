@@ -158,8 +158,16 @@ The report is the way in; the measurements are the substance, and each one is re
     evidence/probe-code-*.md     ⭐ the measurements, each with a reproduce command
              probe-artifact-*.md
              probe-vcs-*.md
+    cost.jsonl                   ⭐ what the run cost, one append-only row per agent
+    cost.md                      the same, rendered: totals, per wave, per agent
     scratch/                     removed after a clean run unless --keep-scratch
 ```
+
+**Cost is a file, not a line of chat.** `cost.md` carries the total, a per-wave table and a row per
+agent, every figure taken from the `usage` that agent reported. An agent that reported nothing is
+recorded as reporting nothing and the total says how many it excludes — so it reads as a floor, not
+as the bill. The lead's own turns are not in it and the file says so: an agent cannot measure the
+session that dispatched it.
 
 **Two modes, two different reports.** With `--handoff on` (the default) the report is written by
 `ktkit:docs-review`, which owns the report schema, the citation check and the lint — this skill

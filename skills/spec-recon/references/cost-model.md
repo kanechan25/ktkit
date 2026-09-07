@@ -25,21 +25,76 @@ Two other numbers worth holding on to:
   agents at ~7k base is 70k before a single file has been read; the actual bill for that run was an
   order of magnitude higher.
 
-## The per-wave line
+## The cost file, and the per-wave line
 
-After **every** wave, print one line. Do not ask, do not stop:
+Cost is an **artifact of the run**, not a line of chat. It used to be only the line, which meant the
+only record of a multi-million-token run was whatever survived in scrollback — and a compaction ends
+that. Two files, in the run directory:
+
+```
+<base>/cost.jsonl      append-only, one row per agent, the source of every figure
+<base>/cost.md          rendered view, regenerated on each append
+```
+
+Written by `scripts/cost_log.py`, in **one call per wave**:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/cost_log.py" wave \
+    --base <base> --wave N \
+    --row 'probe-code,A,148200,3100,14,96' \
+    --row 'probe-artifact,B,92400,2050,9,61' \
+    --row 'probe-vcs,B,,,,,no usage returned'
+```
+
+`agent,toolset,tokens_in,tokens_out,tool_calls,seconds[,note]` — an empty field means that number
+was not reported.
+
+### The tracking must not cost what it tracks
+
+This is why the call is per wave and not per agent, and the difference was measured rather than
+assumed. Wave 1 of a real 62-document corpus is 43 agents:
+
+| Shape | Calls | Command chars | Output chars | ~Tokens | Share of a 2,754,748-token run |
+| ----- | ----: | ------------: | -----------: | ------: | -----------------------------: |
+| one call per agent | 43 | 8,557 | 2,709 | ~4,106 | 0.149% |
+| **one call per wave** | **1** | **1,903** | **63** | **~521** | **0.019%** |
+
+Batching is **13%** of the per-agent cost and one round trip instead of 43. Character counts are
+`[measured]`; the token figures are `[derived]` at four characters per token plus 120 characters of
+Bash-call envelope, and are stated as approximate for that reason.
+
+Half a thousand tokens to know what a two-million-token run cost is about the most this is worth
+spending.
+
+If even that is unwelcome, the answer is not to log approximately. A cost file that is partly guessed
+is worse than none, because it gets quoted. The answer is a smaller run: `--incremental`, a narrower
+`--probe`, or `--handoff off`.
+
+`append` takes one agent with named flags and accepts `--usage-json`, which stores the harness usage
+object verbatim. It is for a single late-returning agent or for debugging — not the hot path.
+
+Then print what the script returns. It is computed from the file, not from memory:
 
 ```text
-Wave 2: 5 agents · ~340k tokens · 11m · running ~1.2M · 1 wave left in the cap
+Wave 2: 5 agents · 339,925 tokens · 11m · running 1,205,844
 ```
 
 This is stricter than `docs-review`, which prints only after wave 1. The reason is the size of the
 runs: a review that costs 200k does not need a running total, one that can reach several million
 does. The line is **progress, not report**, so it does not count against the two-line chat budget.
 
+### What the file may and may not contain
+
 Take the numbers from the `usage` field each agent returns. Never estimate a figure that was
 actually reported — a `[derived]` total that could have been `[measured]` breaks the same rule the
 evidence files are held to.
+
+| Rule | |
+| ---- | - |
+| Missing is missing | An agent that reported no usage is written down as having reported none. The total then names how many agents it excludes and reads as a **floor**. ⛔ Never an average, never an interpolation. |
+| Append only | A re-run wave appends. What the failed attempt cost is part of the record; a correction is `cost_log.py correct --reason <why>`, never an edit. |
+| The lead is not in it | An agent cannot measure the session that dispatched it. `cost.md` says so out loud, because a total that silently omits the largest term is worse than no total. |
+| One label per number | `[measured]` for what an agent reported, `[derived]` for the base floor computed from tool sets. Nothing else appears. |
 
 ## Where the money goes
 

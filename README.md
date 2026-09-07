@@ -309,6 +309,23 @@ Vietnamese**, keeping every identifier, path, snippet and technical term in Engl
 deliberate: the reviewer reads Vietnamese, and prose in Vietnamese removes friction without costing
 any precision. The skill files themselves, and everything they write to a forge, are English.
 
+### What a `spec-recon` run cost
+
+Cost is an artifact, not a line of chat. `<base>/cost.jsonl` gains one append-only row per agent and
+`<base>/cost.md` renders it: a total, a per-wave table with a running figure, and a row per agent —
+every number taken from the `usage` that agent reported.
+
+Three rules make it worth trusting. An agent that reported nothing is recorded as having reported
+nothing, and the total names how many it excludes, so it reads as a floor rather than as the bill —
+never an average. The log is append-only, so a re-run wave adds rows and what the failed attempt cost
+stays in the record. And the page says out loud that the lead's own turns are **not** in the total,
+because an agent cannot measure the session that dispatched it and a total that silently omits the
+largest term is worse than no total.
+
+The logging is itself batched to one call per wave. Measured on a 43-agent wave that is ~521 tokens
+against ~4,106 for a call per agent — 0.019% of a 2.75M-token run instead of 0.149%. Tracking that
+consumed a noticeable share of what it tracks would not be worth keeping.
+
 ### Where a `spec-recon` run writes
 
 A reconnaissance run produces a **directory** — a report, a `recon.json`, seven step files, one

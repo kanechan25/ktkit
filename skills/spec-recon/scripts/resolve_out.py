@@ -48,6 +48,7 @@ TREE = """    recon.json                    freshness, surface, ambiguous artifa
     steps/manifest.md             the index -- read first if a run stops
          00-preflight.md .. 06-handoff.md
     evidence/probe-*.md           the measurements, each with a reproduce command
+    cost.jsonl · cost.md          what the run cost, per agent, append-only
     scratch/                      removed after a clean run"""
 
 

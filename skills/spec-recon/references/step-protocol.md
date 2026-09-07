@@ -27,6 +27,8 @@ Three things fall out of it, and only the first is obvious:
          manifest.md                the index of all of the above
     evidence/probe-<kind>-<topic>.md
     recon.json
+    cost.jsonl                      append-only, one row per agent that returned
+    cost.md                         rendered from cost.jsonl on every append
     scratch/
 ```
 
