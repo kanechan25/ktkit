@@ -31,7 +31,9 @@ phase never re-asks it, and a single place where the run stops.
     [--plan yes|no]       skip the question at step 00
     [--execute]           run phase D as well. Default OFF.
     [--resume | --fresh]  what to do when a previous run exists
-    [--budget <token>]    stop cleanly at a step boundary. Default: no ceiling
+    [--budget <token>]    stop cleanly at a step boundary. Asked for, never assumed
+    [--budget-execute <n>] a separate ceiling for phase D. Default: what A-C cost
+    [--ledger-scope run|dir]  `dir` reads sibling runs' ledgers, as leads only
     [--no-speckit]        take the internalised path even where speckit is installed
     [--rounds N]          self-loop rounds per phase. Default 2
 ```
@@ -40,7 +42,9 @@ phase never re-asks it, and a single place where the run stops.
 | ---- | ---------------------- |
 | `--bug` / `--feature` | **Names the arm outright**, and nothing overrides it — not the frontmatter, not the wording of the request. Use it whenever you already know, which is most of the time. Passing both is an error, not a preference. |
 | `--no-speckit` | **Selects the internalised path**, it does not relax a check. Without it, a missing `.specify/` or missing speckit skills stops the run at step 00 and prints the install command — the chain never degrades on its own, because delivering something else under the same name is worse than stopping. |
-| `--budget` | No ceiling by default. A cost line is printed after **every** step regardless. With a ceiling, the run writes `partial` into the manifest and stops **at a step boundary** — never mid-step, which would leave a half-written artifact that reads as finished. |
+| `--budget` | ⭐ **Asked for, never assumed.** Without it, step 00 prints what a comparable run cost — from `cost.jsonl`, if one exists nearby — and **stops for your answer**. It does not pick a number: `ktkit:spec-recon` defaults to 4M because 453,571 tokens per agent was measured there, and this skill has a different shape and **no measurement yet**. Checked at every step boundary against `cost.jsonl`; reaching it writes `partial` into the manifest and stops **at a boundary** — never mid-step, which would leave a half-written artifact that reads as finished. |
+| `--budget-execute` | Phase D is the one phase whose cost tracks the size of a change rather than the number of questions, so it gets its own ceiling. Default: **what phases A–C actually cost**, measured. ⛔ Running out mid-implementation leaves a repository half-changed, which is worse than one not changed at all — so if the remainder is under that figure, phase D does not start. |
+| `--ledger-scope` | `run` (default) reads only this run's ledger. `dir` also reads sibling runs' `resolved.md` in the same `prompts/<rel>/`, and reports a match as **`FOREIGN` with exit 2** — a lead for a resolver, never a conclusion. A row settled last week may be stale, and a wrong `HIT` is worse than a `MISS` because the chain cites an answer to a question nobody asked now and stops looking. |
 | `--resume` | Read `manifest.md`, restart at the first row marked `missing` or `partial`. Rows marked `complete` are never re-run: their ID allocations are cited by every later row, and re-minting them repoints those citations at something else, silently. |
 | `--fresh` | Start at step 00. ⛔ Deletes nothing — the previous run directory is renamed `<base>.<timestamp>/`, and the artifacts under `analyze/`, `specs/` and `pipeline/` are left alone. |
 | `--rounds` | Per `/ktkit:escalation-ladder`: at most 5 resolvers per round, at most 2 rounds for one question. `--rounds` moves the second number only. |
@@ -188,7 +192,7 @@ Only with `--execute`. Runs the arm's execute skill. Its own STOP conditions sta
 Every conflict found in 04 or 05, once decided, is written back into the artifact it contradicts:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/upsert_block.py" \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/upsert_block.py" \
   <spec.md> --block - --marker chain
 ```
 
@@ -234,19 +238,104 @@ One row per step, appended as it completes. It **is** the resume instruction.
 Partial work beats work that looks complete: a step file covering half its job while reading as
 finished cannot be told from a finished one, by a human or by the next phase.
 
-## Cost
+## Cost — measured at every boundary, written to a file
 
-Print one line after every step. Do not ask, do not stop:
+### Step 00 — before anything is spent
 
-```text
-Step 02: 5 agents · ~180k tokens · 4m · running ~640k
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/quota.py" --gate 80
 ```
 
-Take the numbers from each agent's reported `usage`. ⛔ Never estimate a figure that was actually
-reported.
+Under 20% of a subscription window left is too little to begin something with this many phases.
+`SKIP` is **not** a stop: failing to read the quota is not the same as being out of it, so the run
+continues and writes `quota not-checked: <reason>` into the manifest.
+
+⛔ **Then settle `--budget`.** Without it, print what a comparable run cost and **stop for an
+answer**. Do not choose a number — `spec-recon` defaults to 4M because it measured 453,571 tokens
+per agent, and nothing has measured this skill.
+
+### After every phase
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cost_log.py" wave \
+    --base <chain-dir> --wave 02-clarify \
+    --row 'resolver-1,A,148200,3100,14,96' --row 'resolver-2,A,…'
+
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/budget.py" \
+    --base <chain-dir> --budget <n> --quota-gate 85 --step 02-clarify
+```
+
+One call per phase, not one per agent: measured on a 43-agent wave, batching is ~521 tokens against
+~4,106, and tracking that consumes a noticeable share of what it tracks is not worth keeping.
+
+⭐ **Record the six pipeline skills too, not only the resolvers.** `chain` dispatches
+`analyze-feat` (688 lines), `feat-req-specs` (611), `rca` (372) and three more as subagents, each
+loading its whole body. `cost-model.md` measures that a long body is a tax on **every** spawn — a
+four-tool agent with a long body came to 23,375 tokens against 6,619 for a short one — and nobody has
+ever measured what these six cost. They are the largest unmeasured term in this skill.
+
+`budget.py` returns `GO` (continue) or `STOP`. On `STOP`: write `partial` into `manifest.md` naming
+what was not reached, and print the `--resume` line it gives you. ⛔ Dispatch nothing further.
+
+⭐ **A boundary here is worth more than in `spec-recon`**, because each phase ends on a *complete
+artifact*. Stopping after phase B leaves a finished spec, not half an evidence set.
+
+### Before phase D
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/budget.py" \
+    --base <chain-dir> --budget <budget-execute> --step 05-implement-precheck
+```
+
+Phase D costs by the size of the change, not the number of questions. If what remains is less than
+phases A–C actually cost, ⛔ **do not start it**: say so, and say that a half-changed repository is
+worse than an unchanged one.
+
+### What lands on disk
+
+```
+<chain-dir>/cost.jsonl · cost.md         what each phase and each agent cost
+<chain-dir>/budget.jsonl                 the gate's verdict at every boundary
+<chain-dir>/dispatch.jsonl · dispatch.md what each agent was sent, against what it spent
+<chain-dir>/lookup.jsonl                 every ledger lookup, and what it saved
+```
+
+Three rules: **missing is missing** (an agent that reported no usage is recorded as such, and the
+total names how many it excludes and calls itself a floor — never an average) · **append-only** ·
+**the lead's own turns are not in the total**, and the file says so.
+
+### Before every dispatch
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/dispatch_log.py" \
+    --base <chain-dir> --agent <name> --wave <phase> --payload-file <path>
+```
+
+The prompt a subagent receives is composed in the dispatch call and written nowhere, and it is
+re-sent on every internal turn the agent takes. On a 24-agent `spec-recon` run, three candidate
+explanations for the cost were fitted and all three failed — output tokens R² 0.145, tool calls
+0.421, output × calls 0.025 — leaving 166,000–262,000 per agent unexplained. This is the term that
+was never measured. ⛔ It is recorded and **not** cut: cutting an unsized term is how a tool-call cap
+came to be proposed on a model the data later refused.
+
+### What the ledger lookup saved
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/ledger.py" <ledger> --cache-metric
+```
+
+Pass `--record` to every `--lookup` so this has something to count. `references/self-loop.md` lists
+the lookup as one of five places the tokens are saved and gives the arithmetic — 6,619 per spawn
+against one grep — but nothing counted the hits, so it was an assertion. The metric reports hits as a
+**floor** on tokens not spent, labelled `[derived]`, plus the near-misses between 0.45 and 0.60 —
+the only evidence for whether `--threshold` sits where it should.
 
 ## Stop if you are about to
 
+- Dispatch a further phase after `budget.py` returned `STOP`, or start phase D with less than
+  phases A–C cost
+- Choose a `--budget` yourself instead of asking; no measurement of this skill exists yet
+- Treat a `FOREIGN` row as an answer, or let one close a row in this run's ledger
 - Read a source file in the lead because it would be quicker than dispatching.
 - Carry a phase's findings forward in conversation instead of in its step file.
 - Re-run a step the manifest marks `complete`.
@@ -260,5 +349,6 @@ reported.
 
 | File | What it settles |
 | ---- | --------------- |
+| `references/budget.md` | the boundary gate, and every measurement behind it |
 | `references/ledger.md` | The ledger's columns, the lookup threshold, and what closes a row |
 | `references/self-loop.md` | Step 02 in full, and the five places the tokens are saved |

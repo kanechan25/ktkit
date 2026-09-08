@@ -18,6 +18,12 @@ It is also the only channel that survives a crash, a compaction, and a `--resume
 | ------ | ---- |
 | `ID` | `Q01`, `Q02`, … Minted **only** by `ledger.py --next-id`, and only in the lead. Two subagents minting concurrently would both get the same number. |
 | `Question` | The unknown, in the words it was first asked. Not rewritten later — the lookup depends on the original vocabulary being present. |
+| `At` | When the row was settled, ISO. Stamped by `--add`. |
+| `Head` | The short commit the answer was drawn from, from `git rev-parse` at the moment of writing. A conclusion is only as current as the tree it came from, and without this there is no way to ask whether a row citing code survived forty commits. |
+
+⚠️ A ledger written before these columns existed has seven, not nine. It is read as having no
+provenance rather than refused: crashing a `--resume` on an older run would be worse, and skipping
+the rows would silently re-open questions somebody settled.
 | `Tier` | `T1` `T2` `T3` `T3.5` `T4`, per `/ktkit:escalation-ladder`. |
 | `Conclusion` | What was settled. `OPEN` means the row reached T4 and is waiting on the user. Only a T4 row may be `OPEN`. |
 | `Evidence` | `path:line` for anything the repository settled. For a T4 row the user answered, say so: `user answered at the gate`. |
@@ -59,6 +65,38 @@ Two rules the implementation enforces rather than documents:
    answer itself with its own unanswered question.
 2. **The best match wins, then the threshold is applied.** A near-miss is reported with its score,
    so a caller tuning `--threshold` can see how close it came.
+
+### Recording what the lookup saved
+
+Pass `--record` and every lookup is appended to `lookup.jsonl` beside the ledger. Then:
+
+```bash
+ledger.py <path> --cache-metric
+```
+
+```
+lookups=34 · hits=19 (56%) · misses=15
+spawns avoided=19  ⇒  ~125,761 tokens NOT spent   [derived: 19 x 6,619 base]
+⚠️ base only. A resolver costs more than its base once it reads anything.
+```
+
+⛔ **The figure is a floor and says so.** Multiplying the hits by what a resolver *really* costs would
+read better and has never been measured, so it is not written.
+
+Near-misses between 0.45 and 0.60 are listed too. They are the only evidence for where
+`--threshold` belongs — and moving it on a hunch is how a wrong `HIT` gets shipped.
+
+### Sibling runs — `--ledger-scope dir`
+
+Two runs on related requirements re-derive the same answers, and the ledger is per-run. `dir` reads
+the `resolved.md` of other runs in the same `prompts/<rel>/` and reports a match as **`FOREIGN`,
+exit 2** — deliberately neither `HIT` (0) nor `MISS` (1).
+
+⛔ **A `FOREIGN` row is a lead, not a conclusion, and may not close anything.** It is printed with the
+run it came from, when it was settled and against which commit; the caller dispatches a resolver
+*with that as a starting point*, which is cheaper than a blind search and still a search. Last week's
+answer may be stale — the code moved, the decision changed — and a wrong `HIT` is worse than a
+`MISS`, because the chain then cites an answer to a question nobody asked now and stops looking.
 
 Raise `--threshold` when the run has many similar questions about different subjects. Lowering it
 below ~0.5 starts merging unrelated questions, and a wrong `HIT` is worse than a missed one: the

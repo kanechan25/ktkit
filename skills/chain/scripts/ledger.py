@@ -38,8 +38,11 @@ Exit status
 """
 import argparse
 import io
+import json
 import os
 import re
+import subprocess
+import time
 import sys
 
 TIERS = ("T1", "T2", "T3", "T3.5", "T4")
@@ -47,8 +50,8 @@ SELF_RESOLVED = ("T1", "T2", "T3", "T3.5")
 OPEN = "OPEN"
 
 HEADER = [
-    "| ID | Question | Tier | Conclusion | Evidence | Falsifier | Phase |",
-    "| -- | -------- | ---- | ---------- | -------- | --------- | ----- |",
+    "| ID | Question | Tier | Conclusion | Evidence | Falsifier | Phase | At | Head |",
+    "| -- | -------- | ---- | ---------- | -------- | --------- | ----- | -- | ---- |",
 ]
 
 PREAMBLE = """\
@@ -109,8 +112,16 @@ def read_rows(path):
             if not line.startswith("|"):
                 continue
             parts = [p.strip() for p in line.strip().strip("|").split("|")]
-            if len(parts) != 7:
-                raise ValueError("line %d: expected 7 columns, found %d" % (n, len(parts)))
+            # Nine columns since provenance was added; seven is a ledger written
+            # before that and is read as having none. Refusing it would crash a
+            # `--resume` on any run started earlier, and dropping it would
+            # silently re-open a settled question -- the failure this parser was
+            # written strict to prevent.
+            if len(parts) == 7:
+                parts = parts + ["", ""]
+            elif len(parts) != 9:
+                raise ValueError("line %d: expected 7 or 9 columns, found %d"
+                                 % (n, len(parts)))
             if parts[0] in ("ID", "--") or set(parts[0]) <= set("- "):
                 continue
             if not ID_RE.match(parts[0]):
@@ -118,7 +129,8 @@ def read_rows(path):
             rows.append({
                 "id": parts[0], "question": uncell(parts[1]), "tier": parts[2],
                 "conclusion": uncell(parts[3]), "evidence": uncell(parts[4]),
-                "falsifier": uncell(parts[5]), "phase": parts[6], "line": n,
+                "falsifier": uncell(parts[5]), "phase": parts[6],
+                "at": parts[7], "head": parts[8], "line": n,
             })
     return rows
 
@@ -150,6 +162,24 @@ def do_next_id(rows):
     return 0
 
 
+def git_head(path):
+    """The short SHA the answer was settled against, or "" if there is no repo.
+
+    A conclusion is only as current as the tree it was drawn from. Without this
+    there is no way to ask whether a row that cited code is still true after
+    forty commits -- and no safe way to reuse a row from another run, which is
+    why cross-run lookup depends on this column existing.
+    """
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", os.path.dirname(os.path.abspath(path)) or ".",
+             "rev-parse", "--short", "HEAD"],
+            stderr=subprocess.DEVNULL, timeout=15)
+        return out.decode("utf-8").strip()
+    except Exception:                                          # noqa: BLE001
+        return ""
+
+
 def do_add(path, rows, args):
     if args.tier not in TIERS:
         print("FAIL bad-tier: %s not in %s" % (args.tier, ", ".join(TIERS)))
@@ -168,9 +198,11 @@ def do_add(path, rows, args):
         return 2
     if not os.path.exists(path):
         do_init(path)
-    row = "| %s | %s | %s | %s | %s | %s | %s |" % (
+    row = "| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (
         args.id, cell(args.question), args.tier, cell(conclusion),
-        cell(args.evidence or ""), cell(args.falsifier or ""), cell(args.phase or ""))
+        cell(args.evidence or ""), cell(args.falsifier or ""), cell(args.phase or ""),
+        args.at or time.strftime("%Y-%m-%dT%H:%M:%S"),
+        args.head if args.head is not None else git_head(path))
     with io.open(path, "a", encoding="utf-8") as fh:
         fh.write(row + "\n")
     prior = latest(rows).get(args.id)
@@ -181,20 +213,160 @@ def do_add(path, rows, args):
     return 0
 
 
-def do_lookup(rows, question, threshold):
+LOOKUP_LOG = "lookup.jsonl"
+BASE_SPAWN_TOKENS = 6619          # measured, tool set A -- see cost-model.md
+
+
+def lookup_log_path(ledger_path):
+    return os.path.join(os.path.dirname(os.path.abspath(ledger_path)), LOOKUP_LOG)
+
+
+def record_lookup(ledger_path, question, verdict, score, row_id):
+    """Append what a lookup did, so the saving stops being an assertion.
+
+    `chain/references/self-loop.md` lists the lookup as one of five places the
+    tokens are saved and gives the arithmetic -- 6,619 tokens per spawn against
+    one grep -- but nothing counted the hits, so the saving was never a figure.
+    A near-miss is recorded too: it is the only evidence for whether the
+    threshold is set where it should be.
+    """
+    try:
+        with io.open(lookup_log_path(ledger_path), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                 "question": question, "verdict": verdict,
+                                 "score": round(score, 3), "row": row_id},
+                                ensure_ascii=False, sort_keys=True) + "\n")
+    except (IOError, OSError):
+        pass                          # a lookup must not fail because of its log
+
+
+def sibling_rows(ledger_path):
+    """Settled rows from other runs in the same directory, tagged with where
+    they came from.
+
+    Two chain runs on related requirements re-derive the same answers, and the
+    ledger is per-run, so the second run pays for questions the first already
+    settled. But a row from last week may simply be stale -- the code moved, the
+    decision changed -- and a wrong HIT is worse than a MISS, because the chain
+    cites an answer to a question nobody asked now and stops looking.
+
+    So a sibling row is never a conclusion. It is returned marked `foreign`,
+    reported with its age and the commit it was settled against, and it may not
+    close anything: the caller dispatches a resolver *with the old answer as a
+    starting point*, which is cheaper than a blind search and still a search.
+    """
+    here = os.path.abspath(ledger_path)
+    parent = os.path.dirname(os.path.dirname(here))     # <base>/ -> <rel>/
+    out = []
+    if not os.path.isdir(parent):
+        return out
+    for name in sorted(os.listdir(parent)):
+        cand = os.path.join(parent, name, os.path.basename(here))
+        if not os.path.isfile(cand) or os.path.abspath(cand) == here:
+            continue
+        try:
+            for r in read_rows(cand):
+                r["foreign"] = name
+                out.append(r)
+        except ValueError:
+            continue                    # a malformed sibling is not this run's problem
+    return out
+
+
+def do_lookup(rows, question, threshold, ledger_path=None, record=False,
+              scope="run"):
     """Best current match, if any. Prints the row so the caller can cite it."""
+    pool = list(latest(rows).values())
+    foreign = []
+    if scope == "dir" and ledger_path:
+        foreign = [r for r in latest(sibling_rows(ledger_path)).values()
+                   if r["conclusion"] != OPEN]
     best, score = None, 0.0
-    for r in latest(rows).values():
+    for r in pool:
         if r["conclusion"] == OPEN:
             continue                      # still a question; it settles nothing
         s = similarity(question, r["question"])
         if s > score:
             best, score = r, s
-    if best is None or score < threshold:
+    hit = best is not None and score >= threshold
+
+    # A foreign row is reported only when this run has nothing, and it is
+    # reported as a lead rather than an answer.
+    if not hit and foreign:
+        fbest, fscore = None, 0.0
+        for r in foreign:
+            s = similarity(question, r["question"])
+            if s > fscore:
+                fbest, fscore = r, s
+        if fbest is not None and fscore >= threshold:
+            if record and ledger_path:
+                record_lookup(ledger_path, question, "FOREIGN", fscore, fbest["id"])
+            print("FOREIGN %.2f %s [%s] %s — %s"
+                  % (fscore, fbest["id"], fbest["tier"], fbest["conclusion"],
+                     fbest["evidence"]))
+            print("  from run `%s`, settled %s%s"
+                  % (fbest["foreign"], fbest.get("at") or "at an unrecorded time",
+                     " at " + fbest["head"] if fbest.get("head") else
+                     " against an unrecorded commit"))
+            print("  ⛔ NOT a conclusion. Dispatch a resolver with this as its starting")
+            print("     point and mint a row in THIS ledger from what it returns.")
+            print("     An answer from another run may have gone stale; a wrong HIT is")
+            print("     worse than a MISS, because the chain then stops looking.")
+            return 2
+    if record and ledger_path:
+        record_lookup(ledger_path, question, "HIT" if hit else "MISS", score,
+                      best["id"] if best else "")
+    if not hit:
         print("MISS %.2f — nothing settled covers this" % score)
         return 1
-    print("HIT %.2f %s [%s] %s — %s" % (score, best["id"], best["tier"],
-                                        best["conclusion"], best["evidence"]))
+    stamp = ""
+    if best.get("head") or best.get("at"):
+        stamp = "  (settled %s%s)" % (best.get("at") or "?",
+                                      " at " + best["head"] if best.get("head") else "")
+    print("HIT %.2f %s [%s] %s — %s%s" % (score, best["id"], best["tier"],
+                                          best["conclusion"], best["evidence"], stamp))
+    return 0
+
+
+def do_cache_metric(ledger_path):
+    """What the lookup actually saved, as a floor and labelled as one."""
+    p = lookup_log_path(ledger_path)
+    if not os.path.isfile(p):
+        print("NO-LOOKUPS  nothing recorded yet at %s" % p)
+        print("  pass --record to --lookup so the saving stops being an assertion")
+        return 0
+    hits = misses = 0
+    near = []
+    for line in io.open(p, encoding="utf-8", errors="replace"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if d.get("verdict") == "HIT":
+            hits += 1
+        else:
+            misses += 1
+            s = d.get("score") or 0.0
+            if 0.45 <= s < 0.60:
+                near.append((s, d.get("question", "")[:60]))
+    total = hits + misses
+    print("lookups=%d · hits=%d (%.0f%%) · misses=%d"
+          % (total, hits, (100.0 * hits / total) if total else 0.0, misses))
+    print("spawns avoided=%d  ⇒  ~%s tokens NOT spent   [derived: %d x %s base]"
+          % (hits, format(hits * BASE_SPAWN_TOKENS, ","), hits,
+             format(BASE_SPAWN_TOKENS, ",")))
+    print("⚠️ base only. A resolver costs more than its base once it reads anything,")
+    print("   so this is a FLOOR on what was saved, not the saving.")
+    if near:
+        print("")
+        print("near-misses (0.45-0.60), the evidence for where --threshold belongs:")
+        for s, q in sorted(near, reverse=True)[:8]:
+            print("  %.2f  %s" % (s, q))
+        print("  ⇒ many of these settled by the same row means the threshold is high;")
+        print("    ⛔ raising or lowering it on a hunch is how a wrong HIT gets shipped.")
     return 0
 
 
@@ -247,6 +419,18 @@ def main():
     ap.add_argument("--phase")
     ap.add_argument("--threshold", type=float, default=0.6)
     ap.add_argument("--min-ratio", type=float, default=0.70, dest="min_ratio")
+    ap.add_argument("--at", default=None,
+                    help="when the row was settled (default: now)")
+    ap.add_argument("--head", default=None,
+                    help="the commit it was settled against (default: git HEAD)")
+    ap.add_argument("--record", action="store_true",
+                    help="log this lookup to lookup.jsonl, so the saving is countable")
+    ap.add_argument("--cache-metric", action="store_true", dest="cache_metric",
+                    help="what the lookups saved, as a floor, plus the near-misses")
+    ap.add_argument("--ledger-scope", choices=("run", "dir"), default="run",
+                    dest="ledger_scope",
+                    help="`dir` also reads sibling runs' ledgers, as leads only "
+                         "(exit 2), never as conclusions")
     args = ap.parse_args()
 
     if args.init:
@@ -264,8 +448,12 @@ def main():
         if not (args.id and args.question and args.tier):
             ap.error("--add needs --id, --question and --tier")
         return do_add(args.path, rows, args)
+    if args.cache_metric:
+        return do_cache_metric(args.path)
     if args.lookup is not None:
-        return do_lookup(rows, args.lookup, args.threshold)
+        return do_lookup(rows, args.lookup, args.threshold,
+                         ledger_path=args.path, record=args.record,
+                         scope=args.ledger_scope)
     if args.metric:
         return do_metric(rows, args.min_ratio)
     if args.show_open:

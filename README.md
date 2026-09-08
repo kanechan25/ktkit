@@ -239,6 +239,36 @@ reasoning rather than trust it: the analysis' unknowns table, and `chain/<group>
 — every question, the tier that settled it, and the `path:line` that settles it, including the ones
 that were later overturned.
 
+### What a `chain` run costs
+
+A run is checked at every **phase** boundary against `cost.jsonl` — what agents actually reported —
+and stops on a boundary rather than mid-phase. That matters more here than in a reconnaissance run,
+because each phase ends on a *complete artifact*: stopping after phase B leaves a finished spec, not
+half an evidence set.
+
+⛔ **It will not choose a ceiling for you.** `--budget` is asked for, never assumed: `spec-recon`
+defaults to 4,000,000 because it measured 453,571 tokens per agent, and nothing has measured this
+skill. Step 00 prints what a comparable run cost and waits. `--budget-execute` gives phase D its own
+ceiling, because its cost tracks the size of a change rather than the number of questions — and if
+the remainder is under what phases A–C cost, phase D does not start, since a half-changed repository
+is worse than an unchanged one.
+
+Four files land beside the ledger: `cost.jsonl`/`cost.md`, `budget.jsonl`, `dispatch.jsonl`/
+`dispatch.md`, and `lookup.jsonl`.
+
+**The ledger lookup is now counted rather than claimed.** It had always been listed as one of five
+places the tokens are saved, with the arithmetic — 6,619 per spawn against one grep — but nothing
+counted the hits. `ledger.py --cache-metric` reports them as a **floor** on tokens not spent,
+labelled as one, plus the near-misses between 0.45 and 0.60 that are the only evidence for where
+`--threshold` belongs.
+
+**A row now records when it was settled and against which commit.** A conclusion is only as current
+as the tree it came from. That also makes `--ledger-scope dir` safe: it reads sibling runs' ledgers
+in the same directory and reports a match as `FOREIGN` with **exit 2** — a lead for a resolver, never
+a conclusion, printed with its age and its commit. Last week's answer may be stale, and a wrong `HIT`
+is worse than a `MISS`, because the chain then cites an answer to a question nobody asked now and
+stops looking.
+
 ## The SDD pipeline
 
 Six skills, one road. Each stops at a gate you control, and each hands the next one a file rather

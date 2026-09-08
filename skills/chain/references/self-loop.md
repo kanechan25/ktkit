@@ -64,7 +64,7 @@ Each of these is a mechanism, not an intention.
 | # | Mechanism | Why it is cheap |
 | - | --------- | --------------- |
 | 1 | **Read the gate block, not the report.** | An analysis report has ten-plus sections. In an agentic loop the lead's context is re-sent every turn, so a report opened here is paid for on every turn that follows — `/ktkit:escalation-ladder` makes the same point about opening files at all. The gate block is a fraction of the file and is the only part that contains an unresolved thing. |
-| 2 | **Ledger lookup before the spawn.** | The cheapest agent tool set measured on this harness is 6,619 tokens **before it reads anything**. A lookup is a grep. Across A → B → C the same unknown surfaces repeatedly. |
+| 2 | **Ledger lookup before the spawn.** ⭐ Pass `--record`, then `--cache-metric` reports what it saved as a floor — this row was an assertion for as long as nothing counted the hits. | The cheapest agent tool set measured on this harness is 6,619 tokens **before it reads anything**. A lookup is a grep. Across A → B → C the same unknown surfaces repeatedly. |
 | 3 | **Five resolvers in one message.** | Sequential rounds force the lead to hold round N's results while round N+1 runs. One message, one collection. |
 | 4 | **The resolver returns one line.** | Its contract: a verdict with a `file:line`, never the evidence it sifted. ⛔ Never pass it the lead's reasoning either — a subagent shown a hypothesis confirms it instead of testing it. |
 | 5 | **Hard ceiling 5 × N.** | Out of budget is not a reason to escalate: the unknown drops to T3.5 if one reading is better evidenced, or is recorded `Undecided`. A loop with no ceiling spends the whole run's budget on the hardest question. |
