@@ -503,6 +503,25 @@ page with that skill's own `## Arguments` section in both directions: a flag a p
 the skill does not accept fails the suite, and so does a flag the skill accepts that no page
 mentions. Help that is merely written drifts; help that is checked cannot drift without going red.
 
+## Runbooks
+
+`/ktkit:help <skill>` answers "what are the flags". A runbook answers the other question — "what do I
+actually type on a Tuesday" — and is written for the person driving rather than for the model: worked
+cases end to end, the gate transcript, how to read a verdict, what to do when a ceiling stops a run.
+
+Two exist for the two heavy skills, `chain` and `spec-recon`, and they live in the repository you are
+working in rather than in this one:
+
+```
+<your repo>/.claude/claude/prompts/runbooks/ktkit-chain.runbook.md
+<your repo>/.claude/claude/prompts/runbooks/ktkit-spec-recon.runbook.md
+```
+
+⛔ They are **not** shipped with the plugin and this README does not link to them, because
+`.claude/` is gitignored in the repository they were written in — a README pointing at a file nobody
+who clones gets is a dead link that reads like documentation. Ask the skill for its own guidance
+instead: `/ktkit:help chain`, `/ktkit:help spec-recon`.
+
 ## Install
 
 ### Option A — Plugin marketplace (recommended)
