@@ -176,15 +176,22 @@ them. Whichever mode ran, **name it at the HARD STOP.**
 > `<system>/feature/…`) do **not** match — so a script-backed skill aborts on line 1 even though
 > `.specify/` exists. Directory-exists alone is a **false green**.
 >
-> | Skill | Runs a script? |
-> |---|---|
-> | `speckit.specify` | **No** — safe to call directly |
-> | `speckit.clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` |
-> | `speckit.plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` |
+> | Skill | Runs a script? | Clears the branch gate |
+> |---|---|---|
+> | `speckit.specify` | **No** — safe to call directly | n/a |
+> | `speckit.plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` | **the pin** (below) |
+> | `speckit.clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` | only `SPECIFY_FEATURE` |
 >
-> For a script-backed skill, set `SPECIFY_FEATURE` + `SPECIFY_FEATURE_DIRECTORY` first (see below) —
-> that clears the branch gate **without touching git**. If it still fails, do not call it: switch
-> that one call to the internalised equivalent and say so.
+> ⛔ **An `export` does not reach any of them.** It lives in one Bash invocation; the shell that runs
+> the script is a different shell, opened by the skill one or more tool calls later, with a clean
+> environment. So `SPECIFY_FEATURE_DIRECTORY` is unset by the time the script reads it, and
+> resolution falls through to `.specify/feature.json` — one mutable pointer for the whole
+> repository, written by whichever run touched it last. **Pin that file instead** (next section):
+> it is the only channel that survives the gap between tool calls, and it makes `setup-plan.sh`
+> and `setup-tasks.sh` skip the branch gate outright, with nothing renamed and no git state touched.
+>
+> `check-prerequisites.sh` has no such bypass and validates the branch every time. For those three
+> skills, prefer the internalised equivalent for that one call and say so.
 
 #### Mode `internalised` — write the spec directly
 
@@ -197,7 +204,8 @@ No speckit call, no shell script, no branch gate. Same destination, same filenam
 ```
 
 1. Resolve `<rel-dir>` and `<base>` by the priority order below, and run the collision check.
-2. `mkdir -p` the feature directory and its `checklists/`.
+2. `mkdir -p` the feature directory and its `checklists/`, then **pin it** — the pin section below
+   applies to this mode too, and says why.
 3. Write `spec.md` covering the sections listed at the end of this step.
 4. Write `checklists/requirements.md` yourself — the quality loop is the point of step 7, and it is
    the only always-on gate in this workflow. Items test **the spec**, not the running system; the
@@ -268,20 +276,43 @@ Before `mkdir`/write, check whether `.claude/claude/specs/<rel-dir>/<base>/spec.
   ```
   Wait for the answer. On `u`, overwrite `spec.md` **only** — never delete or rewrite anything under `checklists/`.
 
-#### Before calling `/speckit.specify` — export the two variables *(mode `speckit` only)*
+#### Pin the feature directory — ⛔ **MANDATORY, both modes, right after `mkdir -p`**
 
 ```bash
-export SPECIFY_FEATURE_DIRECTORY=".claude/claude/specs/<rel-dir>/<base>"
-export SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>"   # slug MANDATORY — bare timestamp is rejected
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" \
+  --dir ".claude/claude/specs/<rel-dir>/<base>" \
+  --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 
-- `SPECIFY_FEATURE_DIRECTORY` makes speckit write `spec.md` and `checklists/` into our tree. It is first in spec-kit's resolution order, so it wins.
-- `SPECIFY_FEATURE` only clears the branch-name gate. It does **not** touch git and does **not** rename any branch. Its value is throwaway and may differ every run — the feature directory stays stable because the variable above is always explicit.
+This writes `feature_directory` into `.specify/feature.json` — spec-kit's own persisted pointer,
+the same key `/speckit.specify` writes — and reports `<old> -> <new>`, so a pointer left behind by
+an unrelated feature is visible rather than inherited. It keeps every sibling key, backs the
+previous file up to `feature.json.bak`, and is idempotent. **`--dir` must already exist** — run it
+after the `mkdir -p`, never before.
+
+Run it in **mode `internalised` as well**: the spec is a spec-kit `FEATURE_DIR` whichever mode
+wrote it, `/ktkit:bug-fix-execute` may legitimately run its speckit branch over it, and a pin
+nobody wrote still points at whatever came before. No `.specify/` → `SKIP`, exit 0.
+
+Then, **on the same command line** as any speckit script you invoke yourself, in mode `speckit`:
+
+```bash
+SPECIFY_FEATURE_DIRECTORY=".claude/claude/specs/<rel-dir>/<base>" \
+SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
+  bash .specify/scripts/bash/<script>.sh --json     # slug MANDATORY — bare timestamp is rejected
+```
+
+- Inline, not `export`: the variables must be on the invocation that runs the script, because no
+  shell state crosses a tool-call boundary. The pin covers the calls made *by a skill*, where you
+  do not own the command line.
+- `SPECIFY_FEATURE` only clears the branch-name gate in `check-prerequisites.sh`. It does **not**
+  touch git and does **not** rename any branch. Its value is throwaway — the feature directory is
+  stable because it is pinned on disk.
 - Derive `<slug>` from `<base>`. A bare `YYYYMMDD-HHMMSS` with no trailing slug is **rejected** by the gate.
 
 #### Do NOT truncate `/speckit.specify` at step 6 *(mode `speckit` only)*
 
-Older versions of this workflow overrode the output path and stopped once `spec.md` was written, which silently dropped the skill's own quality loop. With `SPECIFY_FEATURE_DIRECTORY` set correctly there is no reason to stop early — let it run **through step 7**: **7a** writes `checklists/requirements.md`, **7b** grades the spec against it, **7c** fixes the failures.
+Older versions of this workflow overrode the output path and stopped once `spec.md` was written, which silently dropped the skill's own quality loop. With the feature directory pinned there is no reason to stop early — let it run **through step 7**: **7a** writes `checklists/requirements.md`, **7b** grades the spec against it, **7c** fixes the failures.
 
 That loop is the only always-on quality gate in this workflow — STEP 4.7 below is risk-gated and often does not run. Report the checklist result at the HARD STOP.
 

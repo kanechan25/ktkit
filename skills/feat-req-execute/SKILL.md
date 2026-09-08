@@ -115,14 +115,40 @@ Chọn: (1) viết lại spec theo layout mới qua /ktkit:feat-req-specs · (2)
 
 Do **not** move, rename, or convert the file yourself — legacy specs are left untouched by design. Do **not** quietly skip to STEP 7 either: this workflow promises a real `/speckit.analyze` pass, and silently dropping it delivers something else while reporting success.
 
-**Current layout → export the two variables** and use them for every speckit call below:
+**Current layout → pin the feature directory.** ⛔ This is the step, not a detail of the next one:
 
 ```bash
-export SPECIFY_FEATURE_DIRECTORY=".claude/claude/specs/<rel-dir>/<base>"
-export SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>"   # slug MANDATORY — bare timestamp is rejected
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" \
+  --dir ".claude/claude/specs/<rel-dir>/<base>" \
+  --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 
-`SPECIFY_FEATURE` exists solely to clear the branch-name gate in `.specify/scripts/bash/*.sh`. It does **not** touch git and does **not** rename any branch — the branch you are on stays exactly as it is. Its value is throwaway; the feature directory is stable because the first variable is always explicit.
+Read the reported `<old> -> <new>` out loud in the summary. `<old>` naming a different feature is
+the normal case, not an anomaly: `.specify/feature.json` is one mutable pointer for the whole
+repository, written by whichever run touched it last, and `/ktkit:feat-req-specs` may have been a
+different session, a different feature, or a different toolkit.
+
+⛔ **`export` is not an alternative here.** Shell state does not cross a tool-call boundary, and
+every speckit script below runs in a shell the *skill* opens, later, clean. `SPECIFY_FEATURE_DIRECTORY`
+is first in spec-kit's resolution order and so reads like the fix, but it is unset by the time the
+script looks — and resolution falls through to the pin. An unpinned run does not fail loudly: it
+resolves the stale pointer, writes into **another feature's directory**, and reports success.
+
+For a speckit script you invoke yourself, put the variables **inline on that command line**:
+
+```bash
+SPECIFY_FEATURE_DIRECTORY=".claude/claude/specs/<rel-dir>/<base>" \
+SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
+  bash .specify/scripts/bash/check-prerequisites.sh --json --paths-only
+```
+
+`SPECIFY_FEATURE` exists solely to clear the branch-name gate. It does **not** touch git and does **not** rename any branch — the branch you are on stays exactly as it is. Its value is throwaway; the feature directory is stable because it is pinned on disk. `<slug>` is mandatory — a bare `YYYYMMDD-HHMMSS` is rejected.
+
+> **`$SPECIFY_FEATURE_DIRECTORY` below is a label for the resolved path, not a live variable.**
+> The steps that follow write it that way for readability, but nothing exports it and no shell
+> state reaches them. Substitute the actual path — `.claude/claude/specs/<rel-dir>/<base>` — every
+> time you read, write or `cd` anywhere. A command that leaves the `$` in it resolves to an empty
+> prefix, which turns `$SPECIFY_FEATURE_DIRECTORY/spec.md` into `/spec.md` at the filesystem root.
 
 ---
 
@@ -180,18 +206,38 @@ do not edit older directories.
 | **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit.plan` then `/speckit.tasks`, per the guard below |
 | **internalised** | anything else | write `plan.md` and `tasks.md` directly, same contents, same paths |
 
-> ⚠️ **SPECKIT GUARD** *(mode `speckit` only)* — **do the two variables from STEP 5.9 exist?**
+> ⚠️ **SPECKIT GUARD** *(mode `speckit` only)* — **is the pin from STEP 5.9 still on this feature?**
 > Every skill in this branch is script-backed — `/speckit.plan` runs `setup-plan.sh`,
-> `/speckit.tasks` runs `setup-tasks.sh`, `/speckit.analyze` runs `check-prerequisites.sh`. All three
-> enforce the same branch-name pattern that ordinary conventions (`feat/…`, `bugfix/…`,
-> `<system>/feature/…`) do not match, so **`.specify/` existing is a false green** on its own.
-> - Variables not set → go back to STEP 5.9.
-> - Set → verify once, then proceed:
->   ```bash
->   bash .specify/scripts/bash/check-prerequisites.sh --json --paths-only
->   ```
->   Non-zero exit → STOP and report. Do NOT fall back to a manual plan while still calling it a
->   speckit run. Switching to mode `internalised` is allowed; saying nothing about it is not.
+> `/speckit.tasks` runs `setup-tasks.sh`, `/speckit.analyze` runs `check-prerequisites.sh` — and
+> they do not behave the same, so verify rather than assume:
+>
+> | Script | Feature directory | Branch-name gate |
+> |---|---|---|
+> | `setup-plan.sh`, `setup-tasks.sh` | the pin | **skipped** when the pin matches |
+> | `check-prerequisites.sh` | the pin | enforced always — needs inline `SPECIFY_FEATURE` |
+>
+> So **`.specify/` existing is a false green**, and so is "STEP 5.9 ran": another session, or a
+> `/speckit.specify` call in between, can have moved the pin since. Verify — it writes nothing:
+> ```bash
+> python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" --verify \
+>   --dir ".claude/claude/specs/<rel-dir>/<base>" \
+>   --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+> ```
+> - Exit 1 (pin points elsewhere) → repin (drop `--verify`) before any speckit call. Calling
+>   `/speckit.plan` on a wrong pin does not fail: it writes into that other feature's directory.
+> - Exit 0 → proceed.
+>
+> ⛔ **`setup-plan.sh` copies the plan template over `plan.md` unconditionally** — no prompt, no
+> backup, whatever was there. When `plan.md` already exists and is not a bare template (a plan
+> written by hand, or by a previous run of this workflow), copy it aside first and say where:
+> ```bash
+> cp "<feature-dir>/plan.md" "<feature-dir>/plan.pre-speckit.md"
+> ```
+> Then decide deliberately: let speckit regenerate and merge back, or skip `/speckit.plan` for this
+> run and stay in mode `internalised`. Either is fine; losing the file is not.
+>
+> If a check still fails, do NOT fall back to a manual plan while still calling it a speckit run.
+> Switching to mode `internalised` is allowed; saying nothing about it is not.
 
 In mode `internalised`, write `$SPECIFY_FEATURE_DIRECTORY/plan.md` and `.../tasks.md` yourself with
 the contents listed below — the same sections, the same headings — then continue to STEP 6.5, whose

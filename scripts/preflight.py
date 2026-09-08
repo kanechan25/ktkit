@@ -357,7 +357,44 @@ def check_speckit(repo):
         res.append(Result("FAIL", "speckit skills",
                           "%s not installed -> install the speckit skills, or "
                           "re-run the skill with --no-speckit" % SPECKIT_SKILL))
+    if os.path.isdir(scaffold):
+        res.append(check_speckit_pin(scaffold))
     return res
+
+
+def check_speckit_pin(scaffold):
+    """Report the persisted feature pointer, which is nobody's feature yet.
+
+    Reported rather than judged: at preflight time no feature directory has been
+    resolved, so there is nothing to compare against and no basis for a FAIL.
+    What it buys is visibility. The pointer is a single mutable value for the
+    whole repository, and every script-backed speckit skill resolves through it
+    once the environment variable that appears to take precedence has evaporated
+    with the shell that set it. A value naming an unrelated feature is the state
+    in which `setup-plan.sh` copies the plan template into *that* feature's
+    directory and exits 0, so seeing it here -- next to the value the run is
+    about to pin -- is the difference between a caught pointer and a lost file.
+    """
+    path = os.path.join(scaffold, "feature.json")
+    if not os.path.isfile(path):
+        return Result("PASS", "speckit feature pin",
+                      "unset -> resolution falls back to the branch name; "
+                      "scripts/speckit_pin.py pins it once the feature dir exists")
+    try:
+        with open(path, "r") as fh:
+            doc = jsonlib.load(fh)
+        value = doc.get("feature_directory") if isinstance(doc, dict) else None
+    except (ValueError, OSError, IOError):
+        return Result("PASS", "speckit feature pin",
+                      "%s is unreadable -> scripts/speckit_pin.py will back it "
+                      "up and rewrite the key" % path)
+    if not isinstance(value, str) or not value.strip():
+        return Result("PASS", "speckit feature pin",
+                      "no feature_directory key in %s -> the branch name decides "
+                      "until it is pinned" % path)
+    return Result("PASS", "speckit feature pin",
+                  "%s -- confirm this is THIS run's feature before any "
+                  "script-backed speckit call" % value.strip())
 
 
 def check_mcp():

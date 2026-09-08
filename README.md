@@ -308,6 +308,20 @@ picking it up tomorrow.
 Every one of them writes its output under the artifact root and tells you the path. Nothing is
 printed into the conversation twice.
 
+**Where speckit is installed, the pipeline pins the feature directory rather than exporting it.**
+Every script-backed speckit skill — `plan`, `tasks`, `clarify`, `checklist`, `analyze` — resolves
+its feature directory from `SPECIFY_FEATURE_DIRECTORY` first and `.specify/feature.json` second.
+The environment variable is the obvious lever and the one that cannot work here: it lives in one
+Bash invocation, and the shell that runs the script belongs to the skill, opened later, clean. So
+resolution falls through to the file, which is a single mutable pointer for the whole repository,
+written by whichever run touched it last. Left alone, `/speckit.plan` then resolves someone else's
+feature, copies the plan template over **that** feature's `plan.md`, and exits 0 — a wrong write
+reported as a success. `scripts/speckit_pin.py` writes the pointer at the feature in play, reports
+`<old> -> <new>` so an inherited one is visible, and skips cleanly in a repository with no
+`.specify/`. It also removes the branch-name gate from `setup-plan.sh` and `setup-tasks.sh`, which
+skip it entirely when the pin matches — no branch renamed, no git state touched. The preflight
+prints the current pin next to the scaffolding checks, before anything is spent.
+
 ## Working skills
 
 The other five are small, and are used from inside the six above as much as directly.
@@ -1097,6 +1111,9 @@ skills/confirm-with-me/SKILL.md   — one marker, one gate, one explicit yes
 skills/translate-file/SKILL.md    — prose → Vietnamese, identifiers untouched
 scripts/preflight.py              — shared by every skill: capability gate before any spend
                                     groups: runtime write read vcs forge artifacts speckit mcp
+scripts/speckit_pin.py            — points spec-kit's persisted feature pointer at this run's
+                                    feature dir; the only channel that survives a tool-call gap
+  skills/chain/tests/test_speckit_pin.py — stale pin replaced, sibling keys kept, SKIP without .specify/
 hooks/confirm-marker.py           — SessionStart: states the `confirm with me` rule, writes nothing
 .mcp.json                         — the sequential-thinking server the plugin ships
 .claude-plugin/plugin.json        — Claude Code plugin manifest

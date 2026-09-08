@@ -179,6 +179,20 @@ into `steps/03-spec.md` and continue. Otherwise this is the gate. See below.
 chain **stops here and hands over**: this skill does not read a runbook, does not run a command
 taken from one, and does not call the skill that produced it.
 
+⛔ **Before that call, confirm the pin — 03 writing the spec is not proof it still holds:**
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" --verify --dir <feature-dir> --repo <root>
+```
+
+`/speckit.plan` runs `setup-plan.sh`, which resolves its feature directory from
+`.specify/feature.json` — one mutable pointer for the whole repository — and then copies the plan
+template over `plan.md` there. A pin aimed at an unrelated feature does not make it fail: it
+writes into **that** feature's directory and reports success, destroying whatever `plan.md` held.
+Exit 1 ⇒ repin (drop `--verify`) first. And when this feature's `plan.md` already exists as real
+content, copy it to `plan.pre-speckit.md` before the call — the template copy is unconditional and
+takes no backup. Record either action in `steps/04-plan.md`.
+
 Anything the plan reveals that contradicts the spec is **synced back** — see below.
 
 ### 05 — implement
