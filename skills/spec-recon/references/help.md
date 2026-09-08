@@ -172,6 +172,12 @@ own rate. The same rate allows ~14.5M at 84% headroom and ~4.8M at 20%, and a li
 ~35M; any of them written down as a limit would permit a run that cannot finish, or refuse one that
 could.
 
+⭐ **Fewer agents is the lever, not fewer calls** — measured over 24 agents: dropping one agent saved
+a mean of 222,713 tokens, while the cost of an agent is barely related to how many tool calls it
+makes (R² 0.42 linear, 0.30 quadratic; ≥40 calls cost 1.8× ≤6 calls, not an order of magnitude). The
+cheapest agent in that run still cost 123,460 tokens at four calls, and 24 × that floor is 55% of the
+whole run. `--relevance` and the code index cut agents; that is why they work.
+
 ⚠️ At ~450k tokens per agent, 4M is about **8–9 agents**. A ceiling does **not** make a large wave
 fit; it guarantees the run stops cleanly with work banked instead of dying mid-wave and losing every
 verdict. To make a run *fit* rather than merely survive, narrow it: `--relevance`, `--rounds 2`,
@@ -229,6 +235,7 @@ The report is the way in; the measurements are the substance, and each one is re
     recon.json                   freshness, surface, which copy of an artifact is the source
     cost.jsonl · cost.md         ⭐ what it cost, one append-only row per agent
     budget.jsonl                 what each step cost, and the gate's verdict at each boundary
+    dispatch.jsonl · dispatch.md what each agent was *sent*, paired against what it spent
     scratch/                     removed after a clean run unless --keep-scratch
 ```
 

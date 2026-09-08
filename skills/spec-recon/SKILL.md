@@ -298,6 +298,36 @@ observation, acted on, and had to be retracted mid-run.
 
 Each wave dispatches the reviewers in one message, plus the arbiter.
 
+### ⭐ Before every dispatch: record what the agent is being sent
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/dispatch_log.py" \
+    --base <base> --agent <name> --wave N --payload-file <base>/scratch/<name>.prompt
+```
+
+Write the prompt to a file, measure it, then dispatch it. This exists because the
+payload is the one term in a run's cost that nobody has ever measured, and it is the term most
+likely to dominate: a subagent's prompt is re-sent on every internal turn it takes.
+
+The evidence that something is missing is arithmetic. A 24-agent run spent 5,345,133 tokens while
+wave 1 handed its agents 852,260 bytes of document — about 213,000 tokens of content, **9.7%** of
+what the wave spent. Three candidate explanations were fitted against those 24 agents and all three
+failed:
+
+| Candidate driver | R² |
+| ---------------- | -: |
+| output tokens written | **0.145** (slope came out negative) |
+| tool calls made | 0.421 |
+| output × calls | 0.025 |
+
+Every model left **166,000–262,000 per agent** unexplained. `arbiter-B-bugs-accept` spent 398,092
+tokens and wrote 2,286 back — 174 to 1. It was not reading and it was not writing.
+
+⛔ **So record it and do not yet cut it.** `dispatch.md` pairs each payload against what that agent
+spent, in the shape that matters — `payload × calls`. When that column tracks the spend, the payload
+is the missing term and there is a defensible place to cut. Cutting first is how the tool-call cap
+came to be proposed on the strength of a quadratic that the data later refused.
+
 ### ⭐ After every step: record the cost, then ask whether another step fits
 
 Two calls, in this order, at **every** step boundary — after each dispatch batch, after each

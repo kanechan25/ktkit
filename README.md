@@ -352,6 +352,50 @@ and a persisted ratio would survive that silently.
 `scripts/quota.py` reads the window on its own (`--gate <pct>`), and failing to read it never blocks
 a run: unreachable is not exhausted, and the report says `quota not-checked` with the reason.
 
+### Where the tokens actually go
+
+A 24-agent run recorded tokens and tool calls per agent, which was enough to test the models this
+toolkit had been reasoning with. They did not survive.
+
+| Candidate driver | R² over 24 agents |
+| ---------------- | ----------------: |
+| `sqrt(calls)` | 0.476 |
+| `calls` (linear) | 0.421 |
+| **`calls(calls+1)/2` (quadratic)** | **0.298** — worst of the three |
+| output tokens written | 0.145, slope negative |
+
+⛔ **A proposed cap of six tool calls per agent rested on that quadratic and is withdrawn.** Agents
+making ≥40 calls averaged 269,243 tokens against 149,564 for those making ≤6 — **1.8×**, not the
+order of magnitude a quadratic implies.
+
+**What the data shows instead is a large per-agent floor.** The cheapest agent in that run cost
+**123,460 tokens at four tool calls**, and 24 × that floor is 55% of the whole run. So the lever with
+measured support is **fewer agents, not fewer calls**: dropping one agent saved a mean of 222,713
+tokens. Both shipped gates do exactly that — the relevance gate takes 48 mapper agents to 20, and
+`probe_index.py` removes the agent entirely for an identifier with no occurrences.
+
+⚠️ **And the floor itself is not yet explained.** Wave 1 was handed 852,260 bytes of document —
+~213,000 tokens, **9.7%** of what it spent. `arbiter-B-bugs-accept` spent 398,092 tokens and wrote
+2,286 back. One term was never measured: the prompt the lead composes and sends, which is written
+nowhere and is re-sent on every internal turn a subagent takes. `scripts/dispatch_log.py` records it
+and `dispatch.md` pairs it against spend in the shape that matters, `payload × calls`. Nothing is cut
+on the strength of that yet — cutting before measuring is how the tool-call cap came to be proposed.
+
+### The identifier sweep runs in a script
+
+`probe-code` was the most expensive role in the fleet and should have been the cheapest. Its question
+is small — does this identifier exist, and where — but the search ran inside the agent. On a real
+repository `src/` holds 14,627 tracked files, and one `Grep` for `export` returns 15,358 matching
+lines across 3,801 files; that lands in the agent's context and is re-sent on every later call.
+
+`scripts/probe_index.py` runs the sweep as a script and writes an index — counts, sampled
+`path:line` rows, and the exact commands. The same four searches cost ~185,000 tokens inside an agent
+and **~1,700** as an index, and an identifier with zero occurrences dispatches no agent at all.
+
+⛔ The script states counts and lines and **never** `EXISTS`, `NOT_FOUND` or `PARTIAL`. A count is a
+measurement; what an absence *means* is a judgement, and moving that into a script would trade cost
+for the kind of confident wrong answer this toolkit exists to prevent.
+
 ### Reading only what the question is in
 
 Before any agent is dispatched, `--scope` becomes a search vocabulary and each input is scored in

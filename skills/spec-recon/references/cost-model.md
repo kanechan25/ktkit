@@ -31,6 +31,39 @@ Two other numbers worth holding on to:
   agents at ~7k base is 70k before a single file has been read; the actual bill for that run was an
   order of magnitude higher.
 
+## ⚠️ What drives the cost — fitted, and mostly unexplained
+
+A later 24-agent run recorded tokens and tool calls per agent, which is enough to test the models
+this file had been reasoning with. They do not survive.
+
+| Candidate driver | R² over 24 agents |
+| ---------------- | ----------------: |
+| `sqrt(calls)` | 0.476 |
+| `calls` (linear) | 0.421 |
+| **`calls(calls+1)/2` (quadratic)** | **0.298** — the worst of the three |
+| output tokens written | 0.145, slope negative |
+| output × calls | 0.025 |
+
+⛔ **The quadratic-in-tool-calls model is refused by the data**, and a proposed cap of six tool calls
+per agent rested on it. That proposal is withdrawn: `cost-model.md` was already right to reject a
+hard cap for a different reason — an agent out of quota concludes early — and the saving it was
+supposed to buy is not there.
+
+**What the data does show is a large per-agent floor.** The cheapest agent in that run cost
+**123,460 tokens at four tool calls**; 24 × that floor is 2,963,040, or **55%** of the whole run.
+Agents making ≥40 calls averaged 269,243 against 149,564 for those making ≤6 — **1.8×**, not the
+order of magnitude a quadratic implies.
+
+⭐ **So the lever with measured support is fewer agents, not fewer calls.** Dropping one agent saved a
+mean of 222,713 tokens; halving an agent's calls is weakly related at best.
+
+And the floor itself is unexplained. Wave 1 was handed 852,260 bytes of document — ~213,000 tokens,
+9.7% of what it spent. One term was never measured: the prompt the lead composes and sends, which is
+written nowhere and is re-sent on every internal turn a subagent takes.
+`scripts/dispatch_log.py` records it. Until `dispatch.md` from a real run pairs payload against
+spend, the floor stays `[unexplained]` — and nothing should be cut on the strength of a guess about
+it.
+
 ## The cost file, and the per-wave line
 
 Cost is an **artifact of the run**, not a line of chat. It used to be only the line, which meant the

@@ -189,7 +189,9 @@ measured or expected effect:
 | ----- | ------ | ------ |
 | `probe_index.py` — grep in a script, not in an agent | **~109x** on the read `[measured]`; zero-hit identifiers need no agent | shipped |
 | `--relevance` when the vocabulary fits | 48 → 20 agents `[measured]` | shipped |
-| A cap on tool calls per agent | ×0.36 `[derived]` from the quadratic in tool calls | ⛔ needs measuring first |
+| ~~A cap on tool calls per agent~~ | ~~×0.36 from the quadratic~~ | ⛔ **WITHDRAWN** — the quadratic fitted worst of three models (R² 0.298 over 24 agents); calls explain under half the variance |
+| **Fewer agents** — the only lever with measured support | dropping one agent saved a mean of **222,713** tokens `[measured]` | shipped, via the two gates above |
+| Measure the dispatch payload | unknown; it is the one unmeasured term and the floor is 55% of a run | `dispatch_log.py` records it; nothing cut yet |
 | Verdict per question rather than per run | a partial run keeps its verdicts | ⛔ architecture change |
 | `--rounds 2` on a small set | one fewer review wave | shipped |
 | `--probe code,artifact` | one set-B agent and the whole forge preflight | shipped |
