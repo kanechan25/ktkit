@@ -615,6 +615,31 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 4.1.0 — the feature directory is pinned, not exported
+
+Nothing to do, and one thing to know: if you run any SDD skill in a repository with speckit
+scaffolding, it now writes `.specify/feature.json` before calling a speckit skill, and prints the
+value it replaced.
+
+That file is spec-kit's own persisted pointer — the same key `/speckit.specify` writes — and until
+now these skills relied on `SPECIFY_FEATURE_DIRECTORY` instead, which is first in spec-kit's
+resolution order and therefore looked sufficient. It is not reachable: an `export` lives in one
+Bash invocation, and the shell that runs `setup-plan.sh` belongs to the speckit skill, opened
+later, clean. Resolution fell through to the file, which no skill was writing, so a pointer from an
+unrelated feature stayed in place and `/speckit.plan` copied the plan template into **that**
+feature's directory and exited 0.
+
+- The previous pointer is saved to `.specify/feature.json.bak` on the first repin.
+- Sibling keys in that file are kept; only `feature_directory` is written.
+- A repository with no `.specify/` is unaffected — the pin reports SKIP and the internalised path
+  runs exactly as before.
+- `preflight.py --groups speckit` now prints the current pin, so a stale one is visible before any
+  spend. It never fails on it: at preflight time there is no feature directory to compare against.
+- ⛔ One thing the pin cannot fix: `setup-plan.sh` copies the plan template over `plan.md`
+  unconditionally, with no prompt and no backup. `feat-req-execute` and `chain` now say so and copy
+  an existing plan aside first. If you drive `/speckit.plan` yourself over a hand-written plan, do
+  the same.
+
 ### Upgrading to 3.1.0 — the chain, and the half of the ladder that was missing
 
 Additive, with one behaviour change worth reading before you run `rca` again.
