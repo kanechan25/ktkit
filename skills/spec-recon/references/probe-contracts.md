@@ -60,6 +60,11 @@ Write to: <base>/evidence/probe-<kind>-<topic>.md
 Return: the file path and a one-line count, nothing else
 ```
 
+`probe-code` additionally receives `steps/01c-code-index.md` — the sweep, already done by
+`scripts/probe_index.py`. It reads that before searching anything itself; the script costs no model
+tokens and the same sweep inside an agent cost ~109x more. Identifiers the index found with zero
+occurrences are not dispatched at all.
+
 **Reviewer** — `probe-code`, `arbiter-impl`:
 
 ```text

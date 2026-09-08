@@ -24,6 +24,14 @@ never the defect; persisting it was. So the check now asserts the property: a
 rate may be computed from this run's own ledger and printed, and it may not be
 written anywhere that outlives the run or read from anywhere that predates it.
 
+B9 seeds the quota window rather than reading the live one. The first version
+did not, and went red hours later for a reason that had nothing to do with the
+code: the session had spent quota, the remaining window shrank, and a ceiling
+that had been reachable no longer was. A test whose verdict depends on the time
+of day is worse than no test. The window is seeded through `HOME`, because
+`quota.py` caches to `~/.claude/ktkit-quota-cache.json` and `budget.py` inherits
+the environment -- no test-only code path in either script.
+
 B9 is a hard rejection with a computed threshold, and the two halves matter
 equally. A ceiling above what the window can hold is not a ceiling: the run dies
 on the window long before reaching it, which is the original failure wearing a
@@ -74,11 +82,35 @@ def check(name, cond, detail=""):
         failures.append(name)
 
 
-def run(script, *args):
+def run(script, *args, **env):
+    e = dict(os.environ)
+    e.update(env)
     p = subprocess.Popen([sys.executable, script] + list(args),
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=e)
     out, _ = p.communicate()
     return p.returncode, out.decode("utf-8")
+
+
+def seeded_home(percent, minutes=120):
+    """A HOME whose quota cache is fresh, so the window is fixed for the test.
+
+    `quota.py` consults its cache before doing anything else, and `budget.py`
+    inherits the environment when it calls it. Nothing test-only is added to
+    either script.
+    """
+    import json as _json
+    import time as _time
+    from datetime import datetime, timedelta, timezone
+    home = tempfile.mkdtemp(prefix="quota-home-")
+    os.makedirs(os.path.join(home, ".claude"))
+    resets = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
+    io.open(os.path.join(home, ".claude", "ktkit-quota-cache.json"),
+            "w", encoding="utf-8").write(_json.dumps({
+                "at": _time.time(),
+                "payload": {"limits": [{"kind": "session", "percent": percent,
+                                        "severity": "normal", "is_active": True,
+                                        "resets_at": resets}]}}))
+    return home
 
 
 class Run(object):
@@ -357,7 +389,9 @@ def test_b9_an_unreachable_ceiling_is_rejected_with_a_usable_number():
                       "--row", "m0,C,890000,10000,20,150")
         check("B9 the fixture spends", rc == 0, out[:160])
 
-        rc, out = run(BUDGET, "--base", d, "--budget", "200000000", "--step", "b2")
+        home = seeded_home(18.0)
+        rc, out = run(BUDGET, "--base", d, "--budget", "200000000", "--step", "b2",
+                      HOME=home)
         check("B9 an absurd ceiling is rejected", rc == 1, out[:300])
         check("B9 it says the ceiling is unreachable",
               "BUDGET-UNREACHABLE" in out, out[:400])
@@ -377,7 +411,8 @@ def test_b9_an_unreachable_ceiling_is_rejected_with_a_usable_number():
                 break
         check("B9 a number was offered", num is not None, tail[:200])
         if num:
-            rc2, out2 = run(BUDGET, "--base", d, "--budget", num, "--step", "b3")
+            rc2, out2 = run(BUDGET, "--base", d, "--budget", num, "--step", "b3",
+                            HOME=home)
             check("B9 the number it offered is itself accepted", rc2 == 0,
                   "rc=%d  %s" % (rc2, out2[:240]))
     finally:
@@ -400,7 +435,8 @@ def test_b9_a_reachable_ceiling_still_passes():
         run(COST, "wave", "--base", d, "--wave", "1",
             "--row", "m1,C,440000,9000,13,90", "--row", "m2,C,450000,8000,14,95",
             "--row", "m0,C,890000,10000,20,150")
-        rc, out = run(BUDGET, "--base", d, "--budget", "8000000", "--step", "b2")
+        rc, out = run(BUDGET, "--base", d, "--budget", "8000000", "--step", "b2",
+                      HOME=seeded_home(18.0))
         check("B9 a ceiling inside the window is allowed", rc == 0, out[:300])
         check("B9 and the rate is still reported",
               "at this run's own rate" in out, out[:400])

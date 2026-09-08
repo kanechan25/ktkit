@@ -180,6 +180,41 @@ Then plan from `recon-relevant.json`, not `recon.json`.
    and would have cut two Japanese specification documents of 729 KB and 223 KB, because the question
    said `export` and the document says `出力`.
 
+### Step 1c — index the code before probing it ⭐ the second largest saving
+
+If `code` is in `--probe`, the sweep runs in a script, **not in an agent**:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/probe_index.py" \
+    --repo <repo> --paths <dirs> --variants --max-hits 20 \
+    --ids <identifier>... --out <base>/steps/01c-code-index.md
+```
+
+`probe-code` was the most expensive role in the fleet and should have been the
+cheapest. Its question is small — does this identifier exist, and where — but the search happened
+**inside the agent**. Measured on a real repository: `src/` holds 14,627 tracked files, and one
+`Grep` for `export` returns **15,358 matching lines across 3,801 files**. That lands in the agent's
+context, and an agentic loop re-sends everything accumulated on every later call.
+
+| | Tokens |
+| - | -----: |
+| four identifiers swept **inside** an agent | ~185,000 for the first call alone, re-sent after |
+| the same four, as an index the agent **reads** | **~1,700** |
+
+⭐ **A 109× reduction on the read, and identifiers with zero occurrences need no agent at all** — the
+script settles them with the commands it ran. A run reached 7.5M with `probe-code` skipped after
+being warned it would pass 8M, so the questions it would have answered went unanswered. That is the
+expensive outcome, and this is what removes it.
+
+Then size the code fleet from the index, **not from the document count**: one agent per topic cluster
+of identifiers that had occurrences. `plan_fleet.py` deliberately reports `probe-code x0` until this
+step has run.
+
+⛔ **The script states counts, lines and commands. It never states `EXISTS` or `NOT_FOUND`** — those
+are the agent's, and an absence still needs an agent to say what it means. Pass `--variants` so an
+identifier is searched the way another house would have spelled it; an absence searched one way is
+not an absence.
+
 ### Step 2 — the fleet plan
 
 ```bash

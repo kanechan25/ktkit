@@ -35,6 +35,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
 #   Read, Grep, Glob          probe-set-a    6,619
 #   Read, Bash                probe-set-b   11,353
 #   Read, Write, Grep, Glob   probe-set-c    6,875
+# Every spawn pays for the whole body, so a long role prompt is a per-agent tax
+# rather than a one-off. `spec-recon/references/cost-model.md` measures it: a
+# four-tool agent with a long body came to 23,375 base tokens against 6,619 for a
+# three-tool agent with a short one, and a 3,000-word prompt costs ~4,400 extra
+# *on every spawn*. The budget was written down there and enforced for exactly
+# one agent, in test_gap_anchor.py -- so `probe-code` was allowed to reach 1,043
+# words unnoticed while every other body sat under 800. Stating a budget is not
+# enforcing it.
+MAX_BODY_WORDS = 800
+
 PROBED = {
     "Read, Grep, Glob": 6619,
     "Read, Bash": 11353,
@@ -80,7 +90,8 @@ def check_suite(name, spec, problems):
 
     prefix = spec["prefix"]
     for path in files:
-        fm = frontmatter(io.open(path, encoding="utf-8").read())
+        body = io.open(path, encoding="utf-8").read()
+        fm = frontmatter(body)
         role = os.path.basename(path)[len(prefix):-len(".md")]
         tools = field(fm, "tools", "")
         model = field(fm, "model", "inherit")
@@ -107,6 +118,12 @@ def check_suite(name, spec, problems):
         if row.group(2) != model:
             problems.append("%s/%s model: file=%r table=%r"
                             % (name, role, model, row.group(2)))
+
+        words = len(body.split())
+        if words > MAX_BODY_WORDS:
+            problems.append("%s/%s body is %d words, over the %d-word budget "
+                            "(paid on every spawn)"
+                            % (name, role, words, MAX_BODY_WORDS))
     return len(files)
 
 

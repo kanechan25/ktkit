@@ -187,6 +187,7 @@ measured or expected effect:
 
 | Lever | Effect | Status |
 | ----- | ------ | ------ |
+| `probe_index.py` — grep in a script, not in an agent | **~109x** on the read `[measured]`; zero-hit identifiers need no agent | shipped |
 | `--relevance` when the vocabulary fits | 48 → 20 agents `[measured]` | shipped |
 | A cap on tool calls per agent | ×0.36 `[derived]` from the quadratic in tool calls | ⛔ needs measuring first |
 | Verdict per question rather than per run | a partial run keeps its verdicts | ⛔ architecture change |

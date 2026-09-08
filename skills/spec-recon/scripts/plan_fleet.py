@@ -215,12 +215,26 @@ def plan(recon, probes, baseline_paths, max_parallel, rounds):
                       "note": ("resolve ambiguous sources first: %s"
                                % ", ".join(ambiguous)) if ambiguous else None})
 
-    # --- code probes: one per topic cluster, not per identifier -------------
+    # --- code probes: sized by identifiers, and only after the index --------
+    #
+    # This used to be `ceil_div(len(docs), 3)`, which sized the code fleet from
+    # the number of *documents* -- a quantity with nothing to do with how much
+    # code needs looking at. Worse, the agents were handed no paths at all, so
+    # each one searched the tree itself. Measured on a real repository, one Grep
+    # for `export` returns 15,358 lines across 3,801 files, and an agentic loop
+    # re-sends that on every later call.
+    #
+    # So the sweep moves into `scripts/probe_index.py`, which costs no model
+    # tokens, and the agents read its index. Identifiers with zero occurrences
+    # are settled by the script and need no agent, so the fleet is sized by the
+    # identifiers that were actually *found* -- a number the lead only has after
+    # the index exists.
     if "code" in probes:
-        n_code = min(CAP["probe-code"], max(1, ceil_div(len(docs), 3)))
-        tasks.append({"role": "probe-code", "count": n_code, "path": None,
-                      "note": "one agent per topic cluster; the lead writes the "
-                              "clusters from --scope"})
+        tasks.append({"role": "probe-code", "count": 0, "path": None,
+                      "note": "SIZE AFTER THE INDEX: run probe_index.py first, "
+                              "then one agent per topic cluster of identifiers "
+                              "that had occurrences. Zero-occurrence identifiers "
+                              "need no agent -- the script settled them."})
 
     # --- vcs: exactly one, the rate limit is shared -------------------------
     if "vcs" in probes:
