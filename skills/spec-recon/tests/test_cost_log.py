@@ -34,7 +34,7 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPT = os.path.join(ROOT, "skills", "spec-recon", "scripts", "cost_log.py")
+SCRIPT = os.path.join(ROOT, "scripts", "cost_log.py")
 SKILL = os.path.join(ROOT, "skills", "spec-recon", "SKILL.md")
 MODEL = os.path.join(ROOT, "skills", "spec-recon", "references", "cost-model.md")
 

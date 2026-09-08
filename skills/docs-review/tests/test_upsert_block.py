@@ -25,7 +25,11 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPT = os.path.join(os.path.dirname(HERE), "scripts", "upsert_block.py")
+# The script moved to the plugin's shared `scripts/`: it was never specific to
+# documentation review, and W8 in test_plugin_wiring.py now forbids the callers
+# that were reaching across for it.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
+SCRIPT = os.path.join(ROOT, "scripts", "upsert_block.py")
 
 failures = []
 

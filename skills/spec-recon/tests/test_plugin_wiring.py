@@ -17,6 +17,7 @@ The checks, in the order a run would hit them:
   W5  no agent file is orphaned -- something has to dispatch it
   W6  every --groups value handed to preflight.py is one it knows
   W7  every script is importable and answers --help
+  W8  no skill reaches into another skill's private scripts
 
 Run:  python3 skills/spec-recon/tests/test_plugin_wiring.py
 """
@@ -142,8 +143,15 @@ def test_w4_every_named_reference_exists():
         d = os.path.dirname(s)
         for r in set(re.findall(r"references/[a-z0-9-]+\.md", read(s))):
             here = os.path.join(d, r)
+            # Two shared locations: the historical one under docs-review, and
+            # `references/` at the plugin root -- where a document describing
+            # plugin-level scripts belongs, beside `scripts/` itself. W8 forbids
+            # a skill reaching into another skill's scripts; the same reasoning
+            # applies to its reference documents.
             shared = os.path.join(ROOT, "skills", "docs-review", r)
-            if not (os.path.isfile(here) or os.path.isfile(shared)):
+            plugin = os.path.join(ROOT, r)
+            if not (os.path.isfile(here) or os.path.isfile(shared)
+                    or os.path.isfile(plugin)):
                 missing.append("%s -> %s" % (rel(s), r))
     check("W4 every references/*.md a skill points at exists", not missing, missing[:6])
 
@@ -174,6 +182,31 @@ def test_w6_every_preflight_group_is_known():
                     bad.append("%s -> --groups %s" % (rel(f), g))
     check("W6 every --groups value an instruction uses is one preflight knows",
           not bad, bad[:6] + [sorted(known)])
+
+
+def test_w8_no_skill_reaches_into_another_skills_scripts():
+    """A skill may use `scripts/`, and only its own `skills/<self>/scripts/`.
+
+    Three cost scripts lived under `skills/spec-recon/scripts/` and are generic --
+    they read a directory and a ledger and know nothing about reconnaissance. When
+    `chain` needed them the obvious move was to call across, and nothing here
+    would have failed: W1 only checks that a path exists, and W4 only checks
+    `references/`. A skill depending on another skill's internals breaks the
+    moment that skill is reorganised, and the breakage looks like a missing file
+    at run time rather than a failure here.
+    """
+    bad = []
+    for f in instruction_files():
+        rel_f = rel(f).replace(os.sep, "/")
+        owner = rel_f.split("/")[1] if rel_f.startswith("skills/") else None
+        for m in PLUGIN_PATH_RE.finditer(read(f)):
+            p = m.group(1)
+            bits = p.split("/")
+            if len(bits) >= 4 and bits[0] == "skills" and bits[2] == "scripts":
+                if bits[1] != owner:
+                    bad.append("%s -> %s (private to skills/%s)"
+                               % (rel_f, p, bits[1]))
+    check("W8 no skill calls another skill's private scripts", not bad, bad[:6])
 
 
 def test_w7_every_script_answers_help():

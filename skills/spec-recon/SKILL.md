@@ -283,7 +283,7 @@ Concatenate the shard files, build the inventory (requirement or claim → sourc
 and run the citation checker **before** any review wave:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/verify_citations.py" <inventory>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/verify_citations.py" <inventory>
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/check_evidence.py" <base>/evidence/
 ```
 
@@ -301,7 +301,7 @@ Each wave dispatches the reviewers in one message, plus the arbiter.
 ### ⭐ Before every dispatch: record what the agent is being sent
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/dispatch_log.py" \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/dispatch_log.py" \
     --base <base> --agent <name> --wave N --payload-file <base>/scratch/<name>.prompt
 ```
 
@@ -335,7 +335,7 @@ arbitration, after each wave. This is the mechanism that keeps a run inside `--b
 the one thing that would have prevented a run spending 15.2M tokens and returning no verdict.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/budget.py" \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/budget.py" \
     --base <base> --budget <tokens> --quota-gate <pct> --step <name>
 ```
 
@@ -378,7 +378,7 @@ The spend used to exist only as a line of chat, which meant it existed until som
 now an artifact of the run — written in **one call for the whole wave**, never one per agent:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/cost_log.py" wave \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cost_log.py" wave \
     --base <base> --wave N \
     --row 'probe-code,A,148200,3100,14,96' \
     --row 'probe-vcs,B,,,,,no usage returned'

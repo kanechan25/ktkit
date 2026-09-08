@@ -39,7 +39,7 @@ needs, and it is an observation.**
 Called at every step boundary: after each dispatch batch, after each arbitration, after each wave.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/budget.py" \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/budget.py" \
     --base <base> --budget 4000000 --quota-gate 85 --step <name>
 ```
 

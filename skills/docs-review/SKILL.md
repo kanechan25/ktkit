@@ -271,7 +271,7 @@ Once, at the end. Do not check the table by hand.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/check_report.py" <report> --max-questions N
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/verify_citations.py" <report>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/verify_citations.py" <report>
 ```
 
 The second one opens every cited file and checks the quote is really there. Run it **before** the

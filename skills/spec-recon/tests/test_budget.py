@@ -64,8 +64,8 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-BUDGET = os.path.join(ROOT, "skills", "spec-recon", "scripts", "budget.py")
-COST = os.path.join(ROOT, "skills", "spec-recon", "scripts", "cost_log.py")
+BUDGET = os.path.join(ROOT, "scripts", "budget.py")
+COST = os.path.join(ROOT, "scripts", "cost_log.py")
 RELEVANCE = os.path.join(ROOT, "skills", "spec-recon", "scripts", "relevance.py")
 
 sys.path.insert(0, os.path.join(ROOT, "skills", "spec-recon", "scripts"))

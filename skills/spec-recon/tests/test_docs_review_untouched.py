@@ -113,7 +113,20 @@ def test_reviewers_still_declare_they_have_no_shell():
 # is asserted by skills/docs-review/tests/test_upsert_block.py running the
 # script, not by diffing it. Every other script here is still frozen.
 SCRIPTS_ALLOWED = {
+    # Two scripts moved OUT of this skill, to `scripts/` beside `preflight.py`.
+    # Neither was ever specific to documentation review -- `upsert_block.py`
+    # replaces a delimited block in any markdown file and `verify_citations.py`
+    # compares a quote against a line -- and both were already being called from
+    # `chain` and `spec-recon`, which W8 in test_plugin_wiring.py now forbids: a
+    # skill reaching into another skill's private scripts breaks the moment that
+    # skill is reorganised, and breaks at run time rather than here.
+    #
+    # The move changes no behaviour and no caller's arguments. It is listed
+    # because this guard's entire purpose is that a change inside the skill has
+    # to be declared rather than absorbed.
     "skills/docs-review/scripts/upsert_block.py",
+    "skills/docs-review/scripts/verify_citations.py",
+    "scripts/upsert_block.py",
     # check_report.py gained R4: it opens the anchor on every `## Gaps` row and
     # rejects the row when the line is not there. docs-review never emits that
     # section, so the check cannot fire on its reports -- and
@@ -191,11 +204,14 @@ def test_only_two_docs_review_files_changed():
         # the marker parameter, and the test that proves the default did not
         # move. Listed for the same reason as the two above: a scope expansion
         # nobody can see is exactly what this test exists to prevent.
-        "skills/docs-review/scripts/upsert_block.py",
+        "scripts/upsert_block.py",
         "skills/docs-review/tests/test_upsert_block.py",
         # R4, and the two fixtures that exercise it. Additive: see
         # test_r4_is_inert_for_docs_review.
         "skills/docs-review/scripts/check_report.py",
+        # Moved to `scripts/`; see the note in SCRIPTS_ALLOWED above.
+        "skills/docs-review/scripts/upsert_block.py",
+        "skills/docs-review/scripts/verify_citations.py",
         # The skill's help page. It is read only when somebody asks for help,
         # never during a review, so it changes no behaviour -- but this list is
         # where a change inside the skill directory is declared, and a new file

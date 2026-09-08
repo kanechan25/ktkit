@@ -41,9 +41,9 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
-SCRIPT = os.path.join(ROOT, "skills", "spec-recon", "scripts", "dispatch_log.py")
+SCRIPT = os.path.join(ROOT, "scripts", "dispatch_log.py")
 MODEL = os.path.join(ROOT, "skills", "spec-recon", "references", "cost-model.md")
-BUDGET_MD = os.path.join(ROOT, "skills", "spec-recon", "references", "budget.md")
+BUDGET_MD = os.path.join(ROOT, "references", "budget.md")
 
 failures = []
 

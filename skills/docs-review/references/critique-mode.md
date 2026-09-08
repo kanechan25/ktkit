@@ -212,8 +212,8 @@ linking to where it is settled. Nothing above the marker is touched — byte for
 Write it with the script, after the loop has ended and the lint is clean:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/upsert_block.py" <document> --block <file>
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/docs-review/scripts/upsert_block.py" <document> --verify --report <report>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/upsert_block.py" <document> --block <file>
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/upsert_block.py" <document> --verify --report <report>
 ```
 
 It replaces the block on every later run instead of stacking copies, and it never reads the document

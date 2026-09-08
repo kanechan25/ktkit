@@ -78,7 +78,7 @@ that. Two files, in the run directory:
 Written by `scripts/cost_log.py`, in **one call per wave**:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/spec-recon/scripts/cost_log.py" wave \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cost_log.py" wave \
     --base <base> --wave N \
     --row 'probe-code,A,148200,3100,14,96' \
     --row 'probe-artifact,B,92400,2050,9,61' \

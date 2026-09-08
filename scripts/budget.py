@@ -76,10 +76,12 @@ import sys
 import time
 
 SAFETY = 1.5
-# scripts/ -> spec-recon/ -> skills/ -> the plugin root. `${CLAUDE_PLUGIN_ROOT}`
-# when it is set, because a plugin can be installed anywhere.
+# `scripts/` sits directly under the plugin root. `${CLAUDE_PLUGIN_ROOT}` wins
+# when set, because a plugin can be installed anywhere -- and this walked up four
+# levels when the file lived under `skills/spec-recon/scripts/`, which is exactly
+# the kind of breakage the move was made to prevent.
 PLUGIN_ROOT = os.environ.get("CLAUDE_PLUGIN_ROOT") or os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    os.path.dirname(os.path.abspath(__file__)))
 QUOTA = os.path.join(PLUGIN_ROOT, "scripts", "quota.py")
 LEDGER = "budget.jsonl"
 
