@@ -62,8 +62,11 @@ def rel(path):
 PLUGIN_PATH_RE = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/([A-Za-z0-9_./-]+)")
 # A shell line, with $(...) removed first: a nested command's flags are not this
 # script's flags, and `git rev-parse --show-toplevel` inside an argument is the
-# case that taught us so.
+# case that taught us so. A pipe ends the argument list for the same reason --
+# `deviation.py render | upsert_block.py --marker chain` had `--marker` reported
+# against the wrong script until this was added.
 SUBST_RE = re.compile(r"\$\([^)]*\)")
+PIPE_RE = re.compile(r"\|.*$", re.S)
 FLAG_RE = re.compile(r"(?<![\w-])--[a-z][a-z0-9-]+")
 
 
@@ -100,7 +103,8 @@ def test_w2_every_documented_flag_is_a_real_flag():
         text = read(f).replace("\\\n", " ")
         for m in re.finditer(
                 r'python3 "\$\{CLAUDE_PLUGIN_ROOT\}/([^"]+)"([^\n`]*)', text):
-            script, args = m.group(1), SUBST_RE.sub(" ", m.group(2))
+            args = PIPE_RE.sub(" ", SUBST_RE.sub(" ", m.group(2)))
+            script = m.group(1)
             if not os.path.isfile(os.path.join(ROOT, script)):
                 continue                       # W1 owns that failure
             h = script_help(script)

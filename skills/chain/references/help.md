@@ -58,6 +58,7 @@ the spec reads the ledger instead of re-deriving. Implementation is **off** unle
 | `--fresh` | — | Start at step 00. Deletes nothing — the old run directory is renamed `<base>.<timestamp>/`. |
 | `--budget <token>` | **asked, never assumed** | ⭐ Ceiling for the run, checked at every phase boundary against `cost.jsonl` — what agents actually reported. Omit it and step 00 stops for your answer: nothing has measured this skill yet, so it will not pick a number for you. |
 | `--budget-execute <n>` | what A–C cost | A separate ceiling for phase D, whose cost tracks the size of a change rather than the number of questions. ⛔ If the remainder is under that figure, phase D does not start — a half-changed repository is worse than an unchanged one. |
+| `--contract` *(on `deviation.py`)* | — | Marks a divergence that changes what the spec **promises** — an acceptance criterion, an API shape, a dropped requirement. It becomes a gate at step 06 rather than syncing on its own. |
 | `--ledger-scope run\|dir` | `run` | `dir` also reads sibling runs' ledgers in the same `prompts/<rel>/` and reports a match as **`FOREIGN`, exit 2** — a lead for a resolver, never a conclusion. |
 | `--no-speckit` | — | Take the internalised path even where speckit is installed. It **selects a path, it does not relax a check**. |
 | `--rounds N` | `2` | Self-clarify rounds per phase. |
@@ -98,6 +99,39 @@ spawns avoided=19  ⇒  ~125,761 tokens NOT spent   [derived: 19 x 6,619 base]
 arithmetic; nothing counted the hits, so it was an assertion. Now it is a number, labelled as a floor
 because it is one. The metric also lists near-misses between 0.45 and 0.60 — the only evidence for
 whether `--threshold` sits where it should.
+
+## ⭐ The spec still matches the code afterwards
+
+A specification that disagrees with the code is worse than no specification: it reads as
+authoritative and is quietly wrong. So every divergence is recorded **the moment it happens**, while
+the reason is still known, and written into the spec at a boundary:
+
+```
+during implement   deviation.py add   → <chain-dir>/deviations.jsonl   ⛔ spec untouched
+step 06            deviation.py lint  → exit 1 stops the sync
+                   deviation.py render ┬→ spec.md block  (upsert, end of file)
+                                       └→ .implt.md table
+```
+
+⭐ **Both come from one source, so they cannot disagree — reading `spec.md` alone is enough.** A
+hand-written table in each file would be two authorings, and a reader finding them different has no
+way to tell which is true.
+
+⛔ **The spec is not edited during implement.** It would stop being a stable reference during the
+phase that reads it, and an aborted run would leave a spec describing code that was rolled back —
+worse than a stale spec, which was at least true of its own moment.
+
+Three things the lint refuses, and each is a stop rather than a warning:
+
+| Refused | Why |
+| ------- | --- |
+| a reason that is empty, `n/a` or `tbd` | ⭐ A diff shows *that* the code differs; it never shows *why*. Nobody can reconstruct it later. |
+| an anchor whose line is gone | It reads as verified and is not. A line that merely *moved* is re-resolved and marked. |
+| nothing recorded at all | Silence is not "nothing diverged". Say `deviation.py none` and it is stated, with when. |
+
+**A contract-level change is a gate**, not a sync: mark it `--contract` and step 06 stops for
+`confirm-with-me`. ⛔ "It could not be done" is not "it did not need doing" — that substitution, made
+quietly, is how a requirement disappears without anyone deciding to drop it.
 
 ## What you get
 

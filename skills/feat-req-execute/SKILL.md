@@ -339,6 +339,55 @@ leaves the user believing something was verified when it was not.
 
 ---
 
+### STEP 8.5 — RECORD WHAT DIVERGED (at the moment, not at the end)
+
+⛔ **A specification that disagrees with the code is worse than no specification.** It reads as
+authoritative and is quietly wrong: somebody opens it months later, believes it, and builds on a
+shape that was never shipped.
+
+So the moment you build something the spec does not describe — a different status code, an extra
+file, a step in another order, a criterion you could not meet — record it **then**:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" add \
+    --base <run-dir> --repo <root> --source "spec §4.2" \
+    --said "<quote the spec, do not paraphrase>" --did "<what you built>" \
+    --why "<why -- nobody can reconstruct this later>" \
+    --evidence <path>:<line> [--contract]
+```
+
+`<run-dir>` is given to you by `/ktkit:chain`. Called directly without one, use the feature
+directory.
+
+| Rule | Why |
+| ---- | --- |
+| ⭐ **Record at the moment, not at the end** | A diff shows *that* the code differs; it never shows *why* you chose that. By the end of the phase the reason has left your context. |
+| **`--said` quotes the spec** | A paraphrase makes the divergence disappear — "the spec said roughly that" agrees with anything. |
+| **`--evidence` is a real `path:line`** | "I changed X" that cannot be opened is not a record. The lint opens it. |
+| ⛔ **`--contract` when it changes a promise** | An acceptance criterion, an API shape, a dropped requirement. Somebody is integrating against those, so it is a gate rather than a note. ⛔ "It could not be done" is not "it did not need doing". |
+
+⛔ **Do not edit the spec here.** Editing it mid-phase stops it being a stable reference during the
+phase that reads it, and an aborted run would leave a spec describing code that was rolled back.
+`/ktkit:chain` step 06 writes it, at a boundary; a direct run writes it at the end of this skill.
+
+Nothing diverged? That is a statement, not a silence:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" none --base <run-dir> --repo <root>
+```
+
+Then, before the report is written:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" lint --base <run-dir> --repo <root>
+```
+
+Exit 1 ⇒ ⛔ **stop**: a divergence anchored to a line that is not there reads as verified and is not.
+`NOT-ANSWERED` ⇒ ⛔ **stop**: nobody answered the question. `render` supplies the table for the
+report — ⛔ never hand-write it, because a hand-written copy can disagree with the one in the spec.
+
+Full rules: `references/syncback.md`.
+
 ### STEP 9 — DOCUMENT (optional)
 > Goal: institutional memory so next feature can build on this one
 
@@ -403,6 +452,11 @@ Date: <today>
 
 ## Files Changed
 <list>
+
+## Sai khác so với spec
+<the output of `deviation.py render` — never hand-written. It is rendered from the same
+`deviations.jsonl` that produced the block in spec.md, so the two cannot disagree. If nothing
+diverged this section says `KHÔNG CÓ` and when that was declared.>
 ```
 
 ---

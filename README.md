@@ -239,6 +239,30 @@ reasoning rather than trust it: the analysis' unknowns table, and `chain/<group>
 — every question, the tier that settled it, and the `path:line` that settles it, including the ones
 that were later overturned.
 
+### The spec still matches the code afterwards
+
+A specification that disagrees with the code is worse than no specification: it reads as
+authoritative and is quietly wrong, and somebody opens it months later, believes it, and builds on a
+shape that was never shipped.
+
+`chain` had a sync-back step that could not close this. It synced "every conflict found in 04 or 05",
+but 05 hands the work to an execute skill, nothing extracted that skill's divergences, and the
+`.implt.md` template had nowhere to put them.
+
+Now every divergence is recorded **at the moment it happens** — while the reason is still in context
+— and written into the spec at a boundary. One source renders into both the spec's appended block and
+the implementation report, so the two cannot disagree and reading the spec alone is enough.
+
+⛔ The spec is **not** edited during implementation: that would stop it being a stable reference
+during the phase that reads it, and an aborted run would leave a specification describing code that
+was rolled back. Three things stop the sync rather than warning about it — a reason that is empty
+(the one part nobody can reconstruct afterwards), an anchor whose line is gone (a line that merely
+moved is re-resolved and marked), and an empty record, because silence is not "nothing diverged".
+
+**A change to what the spec promises is a gate**, not a sync: an acceptance criterion, an API shape,
+a dropped requirement. Somebody is integrating against those. ⛔ "It could not be done" is not "it did
+not need doing".
+
 ### What a `chain` run costs
 
 A run is checked at every **phase** boundary against `cost.jsonl` — what agents actually reported —

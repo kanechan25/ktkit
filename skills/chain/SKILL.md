@@ -201,31 +201,101 @@ Only with `--execute`. Runs the arm's execute skill. Its own STOP conditions sta
 `/speckit.analyze` CRITICAL finding and a HIGH/CRITICAL blast radius are gates, always. They are
 "expensive if wrong", which is the definition of T4.
 
-### 06 — sync back
-
-Every conflict found in 04 or 05, once decided, is written back into the artifact it contradicts:
+⭐ **Pass the run directory and require a deviation record.** The execute skill records every
+divergence **at the moment it happens**, into `<chain-dir>/deviations.jsonl`:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/upsert_block.py" \
-  <spec.md> --block - --marker chain
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" add \
+    --base <chain-dir> --repo <root> --source "spec §4.2" \
+    --said "POST /exports returns 202" --did "returns 201" \
+    --why "202 needs a job queue the spec does not describe" \
+    --evidence src/api/ExportController.cs:88 [--contract]
 ```
 
-The block sits at the end of the file; every character above it is copied through untouched. The
-marker is `chain`, so a `docs-review` block in the same file is neither read nor overwritten.
+⛔ **The spec is not touched here.** Editing it mid-phase would stop it being a stable reference
+during the very phase that reads it, would let a contract-level change land before anyone approved
+it, and would leave an aborted run with a specification describing code that was rolled back — worse
+than the original problem. Step 06 does the writing, at a boundary.
+
+⭐ **Why the moment matters:** the reason is the one part nobody can reconstruct afterwards. A diff
+shows that the code differs; it never shows why somebody chose that. `--why` is mandatory and the
+lint refuses a row without it.
+
+Nothing diverged? That is a **statement**, not a silence:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" none --base <chain-dir> --repo <root>
+```
+
+### 06 — sync back
+
+⛔ **A specification that disagrees with the code is worse than no specification**: it reads as
+authoritative and is quietly wrong. Somebody opens it three months later, believes it, and builds on
+a shape that was never shipped. Closing that is not optional.
+
+**1. Lint the record. A failure is a stop, not a warning.**
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" lint --base <chain-dir> --repo <root>
+```
+
+| Result | What you do |
+| ------ | ----------- |
+| `LINT … 0 unsafe` | continue |
+| exit 1 | ⛔ **STOP.** A deviation anchored to a line that is not there reads as verified and is not. Fix or withdraw the row. |
+| `NOT-ANSWERED` | ⛔ **STOP.** Nothing was recorded and no `--none` was declared, so nobody answered the question. Silence is not "nothing diverged". |
+| `DECLARED-NONE` | continue; the block will say so, with when it was declared |
+| `⚠️ contract-level` | see 3 below — **a gate, not a sync** |
+
+Anchors are re-checked against the tree, because a `path:line` captured mid-phase drifts as the code
+keeps changing. A line that moved is **re-resolved** and marked; a line that is gone is a stop.
+⛔ Without that, every anchor only means "true at some point".
+
+**2. Render once, into both files.**
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" render --base <chain-dir> --repo <root> \
+  | python3 "${CLAUDE_PLUGIN_ROOT}/scripts/upsert_block.py" <spec.md> --block - --marker chain
+```
+
+The same rendered table goes into `.implt.md`. ⭐ **Neither is authored separately, so they cannot
+drift, and reading `spec.md` alone is enough** — which is the point: a hand-written table in one file
+and a hand-written table in the other are two authorings that can disagree.
+
+The block sits at the end of the file; every character above it is copied through untouched, so
+citations into the spec keep their line numbers. The marker is `chain`, so a `docs-review` block in
+the same file is neither read nor overwritten.
 
 ```markdown
 ## Sai khác phát hiện lúc thi hành — <date>
-| # | Spec nói | Thực tế | Quyết định | Ai quyết | Bằng chứng |
+| # | Nguồn | Spec nói | Thực tế | Vì sao | Bằng chứng | |
 ```
+
+**3. A contract-level row is a gate.**
+
+Implementation detail syncs on its own. A change to what the spec **promises** does not: an
+acceptance criterion, an API shape, a dropped requirement. Somebody is integrating against those.
+
+⇒ Any row marked `--contract` stops the run and goes through **`/ktkit:confirm-with-me`** before it
+is written. ⛔ "It could not be done" is not "it did not need doing".
+
+⚠️ This is a **third** gate, and it does not count against the two below: it is not a question, it
+is confirmation of a change that has already happened.
+
+Conflicts found in step 04 go into the same block, by the same route.
 
 ## The gate
 
-At most **two** in a whole run, and a clean run has **none**:
+At most **two questions** in a whole run, and a clean run has none:
 
 | When | Where |
 | ---- | ----- |
 | T4 survivors after step 02, or the spec skill's own T4 pool | step 03 |
 | `/speckit.analyze` CRITICAL, or blast radius HIGH/CRITICAL | step 05 |
+
+⭐ **A contract-level deviation is a third stop and is not counted here**, because it is not a
+question: the change has already happened, and what is being asked is whether the specification may
+be rewritten to say so. Only `--execute` runs can reach it.
 
 Format is `/ktkit:escalation-ladder`'s three tables: ⛔ CẦN CHỐT (≤3 rows, each with a default that
 is **already applied** and a recommendation), ✅ ĐÃ TỰ CHỐT, 🟡 GIẢ ĐỊNH CÓ BẰNG CHỨNG.
@@ -364,5 +434,6 @@ the only evidence for whether `--threshold` sits where it should.
 | File | What it settles |
 | ---- | --------------- |
 | `references/budget.md` | the boundary gate, and every measurement behind it |
+| `references/syncback.md` | recording a deviation, and the gate a contract-level one hits |
 | `references/ledger.md` | The ledger's columns, the lookup threshold, and what closes a row |
 | `references/self-loop.md` | Step 02 in full, and the five places the tokens are saved |
