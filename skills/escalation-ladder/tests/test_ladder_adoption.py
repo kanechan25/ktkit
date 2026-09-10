@@ -33,6 +33,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(HERE)))
 # with. The execute skills are deliberately absent: they carry out a spec that
 # has already been through the gate, so an unknown there is a defect in the
 # spec, not a question to re-open.
+#
+# `raise-issue` is absent for a different reason, and the reason is worth
+# stating so its absence does not read as an oversight. It adopts the ladder's
+# *ordering* but not its machinery: T4 -- assume the better-evidenced reading,
+# with a falsifier -- is unavailable to it, because the file it writes exists to
+# be the one artifact in the pipeline with no inference in it, so an unresolved
+# slot becomes `[MISSING]` rather than `[ASSUMED]`. And it dispatches no
+# resolvers: its whole budget is eight reads, which a resolver fleet would blow
+# past while doing the reconnaissance the *next* skill is for. Nothing left to
+# assert -- no resolver dispatch, no self_resolve_ratio to print.
 ADOPTERS = ["analyze-feat", "rca", "feat-req-specs", "bug-fix-specs"]
 
 failures = []

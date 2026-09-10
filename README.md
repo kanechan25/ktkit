@@ -3,12 +3,13 @@
 Claude Code skills for spec-driven development: from a feature request or a bug report, to a
 reviewed specification, to the change itself, to a record of what was done.
 
-Fifteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on.
+Sixteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on.
 `/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
 
 | | Skill | What it is for |
 | - | ----- | -------------- |
 | **Chain** | [`chain`](#chain) | a requirement → analysis → spec → plan, as one run instead of four commands |
+| **Frame** | [`raise-issue`](#the-sdd-pipeline) | a messy complaint → an issue statement another agent can start from |
 | **Understand** | [`analyze-feat`](#the-sdd-pipeline) | a feature request → an analysis, before any spec exists |
 | | [`rca`](#the-sdd-pipeline) | a bug report → root cause, by evidence rather than guesswork |
 | **Specify** | [`feat-req-specs`](#the-sdd-pipeline) | an analysed feature → a reviewed spec, then stop |
@@ -30,7 +31,7 @@ out in agents with their own context, not in the session that produced the work.
 the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control
 state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all fifteen.** They are worth reading once, because they are what make the
+**Three rules hold across all sixteen.** They are worth reading once, because they are what make the
 skills composable rather than merely co-located.
 
 - **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in
@@ -295,11 +296,17 @@ stops looking.
 
 ## The SDD pipeline
 
-Six skills, one road. Each stops at a gate you control, and each hands the next one a file rather
+Seven skills, one road. Each stops at a gate you control, and each hands the next one a file rather
 than a conversation — so the pipeline survives a compaction, a new session, or a different person
 picking it up tomorrow.
 
 ```text
+                  what somebody actually said
+                              │
+                    /ktkit:raise-issue
+              → prompts/<slug>/<slug>-<ts>.md
+                              │
+              ┌───────────────┴───────────────┐
         a feature request                      a bug report
                 │                                    │
      /ktkit:analyze-feat                        /ktkit:rca
@@ -315,6 +322,17 @@ picking it up tomorrow.
     → implemented/<base>.implt.md         → implemented/<name>.implt.md
 ```
 
+- **`raise-issue`** — the step before analysis, and the one people skip. It turns a chat message, a
+  screenshot or half a GitHub issue into a single file stating the problem, the current state, the
+  evidence and the unknowns — **and nothing else**. It is banned from naming a cause even when the
+  cause looks obvious, because a cause written down here anchors every later phase to one line of
+  enquiry before any evidence exists. Every fact carries a label saying where it came from and how
+  far it can be trusted (`[CONFIRMED]` · `[VERIFIED path:line]` · `[UNVERIFIED]` · `[LOCATED …]` ·
+  `[ASSUMED: …]` with a falsifier · `[MISSING]`), so a bare identifier anywhere in the file is a bug.
+  It ends by replaying the problem in ten lines and **blocking until you say that is the problem you
+  are hitting** — no flag skips that gate, because a perfectly framed description of the wrong
+  problem is the most expensive artifact in the pipeline. Missing data, by contrast, never blocks:
+  the field is written `[MISSING]` and the run continues.
 - **`analyze-feat`** — reads a feature request and works out what it touches, what it conflicts with,
   and what is genuinely unknown, *before* anyone writes a spec. Unknowns go through the escalation
   ladder rather than into an interview: what the repository can answer is answered, and what reaches
@@ -638,6 +656,30 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 4.3.0 — the step before the pipeline
+
+`raise-issue` is new, and nothing existing changes. Run it before `analyze-feat` or `rca` when the
+problem arrived as a chat message, a screenshot or half a GitHub issue rather than as a written
+requirement:
+
+```text
+/ktkit:raise-issue "the export button does nothing on the reports screen"
+```
+
+It writes `.claude/claude/prompts/<slug>/<slug>-<timestamp>.md`, which is exactly what the rest of
+the toolkit already reads — `/ktkit:chain <that file> --bug` carries it the whole way. Re-raising
+the same problem adds a new timestamped file in the same folder rather than overwriting, so the
+successive framings stay readable side by side.
+
+Two behaviours to know before the first run. It **blocks** at the end, replaying the problem in ten
+lines and waiting for you to say that is the problem you are hitting — no flag skips that, because a
+perfectly framed description of the wrong problem is the most expensive artifact the pipeline can
+carry. And it **will not name a cause**, however obvious one looks; that is `/ktkit:rca`'s job, and
+it does it better starting from a framed problem than from a hunch already written down.
+
+It touches GitHub only when you pass `--issue <#N|url>`, and then reads the body, title, state and
+labels once — never the comment thread.
 
 ### Upgrading to 4.1.0 — the feature directory is pinned, not exported
 
@@ -1146,6 +1188,11 @@ skills/chain/
   references/self-loop.md         — step 02 in full, and the five places tokens are saved
   scripts/ledger.py               — append-only record of every settled unknown; recomputes the ratio
   tests/test_ledger.py            — lookup, superseding, the falsifier rule, the metric floor
+skills/raise-issue/
+  SKILL.md                        — a described problem → one framed issue file; no cause, no fix
+  references/form-bug.md          — the BUG skeleton: symptom, expected, environment, regression
+  references/form-nr.md           — the NR skeleton: today's gap, user story, integration point
+  references/form-cr.md           — the CR skeleton: old behaviour, new behaviour, who asked and why
 skills/analyze-feat/SKILL.md      — feature request → analysis, before any spec
 skills/rca/SKILL.md               — bug report → root cause, five Whys with evidence
 skills/feat-req-specs/SKILL.md    — analysis → reviewed spec, then hard stop
