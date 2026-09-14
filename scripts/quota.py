@@ -129,25 +129,58 @@ def cached():
 
 
 def store(payload):
+    """Write the cache. Returns None on success, or why it could not be written.
+
+    A cache that cannot be written is not a failure of the read -- but it is not
+    nothing either, and the first version swallowed it. On a machine whose
+    sandbox denies writes under `~/.claude/`, every `store` fails, the cache
+    stays frozen at whatever it held, and so **every** call goes to the network.
+    That is precisely the traffic the cache exists to prevent, and it ends in the
+    429 whose fallback is the frozen cache. Silent, self-reinforcing, and
+    invisible until somebody reads a percentage from last week.
+
+    So the reason is returned and surfaced as a note. It never blocks.
+    """
     try:
         tmp = CACHE + ".tmp"
         with io.open(tmp, "w", encoding="utf-8") as fh:
             fh.write(json.dumps({"at": time.time(), "payload": payload}))
         os.replace(tmp, CACHE)
-    except Exception:                                          # noqa: BLE001
-        pass                       # a cache that cannot be written is not a failure
+        return None
+    except Exception as e:                                     # noqa: BLE001
+        return "%s: %s" % (type(e).__name__, e)
+
+
+def expired(payload):
+    """True when every dated row in the payload has already reset.
+
+    The principled staleness test, and the only one that survives moving between
+    accounts: a window whose `resets_at` has passed describes a window that no
+    longer exists, whatever its percentage says. No fixed age threshold is used,
+    for the same reason no token conversion is stored -- a number calibrated here
+    is wrong on the next tier.
+
+    A payload with no dated row at all is not judged expired; there is nothing to
+    judge it by, and guessing would be the error this function prevents.
+    """
+    dated = [r for r in limits(payload) if r.get("minutes") is not None]
+    return bool(dated) and all(r["minutes"] < 0 for r in dated)
 
 
 def fetch(fresh=False):
-    """(payload, source, error, age) -- exactly one of payload/error is set."""
+    """(payload, source, error, age, cache_note).
+
+    Exactly one of payload/error is set. `cache_note` is why the cache could not
+    be written, when it could not; it never makes the read a failure.
+    """
     if not fresh:
         hit, age = cached()
         if hit is not None:
-            return hit, "cache", None, age
+            return hit, "cache", None, age, None
     tok, src = token()
     if not tok:
         return None, None, ("no OAuth token found: set CLAUDE_CODE_OAUTH_TOKEN, "
-                            "or sign in so the keychain entry exists"), None
+                            "or sign in so the keychain entry exists"), None, None
     req = urllib.request.Request(ENDPOINT, headers={
         "Authorization": "Bearer %s" % tok,
         "anthropic-beta": "oauth-2025-04-20",
@@ -157,23 +190,35 @@ def fetch(fresh=False):
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             payload = json.loads(r.read().decode("utf-8"))
-        store(payload)
-        return payload, src, None, 0.0
+        note = store(payload)
+        return payload, src, None, 0.0, note
     except urllib.error.HTTPError as e:
         hint = {401: " (token expired? run /login)",
                 403: " (token expired? run /login)",
                 429: " (the endpoint rate-limits; this is why the answer is "
                      "cached for %ds)" % CACHE_SECONDS}.get(e.code, "")
-        # A stale cache beats no answer when the reason is throttling.
+        # A stale cache beats no answer when the reason is throttling -- but only
+        # while it still describes a window that exists. Serving a payload whose
+        # windows have all reset is worse than SKIP: SKIP is visibly a non-answer
+        # and every caller here is built to continue past one, whereas a stale
+        # percentage is indistinguishable from a current one and a gate will
+        # branch on it.
         try:
             with io.open(CACHE, encoding="utf-8") as fh:
                 d = json.load(fh)
-            return d["payload"], "stale cache", None, time.time() - float(d["at"])
+            age = time.time() - float(d["at"])
+            if expired(d["payload"]):
+                return (None, src,
+                        "HTTP %d from the usage endpoint%s, and the cached answer "
+                        "is %.0fs old with every window already reset -- refusing "
+                        "to report last window's percentage as this one's"
+                        % (e.code, hint, age), None, None)
+            return d["payload"], "stale cache", None, age, None
         except Exception:                                      # noqa: BLE001
             pass
-        return None, src, "HTTP %d from the usage endpoint%s" % (e.code, hint), None
+        return None, src, "HTTP %d from the usage endpoint%s" % (e.code, hint), None, None
     except Exception as e:                                     # noqa: BLE001
-        return None, src, "%s: %s" % (type(e).__name__, e), None
+        return None, src, "%s: %s" % (type(e).__name__, e), None, None
 
 
 def minutes_until(iso):
@@ -230,7 +275,7 @@ def main(argv=None):
                     help="bypass the cache; the endpoint rate-limits, so use sparingly")
     a = ap.parse_args(argv)
 
-    payload, src, err, age = fetch(fresh=a.fresh)
+    payload, src, err, age, cache_note = fetch(fresh=a.fresh)
     if err:
         out = {"status": "SKIP", "reason": err, "credential_source": src}
         print(json.dumps(out, indent=2) if a.json
@@ -245,10 +290,14 @@ def main(argv=None):
         return 0
 
     sess = session_row(rows)
+    stale = src == "stale cache"
     if a.json:
-        print(json.dumps({"status": "OK", "credential_source": src,
-                          "age_seconds": round(age or 0.0, 1),
-                          "limits": rows, "session": sess}, indent=2))
+        out = {"status": "STALE" if stale else "OK", "credential_source": src,
+               "age_seconds": round(age or 0.0, 1),
+               "limits": rows, "session": sess}
+        if cache_note:
+            out["cache_note"] = cache_note
+        print(json.dumps(out, indent=2))
     else:
         stamp = "" if not age else "  · %.0fs old" % age
         print("quota (source: the endpoint /usage reads · %s%s)" % (src, stamp))
@@ -262,6 +311,12 @@ def main(argv=None):
         if sess:
             print("  headroom in the window a run spends into: %.1f%%"
                   % (100.0 - sess["percent"]))
+        if stale:
+            print("  ⚠ STALE — the endpoint refused and this is the last answer it "
+                  "gave. Treat every figure above as a lower bound.")
+        if cache_note:
+            print("  ⚠ the cache could not be written (%s); every call will go to "
+                  "the network, which is what the endpoint rate-limits" % cache_note)
 
     if a.gate is not None and sess and sess["percent"] >= a.gate:
         msg = ("QUOTA-GATE  session window at %.1f%% (>= %.1f%%)"

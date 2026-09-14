@@ -18,6 +18,9 @@ the run continue. Only a real percentage over the threshold is a stop.
   Q5  the cache honours its TTL, and a throttled read falls back to it
   Q6  the decision path uses percent only -- no token conversion, no calibration
   Q7  --help lists the flags, so the wiring check can see them
+  Q8  a cache that cannot be written says so -- it is not a failure, but a
+      silent one turns the TTL into a no-op and every call into network traffic
+  Q9  a stale payload whose windows have all reset is refused, not served
 
 Q4 is not defensive programming. The payload changed shape during the very
 session that built this: two limit rows became three, and a row named
@@ -30,6 +33,19 @@ Q1 runs the script rather than recomputing its comparison. The first version of
 it read the cache, called `session_row`, and decided for itself whether that
 percentage should block -- so flipping `>=` to `<=` inside the script left it
 green. A check that reimplements what it is checking is not checking anything.
+
+Q8 and Q9 are one failure seen from both ends, and it was found in production on
+this machine. The sandbox denies writes under `~/.claude/`, so `store` failed on
+every call and swallowed it; the cache froze; every call therefore went to the
+network; the endpoint rate-limited; and the 429 fallback served a payload five
+days old **as `status: OK`**. A gate consulted at every step boundary was
+branching on last week's percentage, and nothing anywhere said so. Q8 makes the
+cause visible; Q9 refuses the symptom.
+
+Q9 tests staleness by the payload's own `resets_at`, not by an age threshold. A
+window that has already reset cannot describe the current one whatever its
+percentage says, and that test needs no number calibrated against a tier -- the
+same reasoning that keeps percent as the unit everywhere else here.
 
 Q6 guards against a design that was built and then removed. An earlier version
 converted the percentage into tokens so a run could predict whether it would
@@ -197,6 +213,42 @@ def test_q6_the_decision_path_is_percent_only():
           'sess["percent"] >= a.gate' in body, "main()")
     check("Q6 nothing multiplies a percentage into tokens",
           "* 100" not in body.replace("percent / 5", ""), body[:1])
+
+
+def test_q8_a_cache_that_cannot_be_written_says_so():
+    """Not a failure of the read. But not silence either."""
+    d = tempfile.mkdtemp(prefix="quota-")
+    old = quota.CACHE
+    try:
+        quota.CACHE = os.path.join(d, "c.json")
+        check("Q8 a successful write returns no note", quota.store(BEFORE) is None)
+
+        # A directory where the file should be: write fails, every time.
+        quota.CACHE = os.path.join(d, "nope")
+        os.makedirs(quota.CACHE)
+        note = quota.store(BEFORE)
+        check("Q8 a failed write returns the reason", bool(note), note)
+        check("Q8 the reason names the exception type",
+              note and ":" in note, note)
+    finally:
+        quota.CACHE = old
+
+
+def test_q9_a_reset_window_is_refused_not_served():
+    """The 429 fallback must not hand a gate a percentage from a dead window."""
+    past = {"limits": [
+        {"kind": "session", "group": "session", "percent": 31, "severity": "normal",
+         "resets_at": "2000-01-01T00:00:00+00:00", "is_active": False},
+        {"kind": "weekly_all", "group": "weekly", "percent": 49, "severity": "normal",
+         "resets_at": "2000-01-08T00:00:00+00:00", "is_active": True}]}
+    check("Q9 a payload whose windows have all reset is expired",
+          quota.expired(past) is True)
+    check("Q9 a payload with future windows is not expired",
+          quota.expired(BEFORE) is False)
+    # Nothing datable cannot be judged, and guessing is the error being prevented.
+    check("Q9 a payload with no dated row is not called expired",
+          quota.expired({"limits": [{"kind": "session", "percent": 5,
+                                     "resets_at": None, "is_active": True}]}) is False)
 
 
 def test_q7_help_lists_the_flags():

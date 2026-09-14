@@ -125,13 +125,24 @@ def quota_percent(gate=None):
         d = json.loads(out.decode("utf-8"))
     except Exception as e:                                     # noqa: BLE001
         return None, None, None, "quota unreadable (%s)" % type(e).__name__
-    if d.get("status") != "OK":
+    # `STALE` is an answer, `SKIP` is not. A stale payload is the last figure the
+    # endpoint gave before it refused, and quota.py only serves one whose windows
+    # have not reset yet -- so it is a **lower bound** on current use, which is
+    # the safe direction for a gate that stops when use is high. It is carried
+    # through with its age attached rather than discarded, because discarding it
+    # would turn a throttled endpoint into an unguarded run.
+    status = d.get("status")
+    if status not in ("OK", "STALE"):
         return None, None, None, "quota not-checked: %s" % d.get("reason", "?")
     sess = d.get("session") or {}
     pct = sess.get("percent")
     if pct is None:
         return None, None, None, "quota returned no session window"
-    return float(pct), 100.0 - float(pct), sess.get("minutes"), None
+    note = None
+    if status == "STALE":
+        note = ("quota figure is stale (%.0fs old, endpoint refused) -- a lower "
+                "bound, not the current number" % (d.get("age_seconds") or 0.0))
+    return float(pct), 100.0 - float(pct), sess.get("minutes"), note
 
 
 def ledger(base):
