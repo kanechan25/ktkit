@@ -21,6 +21,7 @@ the run continue. Only a real percentage over the threshold is a stop.
   Q8  a cache that cannot be written says so -- it is not a failure, but a
       silent one turns the TTL into a no-op and every call into network traffic
   Q9  a stale payload whose windows have all reset is refused, not served
+  Q10 the cache lives somewhere writable, and is readable only by its owner
 
 Q4 is not defensive programming. The payload changed shape during the very
 session that built this: two limit rows became three, and a row named
@@ -46,6 +47,14 @@ Q9 tests staleness by the payload's own `resets_at`, not by an age threshold. A
 window that has already reset cannot describe the current one whatever its
 percentage says, and that test needs no number calibrated against a tier -- the
 same reasoning that keeps percent as the unit everywhere else here.
+
+Q10 is the other half of Q8. Reporting that the cache could not be written is
+honest but not enough -- the default location has to be one that actually works.
+`~/.claude/` does not: Claude Code's own sandbox denies writes there, which is how
+a sixty-second TTL became a permanent no-op. The cache now sits in the system
+temp directory, which is correct rather than merely convenient: a file that is
+stale after a minute does not need to survive a reboot, and losing it costs one
+HTTP request.
 
 Q6 guards against a design that was built and then removed. An earlier version
 converted the percentage into tokens so a run could predict whether it would
@@ -139,24 +148,35 @@ def test_q4_inactive_rows_are_kept_not_dropped():
           sess["kind"] == "session" and sess["active"] is False, sess)
 
 
-def seeded_home(percent):
-    """A HOME whose quota cache is fresh, so the script needs no token and no
-    network: `fetch` consults the cache before it does anything else."""
-    home = tempfile.mkdtemp(prefix="quota-home-")
-    os.makedirs(os.path.join(home, ".claude"))
-    io.open(os.path.join(home, ".claude", "ktkit-quota-cache.json"),
-            "w", encoding="utf-8").write(json.dumps({
-                "at": time.time(),
-                "payload": {"limits": [{"kind": "session", "percent": percent,
-                                        "severity": "x", "is_active": True}]}}))
-    return home
+def seeded_cache(percent):
+    """A cache file the script will read, so it needs no token and no network:
+    `fetch` consults the cache before it does anything else.
+
+    Returns the path, to be passed as `KTKIT_QUOTA_CACHE`. Isolation used to work
+    by faking `HOME`, which held only while the cache path was derived from it --
+    and the day the path moved to the temp directory, every such test started
+    reading the developer's real cache and passing or failing by accident. An
+    explicit override cannot drift that way.
+    """
+    d = tempfile.mkdtemp(prefix="quota-cache-")
+    p = os.path.join(d, "c.json")
+    io.open(p, "w", encoding="utf-8").write(json.dumps({
+        "at": time.time(),
+        "payload": {"limits": [{"kind": "session", "percent": percent,
+                                "severity": "x", "is_active": True}]}}))
+    return p
+
+
+def empty_cache():
+    """A path with no file at it: a cache miss, so the script must really fetch."""
+    return os.path.join(tempfile.mkdtemp(prefix="quota-empty-"), "c.json")
 
 
 def test_q1_the_gate_blocks_above_and_allows_below():
     """End to end: the script's own exit code, not a recomputation of it."""
     for pct, gate, expect in ((92, 70, 1), (92, 95, 0), (6, 70, 0), (70, 70, 1),
                               (69.9, 70, 0)):
-        rc, out = run("--gate", str(gate), HOME=seeded_home(pct))
+        rc, out = run("--gate", str(gate), KTKIT_QUOTA_CACHE=seeded_cache(pct))
         check("Q1 %s%% against a %s%% gate exits %d (%s)"
               % (pct, gate, expect, "block" if expect else "allow"),
               rc == expect, "rc=%d  %s" % (rc, out[:160]))
@@ -185,6 +205,7 @@ def test_q5_the_cache_honours_its_ttl():
 
 def test_q2_unreachable_never_blocks():
     rc, out = run("--gate", "1", CLAUDE_CODE_OAUTH_TOKEN="not-a-real-token",
+                  KTKIT_QUOTA_CACHE=empty_cache(),
                   HOME=tempfile.mkdtemp(prefix="quota-home-"))
     check("Q2 a bad token exits 0 even with a 1% gate", rc == 0, out[:200])
     check("Q2 it reports SKIP rather than a percentage", "SKIP" in out, out[:200])
@@ -195,8 +216,11 @@ def test_q2_unreachable_never_blocks():
 def test_q3_the_token_never_reaches_stdout():
     secret = "sk-ant-oat01-THIS-MUST-NOT-APPEAR-anywhere"
     home = tempfile.mkdtemp(prefix="quota-home-")
+    # An empty cache on purpose: served from cache, the script never reaches the
+    # token at all and the check would pass without exercising anything.
     for mode in ([], ["--json"], ["--gate", "50"]):
-        _rc, out = run(*mode, CLAUDE_CODE_OAUTH_TOKEN=secret, HOME=home)
+        _rc, out = run(*mode, CLAUDE_CODE_OAUTH_TOKEN=secret, HOME=home,
+                       KTKIT_QUOTA_CACHE=empty_cache())
         check("Q3 mode %r leaks nothing" % (" ".join(mode) or "plain"),
               secret not in out, out[:160])
 
@@ -249,6 +273,34 @@ def test_q9_a_reset_window_is_refused_not_served():
     check("Q9 a payload with no dated row is not called expired",
           quota.expired({"limits": [{"kind": "session", "percent": 5,
                                      "resets_at": None, "is_active": True}]}) is False)
+
+
+def test_q10_the_cache_is_writable_and_owner_only():
+    """A location that cannot be written turns the TTL into a no-op (see Q8)."""
+    check("Q10 the cache is not under ~/.claude, which the sandbox denies",
+          not quota.CACHE.startswith(os.path.expanduser("~/.claude")),
+          quota.CACHE)
+    check("Q10 the cache lives in the system temp directory",
+          quota.CACHE.startswith(tempfile.gettempdir()), quota.CACHE)
+    # Two accounts on one machine must not read each other's usage figures.
+    check("Q10 the filename is scoped to the uid",
+          str(os.getuid()) in os.path.basename(quota.CACHE),
+          os.path.basename(quota.CACHE))
+
+    # And it must actually take a write, which is the claim that matters.
+    d = tempfile.mkdtemp(prefix="quota-")
+    old = quota.CACHE
+    try:
+        quota.CACHE = os.path.join(d, "c.json")
+        check("Q10 a write to it succeeds", quota.store(BEFORE) is None)
+        check("Q10 the file is owner-read/write only",
+              oct(os.stat(quota.CACHE).st_mode & 0o777) == "0o600",
+              oct(os.stat(quota.CACHE).st_mode & 0o777))
+        hit, age = quota.cached()
+        check("Q10 and is served back inside the TTL",
+              hit is not None and age is not None and age < 5, age)
+    finally:
+        quota.CACHE = old
 
 
 def test_q7_help_lists_the_flags():

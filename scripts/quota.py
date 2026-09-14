@@ -45,7 +45,7 @@ The answer is cached for `CACHE_SECONDS`, and that is not an optimisation. The
 endpoint rate-limits: probing it four times inside a minute while testing this
 script returned `HTTP 429`. A gate consulted at every step boundary would do
 exactly that, so a fresh read happens at most once a minute and every check in
-between is served from `~/.claude/ktkit-quota-cache.json`. `--fresh` forces a
+between is served from a per-uid file in the system temp directory. `--fresh` forces a
 read; a cached row is labelled with its age so nothing reports a stale figure as
 current.
 
@@ -57,13 +57,34 @@ import os
 import io
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
 ENDPOINT = "https://api.anthropic.com/api/oauth/usage"
-CACHE = os.path.expanduser("~/.claude/ktkit-quota-cache.json")
+# A sixty-second cache has no business living in a permanent directory, and the
+# first version's `~/.claude/` was worse than merely odd: Claude Code's own
+# sandbox denies writes there, so every `store` failed, the cache never aged out
+# of being empty, and every call went to the network -- which is the traffic the
+# TTL exists to prevent, and which ends in the 429 whose fallback is a frozen
+# cache. See `fix(quota)`.
+#
+# `gettempdir()` rather than a hard-coded path: it honours `TMPDIR` where a
+# sandbox sets one and falls back to `/tmp` where nothing does, so the same line
+# works inside the sandbox, outside it, and in CI. The uid keeps two accounts on
+# one machine from reading each other's usage, and the file is written 0600 for
+# the same reason.
+#
+# Losing this cache on reboot costs exactly one HTTP request. That is the whole
+# downside, and it is the right trade for a file that is stale after a minute.
+# `KTKIT_QUOTA_CACHE` overrides the location. It exists so a test can point the
+# script at a file it controls: the previous tests isolated by faking `HOME`,
+# which worked only while the path was derived from it, and an isolation
+# mechanism that breaks silently when the path moves is worse than none.
+CACHE = os.environ.get("KTKIT_QUOTA_CACHE") or os.path.join(
+    tempfile.gettempdir(), "ktkit-quota-%d.json" % os.getuid())
 CACHE_SECONDS = 60
 KEYCHAIN_SERVICE = "Claude Code-credentials"
 UA = "claude-cli/2.1.236"
@@ -143,7 +164,8 @@ def store(payload):
     """
     try:
         tmp = CACHE + ".tmp"
-        with io.open(tmp, "w", encoding="utf-8") as fh:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with io.open(fd, "w", encoding="utf-8") as fh:
             fh.write(json.dumps({"at": time.time(), "payload": payload}))
         os.replace(tmp, CACHE)
         return None

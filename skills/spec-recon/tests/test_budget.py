@@ -91,26 +91,32 @@ def run(script, *args, **env):
     return p.returncode, out.decode("utf-8")
 
 
-def seeded_home(percent, minutes=120):
-    """A HOME whose quota cache is fresh, so the window is fixed for the test.
+def seeded_quota(percent, minutes=120):
+    """A quota cache file that fixes the window for the test.
 
     `quota.py` consults its cache before doing anything else, and `budget.py`
-    inherits the environment when it calls it. Nothing test-only is added to
-    either script.
+    inherits the environment when it calls it. Returns the path, to be passed as
+    `KTKIT_QUOTA_CACHE`.
+
+    This used to seed `$HOME/.claude/`, which worked only while the cache path
+    was derived from `HOME`. When the cache moved to the temp directory -- because
+    the sandbox denies writes under `~/.claude/` and the TTL had become a no-op --
+    these tests silently started reading the developer's real quota instead of a
+    fixture, and B9 failed on a live percentage. An explicit override cannot drift
+    that way.
     """
     import json as _json
     import time as _time
     from datetime import datetime, timedelta, timezone
-    home = tempfile.mkdtemp(prefix="quota-home-")
-    os.makedirs(os.path.join(home, ".claude"))
+    d = tempfile.mkdtemp(prefix="quota-cache-")
+    path = os.path.join(d, "c.json")
     resets = (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
-    io.open(os.path.join(home, ".claude", "ktkit-quota-cache.json"),
-            "w", encoding="utf-8").write(_json.dumps({
-                "at": _time.time(),
-                "payload": {"limits": [{"kind": "session", "percent": percent,
-                                        "severity": "normal", "is_active": True,
-                                        "resets_at": resets}]}}))
-    return home
+    io.open(path, "w", encoding="utf-8").write(_json.dumps({
+        "at": _time.time(),
+        "payload": {"limits": [{"kind": "session", "percent": percent,
+                                "severity": "normal", "is_active": True,
+                                "resets_at": resets}]}}))
+    return path
 
 
 class Run(object):
@@ -389,9 +395,11 @@ def test_b9_an_unreachable_ceiling_is_rejected_with_a_usable_number():
                       "--row", "m0,C,890000,10000,20,150")
         check("B9 the fixture spends", rc == 0, out[:160])
 
-        home = seeded_home(18.0)
+        # One cache for both calls: the second must be judged against the same
+        # window as the first, or it is not testing the number that was offered.
+        qcache = seeded_quota(18.0)
         rc, out = run(BUDGET, "--base", d, "--budget", "200000000", "--step", "b2",
-                      HOME=home)
+                      KTKIT_QUOTA_CACHE=qcache)
         check("B9 an absurd ceiling is rejected", rc == 1, out[:300])
         check("B9 it says the ceiling is unreachable",
               "BUDGET-UNREACHABLE" in out, out[:400])
@@ -412,7 +420,7 @@ def test_b9_an_unreachable_ceiling_is_rejected_with_a_usable_number():
         check("B9 a number was offered", num is not None, tail[:200])
         if num:
             rc2, out2 = run(BUDGET, "--base", d, "--budget", num, "--step", "b3",
-                            HOME=home)
+                            KTKIT_QUOTA_CACHE=qcache)
             check("B9 the number it offered is itself accepted", rc2 == 0,
                   "rc=%d  %s" % (rc2, out2[:240]))
     finally:
@@ -436,7 +444,7 @@ def test_b9_a_reachable_ceiling_still_passes():
             "--row", "m1,C,440000,9000,13,90", "--row", "m2,C,450000,8000,14,95",
             "--row", "m0,C,890000,10000,20,150")
         rc, out = run(BUDGET, "--base", d, "--budget", "8000000", "--step", "b2",
-                      HOME=seeded_home(18.0))
+                      KTKIT_QUOTA_CACHE=seeded_quota(18.0))
         check("B9 a ceiling inside the window is allowed", rc == 0, out[:300])
         check("B9 and the rate is still reported",
               "at this run's own rate" in out, out[:400])
