@@ -596,9 +596,13 @@ preflight the first time a skill needs one — which is cheap, but knowing up fr
 Then, **in every repository** where you run ktkit:
 
 ```bash
-specify init --here              # writes .specify/ — add it to .gitignore
-specify preset install lean      # the core command templates total 135 KB without it
+specify init --here --integration claude   # writes .specify/ and .claude/skills/speckit-*
+specify preset install lean                # core command templates total 135 KB without it
 ```
+
+`--integration claude` is what installs the skills; without it the CLI defaults to Copilot in a
+non-interactive shell and ktkit's preflight finds nothing. Add `.specify/` to `.gitignore` — it is
+scaffolding pinned to a CLI version, not source.
 
 **Why these two and nothing else.** spec-kit owns the truth artifacts and, from 1.0.0, `converge` —
 the only step that reads the delivered code and asks whether it satisfies the spec. superpowers owns
@@ -611,8 +615,11 @@ A machine whose spec-kit predates 1.0.0 has a `.specify/` that looks complete an
 close. The preflight reports that as its own row:
 
 ```text
-WARN  speckit converge   ~/.claude/skills/speckit.converge absent -- speckit predates 1.0.0 ...
+WARN  speckit converge   no speckit-converge or speckit.converge -- speckit predates 1.0.0 ...
 ```
+
+Both skill layouts are accepted: `<repo>/.claude/skills/speckit-converge`, which is what a current
+`specify init` writes, and `~/.claude/skills/speckit.converge` from older releases.
 
 ### Not required, and deliberately so
 

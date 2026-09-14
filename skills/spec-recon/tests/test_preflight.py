@@ -37,6 +37,8 @@ def check(name, cond, detail=""):
         failures.append(name)
 
 
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
+
 def run(args, env=None):
     e = dict(os.environ)
     if env:
@@ -172,6 +174,55 @@ def test_speckit_group_fails_with_both_ways_out():
           "FAIL" in out and "speckit scaffolding" in out, out)
     check("the fix names `specify init`", "specify init" in out, out)
     check("the fix also names --no-speckit", "--no-speckit" in out, out)
+
+
+def test_speckit_skills_are_found_under_either_layout():
+    """speckit has shipped its Claude skills two ways; both must be recognised.
+
+    The check that knew only `~/.claude/skills/speckit.converge` could never be
+    satisfied by a current speckit, which writes
+    `<repo>/.claude/skills/speckit-converge` instead -- so a machine that had
+    upgraded correctly kept being told to upgrade. A warning that cannot be
+    cleared is a warning people learn to scroll past.
+    """
+    import preflight                                            # noqa: E402
+
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, ".specify"))
+    check("neither layout present -> converge is not found",
+          preflight.speckit_skill(d, preflight.SPECKIT_CONVERGE_NAMES) is None)
+
+    # The layout a current `specify init --integration claude` writes.
+    hyphen = os.path.join(d, ".claude", "skills", "speckit-converge")
+    os.makedirs(hyphen)
+    found = preflight.speckit_skill(d, preflight.SPECKIT_CONVERGE_NAMES)
+    check("project-local hyphenated layout is found", found == hyphen, found)
+
+    rc, out, _ = run(["--groups", "speckit", "--repo", d])
+    check("and it reports PASS rather than WARN",
+          "PASS  speckit converge" in out, out)
+    check("a repo with converge does not tell you to upgrade",
+          "predates 1.0.0" not in out, out)
+
+    # The older user-level dotted layout still answers when nothing else does.
+    e = tempfile.mkdtemp()
+    os.makedirs(os.path.join(e, ".specify"))
+    home = tempfile.mkdtemp()
+    os.makedirs(os.path.join(home, ".claude", "skills", "speckit.converge"))
+    old_home = os.environ.get("HOME")
+    try:
+        os.environ["HOME"] = home
+        found = preflight.speckit_skill(e, preflight.SPECKIT_CONVERGE_NAMES)
+        check("user-level dotted layout is still found",
+              found is not None and found.startswith(home), found)
+    finally:
+        if old_home is not None:
+            os.environ["HOME"] = old_home
+
+    # The fix text must name the flag that actually installs it.
+    rc, out, _ = run(["--groups", "speckit", "--repo", tempfile.mkdtemp()])
+    check("the converge fix names the integration flag",
+          "--integration claude" in out, out)
 
 
 def test_mcp_group_never_tells_the_user_to_install_the_server():

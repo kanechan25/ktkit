@@ -72,14 +72,48 @@ ARTIFACT_DIRS = ("prompts", "analyze", "specs", "pipeline", "implemented",
 # it and never vendors it: `.specify/` is scaffolding that lives inside the
 # repository being worked on, so no plugin can supply it on the user's behalf.
 SPECKIT_SCAFFOLD = ".specify"
-SPECKIT_SKILL = os.path.join("~", ".claude", "skills", "speckit.specify")
+
+# speckit has shipped its Claude skills under two layouts, and a check that knows
+# only one reports the wrong answer under the other -- silently, and in the
+# direction that matters: a machine that upgraded correctly keeps being told to
+# upgrade, which is how a warning gets ignored.
+#
+#   project-local, hyphenated   <repo>/.claude/skills/speckit-converge/
+#   user-level, dotted          ~/.claude/skills/speckit.converge/
+#
+# The first is what current speckit writes: `IntegrationBase.skills_dest` returns
+# `project_root / config["folder"] / commands_subdir`, and the Claude integration
+# sets those to `.claude` and `skills`; `build_command_invocation` strips the
+# `speckit.` prefix, which is where the hyphen comes from. The second is what
+# older releases installed, and it is still on machines that have not re-run
+# `specify init`. Both are accepted, project-local first because that is the one
+# a current install produces.
+SPECKIT_SKILL_NAMES = ("speckit-specify", "speckit.specify")
+
 # The capability the closed loop actually depends on, rather than a version
 # string. `converge` is the only command that reads the delivered code and asks
 # whether it satisfies the spec, and it landed in speckit 1.0.0 -- so a machine
 # whose skills predate it has a `.specify/` that looks complete and a loop that
 # cannot close. Probing for the skill proves the capability; parsing
 # `specify --version` would only prove what the CLI says about itself.
-SPECKIT_CONVERGE = os.path.join("~", ".claude", "skills", "speckit.converge")
+SPECKIT_CONVERGE_NAMES = ("speckit-converge", "speckit.converge")
+
+
+def speckit_skill(repo, names):
+    """Where a speckit skill is, across both layouts, or None.
+
+    Project-local is checked first: it is what a current `specify init` writes,
+    and a stale user-level copy left over from an older release must not be
+    allowed to answer for it.
+    """
+    for name in names:
+        here = os.path.abspath(os.path.join(repo or ".", ".claude", "skills", name))
+        if os.path.isdir(here):
+            return here
+        there = os.path.expanduser(os.path.join("~", ".claude", "skills", name))
+        if os.path.isdir(there):
+            return there
+    return None
 
 # The transport used for every forge request. Deliberately not `gh api`: see the
 # module docstring. urllib goes through OpenSSL and works where `gh` does not.
@@ -361,22 +395,25 @@ def check_speckit(repo):
                           "no %s in this repository -> run `specify init` at the "
                           "repository root, or re-run the skill with --no-speckit"
                           % SPECKIT_SCAFFOLD))
-    skill = os.path.expanduser(SPECKIT_SKILL)
-    if os.path.isdir(skill):
+    skill = speckit_skill(repo, SPECKIT_SKILL_NAMES)
+    if skill:
         res.append(Result("PASS", "speckit skills", skill))
     else:
         res.append(Result("FAIL", "speckit skills",
-                          "%s not installed -> install the speckit skills, or "
-                          "re-run the skill with --no-speckit" % SPECKIT_SKILL))
-    converge = os.path.expanduser(SPECKIT_CONVERGE)
-    if os.path.isdir(converge):
+                          "none of %s under .claude/skills, in this repository "
+                          "or your home -> run `specify init --here "
+                          "--integration claude`, or re-run the skill with "
+                          "--no-speckit" % ", ".join(SPECKIT_SKILL_NAMES)))
+    converge = speckit_skill(repo, SPECKIT_CONVERGE_NAMES)
+    if converge:
         res.append(Result("PASS", "speckit converge", converge))
     else:
         res.append(Result("WARN", "speckit converge",
-                          "%s absent -- speckit predates 1.0.0, so the loop "
-                          "cannot check delivered code against the spec -> "
-                          "`uv tool upgrade specify-cli` then `specify init` "
-                          "again" % SPECKIT_CONVERGE))
+                          "no %s -- speckit predates 1.0.0, so the loop cannot "
+                          "check delivered code against the spec -> `uv tool "
+                          "upgrade specify-cli` then `specify init --here "
+                          "--integration claude`"
+                          % " or ".join(SPECKIT_CONVERGE_NAMES)))
     if os.path.isdir(scaffold):
         res.append(check_speckit_pin(scaffold))
     return res
