@@ -184,45 +184,56 @@ def test_speckit_skills_are_found_under_either_layout():
     `<repo>/.claude/skills/speckit-converge` instead -- so a machine that had
     upgraded correctly kept being told to upgrade. A warning that cannot be
     cleared is a warning people learn to scroll past.
+
+    HOME is faked throughout. A machine that ran `scripts/speckit_global.py` has
+    speckit installed at user level on purpose, and without the fake every "not
+    present" assertion here would be answered by that real installation instead
+    of by the fixture -- passing or failing according to what the developer
+    happened to have installed.
     """
     import preflight                                            # noqa: E402
 
-    d = tempfile.mkdtemp()
-    os.makedirs(os.path.join(d, ".specify"))
-    check("neither layout present -> converge is not found",
-          preflight.speckit_skill(d, preflight.SPECKIT_CONVERGE_NAMES) is None)
-
-    # The layout a current `specify init --integration claude` writes.
-    hyphen = os.path.join(d, ".claude", "skills", "speckit-converge")
-    os.makedirs(hyphen)
-    found = preflight.speckit_skill(d, preflight.SPECKIT_CONVERGE_NAMES)
-    check("project-local hyphenated layout is found", found == hyphen, found)
-
-    rc, out, _ = run(["--groups", "speckit", "--repo", d])
-    check("and it reports PASS rather than WARN",
-          "PASS  speckit converge" in out, out)
-    check("a repo with converge does not tell you to upgrade",
-          "predates 1.0.0" not in out, out)
-
-    # The older user-level dotted layout still answers when nothing else does.
-    e = tempfile.mkdtemp()
-    os.makedirs(os.path.join(e, ".specify"))
-    home = tempfile.mkdtemp()
-    os.makedirs(os.path.join(home, ".claude", "skills", "speckit.converge"))
     old_home = os.environ.get("HOME")
+    empty = tempfile.mkdtemp()
     try:
+        os.environ["HOME"] = empty
+
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, ".specify"))
+        check("neither layout present -> converge is not found",
+              preflight.speckit_skill(d, preflight.SPECKIT_CONVERGE_NAMES) is None)
+
+        # The layout a current `specify init --integration claude` writes.
+        hyphen = os.path.join(d, ".claude", "skills", "speckit-converge")
+        os.makedirs(hyphen)
+        found = preflight.speckit_skill(d, preflight.SPECKIT_CONVERGE_NAMES)
+        check("project-local hyphenated layout is found", found == hyphen, found)
+
+        rc, out, _ = run(["--groups", "speckit", "--repo", d], env={"HOME": empty})
+        check("and it reports PASS rather than WARN",
+              "PASS  speckit converge" in out, out)
+        check("a repo with converge does not tell you to upgrade",
+              "predates 1.0.0" not in out, out)
+
+        # The older user-level dotted layout still answers when nothing else does.
+        e2 = tempfile.mkdtemp()
+        os.makedirs(os.path.join(e2, ".specify"))
+        home = tempfile.mkdtemp()
+        os.makedirs(os.path.join(home, ".claude", "skills", "speckit.converge"))
         os.environ["HOME"] = home
-        found = preflight.speckit_skill(e, preflight.SPECKIT_CONVERGE_NAMES)
+        found = preflight.speckit_skill(e2, preflight.SPECKIT_CONVERGE_NAMES)
         check("user-level dotted layout is still found",
               found is not None and found.startswith(home), found)
+
+        # The fix text must name the flag that actually installs it.
+        f = tempfile.mkdtemp()
+        os.makedirs(os.path.join(f, ".specify"))
+        rc, out, _ = run(["--groups", "speckit", "--repo", f], env={"HOME": empty})
+        check("the converge fix names the integration flag",
+              "--integration claude" in out, out)
     finally:
         if old_home is not None:
             os.environ["HOME"] = old_home
-
-    # The fix text must name the flag that actually installs it.
-    rc, out, _ = run(["--groups", "speckit", "--repo", tempfile.mkdtemp()])
-    check("the converge fix names the integration flag",
-          "--integration claude" in out, out)
 
 
 def test_mcp_group_never_tells_the_user_to_install_the_server():

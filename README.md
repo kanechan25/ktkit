@@ -596,13 +596,30 @@ preflight the first time a skill needs one — which is cheap, but knowing up fr
 Then, **in every repository** where you run ktkit:
 
 ```bash
-specify init --here --integration claude   # writes .specify/ and .claude/skills/speckit-*
-specify preset install lean                # core command templates total 135 KB without it
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"   # once per machine
 ```
 
-`--integration claude` is what installs the skills; without it the CLI defaults to Copilot in a
-non-interactive shell and ktkit's preflight finds nothing. Add `.specify/` to `.gitignore` — it is
-scaffolding pinned to a CLI version, not source.
+Then, **in every repository** where you run ktkit:
+
+```bash
+specify init --here --force --non-interactive --integration claude
+specify preset add lean          # core command templates total 135 KB without it
+rm -rf .claude/skills/speckit-*  # the skills are already global; see below
+```
+
+Add `.specify/` to `.gitignore` — it is scaffolding pinned to a CLI version, not source.
+
+**Why the extra step.** speckit's Claude integration writes its skills *into the project*:
+`ClaudeIntegration.config` hard-codes `folder: ".claude/"`, `skills_dest` returns
+`project_root / folder / "skills"`, and no flag changes it. Where `.claude/skills/` is checked in and
+shared across a team — 76 tracked files in one real case — `specify init` drops fifteen untracked
+directories in the middle of it, and the next `git add -A` commits speckit into everyone's repository.
+
+They do not need to be there. The skills reference `.specify/` relative to the repository root and
+resolve it at run time, so one copy under `~/.claude/skills/` serves every repository.
+`speckit_global.py` renders them with speckit's own `specify init` into a throwaway directory, copies
+the result out, and removes the pre-1.0 dotted layout if it is still around. Only `.specify/`
+scaffolding stays per-repository, and that one belongs there.
 
 **Why these two and nothing else.** spec-kit owns the truth artifacts and, from 1.0.0, `converge` —
 the only step that reads the delivered code and asks whether it satisfies the spec. superpowers owns
