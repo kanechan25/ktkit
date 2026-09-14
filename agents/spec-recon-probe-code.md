@@ -2,7 +2,7 @@
 name: spec-recon-probe-code
 description: Settles whether an identifier exists in a codebase and where, returning EXISTS with a path:line or NOT_FOUND with the search terms it tried. Never draws a conclusion about the product. Reviewer role in a spec reconnaissance run.
 tools: Read, Grep, Glob
-model: sonnet
+model: haiku
 color: cyan
 ---
 

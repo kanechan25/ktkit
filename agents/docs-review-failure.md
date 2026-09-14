@@ -2,6 +2,7 @@
 name: docs-review-failure
 description: Attacks the audit itself rather than the documents — unread sources, coverage weaker than the verdicts imply, skim-shaped verdict distributions, false convergence, lazy escalation to the user, and decisions made without being recorded.
 tools: Read, Grep, Glob
+model: opus
 color: red
 ---
 

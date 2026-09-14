@@ -8,12 +8,12 @@ the agent files, so the two cannot drift.
 
 | Role | Agent | `tools` | Model |
 | ---- | ----- | ------- | ----- |
-| probe-code | `ktkit:spec-recon-probe-code` | `Read, Grep, Glob` | sonnet |
+| probe-code | `ktkit:spec-recon-probe-code` | `Read, Grep, Glob` | haiku |
 | probe-artifact | `ktkit:spec-recon-probe-artifact` | `Read, Bash` | sonnet |
 | probe-vcs | `ktkit:spec-recon-probe-vcs` | `Read, Bash` | sonnet |
 | probe-runtime | `ktkit:spec-recon-probe-runtime` | `Read, Bash` | sonnet |
 | state-extract | `ktkit:spec-recon-state-extract` | `Read, Write, Grep, Glob` | sonnet |
-| arbiter-impl | `ktkit:spec-recon-arbiter-impl` | `Read, Grep, Glob` | inherit |
+| arbiter-impl | `ktkit:spec-recon-arbiter-impl` | `Read, Grep, Glob` | opus |
 | gap-design | `ktkit:spec-recon-gap-design` | `Read, Grep, Glob` | inherit |
 
 Only three tool sets appear, and that is not tidiness. Tool grants on this harness are **not

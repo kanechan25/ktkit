@@ -2,6 +2,7 @@
 name: docs-review-fix-safety
 description: Reviews proposed documentation edits before they are written — traceability, invented values, verdict eligibility, minimal diff, deletions, and voice — and blocks the ones that are not safe to apply.
 tools: Read, Grep, Glob
+model: opus
 color: pink
 ---
 

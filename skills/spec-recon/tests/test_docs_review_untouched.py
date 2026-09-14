@@ -219,6 +219,16 @@ def test_only_two_docs_review_files_changed():
         # are held to the skill's own `## Arguments` table by
         # skills/spec-recon/tests/test_help.py.
         "skills/docs-review/references/help.md",
+        # The role table's Model column. Four terminal-judgement roles --
+        # adjudicator, failure, fix-safety, implication -- were moved from
+        # `inherit` to a pinned `opus`, because `inherit` silently hands a gate
+        # whatever model the session happens to be on, and a gate that weakens
+        # when somebody switches to a cheaper model weakens exactly where
+        # nothing downstream would catch it. This is a deliberate behaviour
+        # change to docs-review, not a spec-recon change leaking in, and it is
+        # declared here for that reason. `check_agent_table.py` holds the column
+        # to the agent files themselves.
+        "skills/docs-review/references/review-team.md",
     }
     p = subprocess.Popen(["git", "-C", ROOT, "diff", "--name-only", "HEAD", "--",
                           "skills/docs-review"],

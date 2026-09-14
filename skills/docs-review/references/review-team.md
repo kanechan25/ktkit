@@ -444,12 +444,12 @@ fix instead of rewriting all eight.
 | requirement | `ktkit:docs-review-requirement` | `Read, Grep, Glob` | inherit |
 | evidence | `ktkit:docs-review-evidence` | `Read, Grep, Glob` | sonnet |
 | coverage | `ktkit:docs-review-coverage` | `Read, Grep, Glob` | sonnet |
-| failure | `ktkit:docs-review-failure` | `Read, Grep, Glob` | inherit |
-| adjudicator | `ktkit:docs-review-adjudicator` | `Read, Grep, Glob` | inherit |
-| fix-safety | `ktkit:docs-review-fix-safety` | `Read, Grep, Glob` | inherit |
+| failure | `ktkit:docs-review-failure` | `Read, Grep, Glob` | opus |
+| adjudicator | `ktkit:docs-review-adjudicator` | `Read, Grep, Glob` | opus |
+| fix-safety | `ktkit:docs-review-fix-safety` | `Read, Grep, Glob` | opus |
 | claims (Mode C) | `ktkit:docs-review-claims` | `Read, Write, Grep, Glob` | sonnet |
 | verify (Mode C) | `ktkit:docs-review-verify` | `Read, Write, Grep, Glob` | sonnet |
-| implication (Mode C) | `ktkit:docs-review-implication` | `Read, Grep, Glob` | inherit |
+| implication (Mode C) | `ktkit:docs-review-implication` | `Read, Grep, Glob` | opus |
 | solo-reviewer (`--team off`) | `ktkit:docs-review-solo-reviewer` | `Read, Grep, Glob` | inherit |
 
 No role has `Bash`, `Edit`, `WebFetch`, MCP tools or `Skill`. Granting `Bash` **removes** `Grep` and

@@ -2,6 +2,7 @@
 name: docs-review-implication
 description: Finds what follows from a document's own statements but is never said, what class of problem it addresses only partially, and where two of its statements disagree. Reviewer role for single-document review.
 tools: Read, Grep, Glob
+model: opus
 color: green
 ---
 

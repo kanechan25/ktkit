@@ -2,7 +2,7 @@
 name: spec-recon-arbiter-impl
 description: Decides whether a "not implemented" or "missing" verdict survives, by opening the code and upholding or refuting it with a path:line. The gate every absence claim must pass. Reviewer role in a spec reconnaissance run.
 tools: Read, Grep, Glob
-model: inherit
+model: opus
 color: red
 ---
 

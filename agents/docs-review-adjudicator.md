@@ -2,6 +2,7 @@
 name: docs-review-adjudicator
 description: Decides which findings from a review wave survive, by opening the cited files and upholding or refuting each one with evidence. Given the finding lists only, never the report it would otherwise anchor to.
 tools: Read, Grep, Glob
+model: opus
 color: orange
 ---
 
