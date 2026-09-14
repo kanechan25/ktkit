@@ -46,6 +46,10 @@ Exit status
 A SKIP is a capability that is unavailable for a reason the run can work around.
 It never blocks. Whoever consumes a SKIP must degrade honestly: the questions it
 would have answered become `not-accessed`, never `missing` and never guessed.
+
+A WARN is present-but-outdated: the capability exists in a form that still runs
+today and will not tomorrow. It never blocks either, and it exists so an upgrade
+that is about to be required is visible before it becomes a FAIL.
 """
 import argparse
 import json as jsonlib
@@ -69,6 +73,13 @@ ARTIFACT_DIRS = ("prompts", "analyze", "specs", "pipeline", "implemented",
 # repository being worked on, so no plugin can supply it on the user's behalf.
 SPECKIT_SCAFFOLD = ".specify"
 SPECKIT_SKILL = os.path.join("~", ".claude", "skills", "speckit.specify")
+# The capability the closed loop actually depends on, rather than a version
+# string. `converge` is the only command that reads the delivered code and asks
+# whether it satisfies the spec, and it landed in speckit 1.0.0 -- so a machine
+# whose skills predate it has a `.specify/` that looks complete and a loop that
+# cannot close. Probing for the skill proves the capability; parsing
+# `specify --version` would only prove what the CLI says about itself.
+SPECKIT_CONVERGE = os.path.join("~", ".claude", "skills", "speckit.converge")
 
 # The transport used for every forge request. Deliberately not `gh api`: see the
 # module docstring. urllib goes through OpenSSL and works where `gh` does not.
@@ -83,7 +94,7 @@ READ_SCOPES = ("repo", "public_repo")
 
 class Result(object):
     def __init__(self, status, name, detail):
-        self.status = status          # PASS | FAIL | SKIP
+        self.status = status          # PASS | WARN | FAIL | SKIP
         self.name = name
         self.detail = detail          # a fix command when FAIL, a reason when SKIP
 
@@ -357,6 +368,15 @@ def check_speckit(repo):
         res.append(Result("FAIL", "speckit skills",
                           "%s not installed -> install the speckit skills, or "
                           "re-run the skill with --no-speckit" % SPECKIT_SKILL))
+    converge = os.path.expanduser(SPECKIT_CONVERGE)
+    if os.path.isdir(converge):
+        res.append(Result("PASS", "speckit converge", converge))
+    else:
+        res.append(Result("WARN", "speckit converge",
+                          "%s absent -- speckit predates 1.0.0, so the loop "
+                          "cannot check delivered code against the spec -> "
+                          "`uv tool upgrade specify-cli` then `specify init` "
+                          "again" % SPECKIT_CONVERGE))
     if os.path.isdir(scaffold):
         res.append(check_speckit_pin(scaffold))
     return res
@@ -435,12 +455,17 @@ def render(results, groups):
     lines += [r.line() for r in results]
     lines += ["```", ""]
     fails = [r for r in results if r.status == "FAIL"]
+    warns = [r for r in results if r.status == "WARN"]
     skips = [r for r in results if r.status == "SKIP"]
     if fails:
         lines.append("**%d FAIL - do not spawn any agent.** Fix these, then run "
                      "again; this gate is cheap and idempotent." % len(fails))
     else:
         lines.append("**No FAIL.** The run may proceed.")
+    if warns:
+        lines.append("")
+        lines.append("%d WARN - runs today, will not once the requirement lands. "
+                     "The fix is on each row." % len(warns))
     if skips:
         lines.append("")
         lines.append("%d SKIP - available capability is narrower than the full set. "

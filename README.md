@@ -578,6 +578,74 @@ working in rather than in this one:
 who clones gets is a dead link that reads like documentation. Ask the skill for its own guidance
 instead: `/ktkit:help chain`, `/ktkit:help spec-recon`.
 
+## Prerequisites
+
+Install these **before** ktkit. The plugin installs fine without them and then stops at its own
+preflight the first time a skill needs one — which is cheap, but knowing up front is cheaper.
+
+### Required
+
+| | Minimum | Check | Install |
+| - | ------- | ----- | ------- |
+| **Python** | 3.9 | `python3 --version` | stdlib only — no package is ever installed |
+| **git** | any | `git rev-parse --show-toplevel` | the artifact root hangs off the repository root |
+| **Claude Code** | a build with plugins + subagents | `/plugin` | ktkit dispatches twenty agents |
+| **spec-kit** | **1.0.6** | `specify --version` | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` |
+| **superpowers** | **6.3.0** | `/plugin` | `claude plugin install superpowers@claude-plugins-official` |
+
+Then, **in every repository** where you run ktkit:
+
+```bash
+specify init --here              # writes .specify/ — add it to .gitignore
+specify preset install lean      # the core command templates total 135 KB without it
+```
+
+**Why these two and nothing else.** spec-kit owns the truth artifacts and, from 1.0.0, `converge` —
+the only step that reads the delivered code and asks whether it satisfies the spec. superpowers owns
+execution discipline: `systematic-debugging` (no fix without a root cause), `test-driven-development`,
+`verification-before-completion` (no completion claim without fresh evidence). ktkit owns intake,
+routing, the escalation ladder, the ledger, budget and the loop. Three layers, one owner each —
+anything that blurs that boundary is not a dependency worth having.
+
+A machine whose spec-kit predates 1.0.0 has a `.specify/` that looks complete and a loop that cannot
+close. The preflight reports that as its own row:
+
+```text
+WARN  speckit converge   ~/.claude/skills/speckit.converge absent -- speckit predates 1.0.0 ...
+```
+
+### Not required, and deliberately so
+
+| | Why not |
+| - | ------- |
+| `speckit-superpowers-bridge`, `superspec`, `superb` | 37 / 71 / 33 stars, one author each, months between pushes, against a spec-kit that releases roughly weekly. They also duplicate the ledger, manifest and cost log ktkit already has tests for. |
+| Community spec-kit extensions | Each one loads its command templates into context. The cap here is **three**, the default is **zero**. `bug` and `assess` are exceptions only because they ship bundled with spec-kit itself. |
+| Agent libraries installed into `~/.claude/agents/` | ktkit's agents declare `tools:` so a reviewer cannot write to what it is judging. An agent that does not declare them gets everything. |
+| Any MCP server | ktkit ships one and requires none of yours. |
+
+### Model routing is deliberate
+
+Each agent declares the model it runs on, and `skills/*/references/` documents that choice next to
+the agent's tools — `check_agent_table.py` fails when the two disagree. The five roles that make a
+terminal judgement (`adjudicator`, `failure`, `fix-safety`, `implication`, `arbiter-impl`) are
+**pinned to `opus`** rather than inheriting the session's model, because `inherit` hands a gate
+whatever model happens to be running and a gate that weakens is worth less than no gate. Roles whose
+output another role attacks stay on `sonnet` or `inherit`; `spec-recon-probe-code` runs on `haiku`
+because its contract forbids it from drawing a conclusion at all.
+
+`cost.jsonl` records the model beside the tokens, so a run's total can be compared against the
+next one's rather than read in isolation.
+
+### Verify the whole set
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
+  --groups runtime,write,read,vcs,artifacts,speckit --repo "$(git rev-parse --show-toplevel)"
+```
+
+Every row proves a capability with a real request rather than trusting a tool's opinion of itself.
+Exit 1 means at least one FAIL — fix those before spending a token.
+
 ## Install
 
 ### Option A — Plugin marketplace (recommended)
@@ -597,7 +665,7 @@ Or via the interactive UI:
 /plugin install ktkit@ktkit
 ```
 
-Installing as a plugin is what registers the eighteen agents and the MCP server. Verify after
+Installing as a plugin is what registers the twenty agents and the MCP server. Verify after
 install:
 
 ```text
