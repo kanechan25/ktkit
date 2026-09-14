@@ -16,6 +16,15 @@ holds it to the same standard as the evidence files:
   C5  every number on the rendered page carries exactly one label
   C6  the rendered page states that the lead's own turns are not in the total
   C7  the instructions still say to batch, and still forbid averaging
+  C8  every agent row records which model spent the tokens, looked up from the
+      agent's own file -- and says so honestly when it cannot
+
+C8 exists because a token total is not comparable on its own. On a subscription
+the ceiling is a usage window, and the window is consumed at a rate set by the
+model -- so "1.4M tokens" describes two very different bills depending on who
+spent them. The model is read from `agents/<name>.md` rather than passed in,
+because passing it would widen the positional `--row` format that `chain` writes
+by hand, and a widened positional format silently shifts every field after it.
 
 C2 and C6 are the two that matter. A cost total is quoted downstream by whoever
 reads it, so a figure that silently omits agents -- or silently omits the largest
@@ -195,6 +204,58 @@ def test_c7_the_instructions_batch_and_forbid_averaging():
     check("C7 the run directory layout names both files",
           "cost.jsonl" in read(os.path.join(
               ROOT, "skills", "spec-recon", "references", "step-protocol.md")))
+
+
+def test_c8_every_row_records_the_model_that_spent_it():
+    """Looked up from the agent file, never guessed, never back-filled."""
+    with Run() as r:
+        rc, out = r.wave(1,
+                         "spec-recon-probe-code,A,412000,9000,14,96",
+                         "docs-review-adjudicator,A,180000,7000,9,70",
+                         "docs-review-checklist,B,95000,4000,6,40",
+                         "feat-req-specs,,50000,2000,3,20")
+        check("C8 the wave is accepted", rc == 0, out)
+        got = dict((row["agent"], row.get("model")) for row in r.jsonl()
+                   if row.get("kind") == "agent")
+
+        # a pinned model is read off the file
+        check("C8 a pinned model is recorded",
+              got.get("spec-recon-probe-code") == "haiku", got)
+        check("C8 a second pinned model is recorded",
+              got.get("docs-review-adjudicator") == "opus", got)
+        # `inherit` is an answer, not a gap: the agent runs on whatever the
+        # session runs on, and recording it as missing would be a lie.
+        check("C8 an agent with no model: line records `inherit`",
+              got.get("docs-review-checklist") == "inherit", got)
+        # the pipeline skills are recorded as rows too, and they are not agents
+        check("C8 a row that is not an agent says so rather than guessing",
+              got.get("feat-req-specs") == "[not-an-agent]", got)
+
+        md = r.md()
+        check("C8 the rendered page splits the total by model",
+              "## Per model" in md, md[:200])
+        check("C8 the per-agent table carries a Model column",
+              "| Model |" in md and "haiku" in md and "opus" in md)
+        check("C8 the page says why the split exists",
+              "usage window" in md)
+
+
+def test_c8_a_row_written_before_the_column_existed_is_not_invented():
+    """Append-only means old rows stay as they were. They are labelled, not filled."""
+    with Run() as r:
+        r.wave(1, "docs-review-adjudicator,A,10,1,1,1")
+        # simulate a pre-existing row: no `model` key at all
+        path = os.path.join(r.d, "cost.jsonl")
+        rows = [json.loads(l) for l in io.open(path, encoding="utf-8") if l.strip()]
+        for row in rows:
+            row.pop("model", None)
+        with io.open(path, "w", encoding="utf-8") as fh:
+            for row in rows:
+                fh.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+        rc, _out = run("render", "--base", r.d)
+        check("C8 render survives a row with no model field", rc == 0)
+        check("C8 a row with no model reads `[unrecorded]`, not a guess",
+              "[unrecorded]" in r.md(), r.md()[:400])
 
 
 def main():

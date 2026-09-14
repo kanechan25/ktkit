@@ -52,7 +52,10 @@ import datetime
 import io
 import json
 import os
+import re
 import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LOG = "cost.jsonl"
 RENDER = "cost.md"
@@ -91,6 +94,45 @@ def append_row(base, row):
 
 def num(v):
     return v if isinstance(v, int) else None
+
+
+# The model an agent runs on is a static property of its own file, so it is
+# looked up rather than passed. Passing it would mean widening the `--row`
+# format that `chain` already writes by hand, and a widened positional format is
+# the kind of change that silently shifts every field after it. Looking it up
+# also cannot drift: `check_agent_table.py` already holds the agent file and the
+# role table to each other, so this reads the one thing that is already the
+# source of truth.
+#
+# Why it matters at all: `cost.jsonl` could say a wave spent 1.4M tokens and not
+# which model spent them, and on a subscription the limit is consumed at a rate
+# that depends on exactly that. A total without it cannot be compared against
+# the next wave's.
+MODEL_UNRESOLVED = "[not-an-agent]"
+MODEL_INHERIT = "inherit"
+
+
+def agent_model(name):
+    """The `model:` an agent declares, or why it could not be read.
+
+    `inherit` is a real answer, not a missing one -- it means the agent runs on
+    whatever the session runs on. Rows for the pipeline skills, which are not
+    agents at all, get MODEL_UNRESOLVED rather than a guess.
+    """
+    if not name:
+        return MODEL_UNRESOLVED
+    path = os.path.join(ROOT, "agents", "%s.md" % name)
+    if not os.path.isfile(path):
+        return MODEL_UNRESOLVED
+    try:
+        text = io.open(path, encoding="utf-8").read()
+    except IOError:
+        return MODEL_UNRESOLVED
+    if not text.startswith("---\n"):
+        return MODEL_INHERIT
+    end = text.find("\n---", 4)
+    m = re.search(r"^model:\s*(\S+)\s*$", text[4:end if end != -1 else None], re.M)
+    return m.group(1) if m else MODEL_INHERIT
 
 
 def totals(rows):
@@ -172,17 +214,39 @@ def render(base):
                    % (w, st["agents"], thousands(st["tokens_total"]),
                       thousands(st["tool_calls"]), st["seconds"], thousands(running)))
 
+    by_model = {}
+    for r in agents:
+        m = r.get("model") or "[unrecorded]"
+        ti, to = num(r.get("tokens_in")) or 0, num(r.get("tokens_out")) or 0
+        tt = num(r.get("tokens_total"))
+        tt = tt if tt is not None else ti + to
+        b = by_model.setdefault(m, {"n": 0, "tokens": 0})
+        b["n"] += 1
+        b["tokens"] += tt
+    out += ["", "## Per model", "",
+            "On a subscription the ceiling is a usage window, and a window is consumed at a",
+            "rate that depends on which model spent the tokens -- so a total without this",
+            "split cannot be compared against the next run's. `[unrecorded]` is a row written",
+            "before this column existed; it is never back-filled from a guess.",
+            "",
+            "| Model | Agents | Tokens | Label |",
+            "| ----- | -----: | -----: | ----- |"]
+    for m in sorted(by_model, key=lambda k: -by_model[k]["tokens"]):
+        out.append("| %s | %d | %s | [measured] |"
+                   % (m, by_model[m]["n"], thousands(by_model[m]["tokens"])))
+
     out += ["", "## Per agent", "",
-            "| # | Wave | Agent | Set | Tokens in | out | total | Calls | s | Note |",
-            "| -: | ---- | ----- | --- | --------: | --: | ----: | ----: | -: | ---- |"]
+            "| # | Wave | Agent | Model | Set | Tokens in | out | total | Calls | s | Note |",
+            "| -: | ---- | ----- | ----- | --- | --------: | --: | ----: | ----: | -: | ---- |"]
     for i, r in enumerate(agents, 1):
         ti, to = num(r.get("tokens_in")), num(r.get("tokens_out"))
         tt = num(r.get("tokens_total"))
         if tt is None and (ti is not None or to is not None):
             tt = (ti or 0) + (to or 0)
         cell = lambda v: thousands(v) if v is not None else "**not reported**"
-        out.append("| %d | %s | `%s` | %s | %s | %s | %s | %s | %s | %s |"
+        out.append("| %d | %s | `%s` | %s | %s | %s | %s | %s | %s | %s | %s |"
                    % (i, r.get("wave", "-"), r.get("agent", "?"),
+                      r.get("model") or "[unrecorded]",
                       r.get("toolset") or "-", cell(ti), cell(to), cell(tt),
                       cell(num(r.get("tool_calls"))), cell(num(r.get("seconds"))),
                       (r.get("note") or "").replace("|", "/")))
@@ -288,6 +352,7 @@ with an empty field meaning the agent did not report that number.""")
                     return None
             append_row(args.base, {
                 "kind": "agent", "at": stamp, "wave": args.wave, "agent": agent,
+                "model": agent_model(agent),
                 "toolset": toolset, "tokens_in": maybe(parts[2]),
                 "tokens_out": maybe(parts[3]), "tokens_total": None,
                 "tool_calls": maybe(parts[4]), "seconds": maybe(parts[5]),
@@ -305,6 +370,7 @@ with an empty field meaning the agent did not report that number.""")
                 usage = {"unparsed": args.usage_json[:500]}
         append_row(args.base, {
             "kind": "agent", "at": now(), "wave": args.wave, "agent": args.agent,
+            "model": agent_model(args.agent),
             "toolset": args.toolset, "tokens_in": args.tokens_in,
             "tokens_out": args.tokens_out, "tokens_total": args.tokens_total,
             "tool_calls": args.tool_calls, "seconds": args.seconds,
