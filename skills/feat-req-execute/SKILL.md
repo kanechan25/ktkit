@@ -34,7 +34,7 @@ If you catch yourself about to make a format-only edit: **stop, undo the mental 
 
 ## 🌐 LANGUAGE GATE (Vietnamese for clarifications & assumptions)
 
-Whenever this workflow — or any `speckit.*` skill it calls — produces **open questions, assumptions,
+Whenever this workflow — or any `speckit-*` skill it calls — produces **open questions, assumptions,
 cross-artifact inconsistencies, severity findings or recommendations**:
 
 - **Write in Vietnamese**: every question, assumption label, rationale, severity description
@@ -85,7 +85,7 @@ your own. Degrading silently ships something other than what was asked for, unde
 ```
 
 The `read` group is what stops the classic failure of this skill: a spec path that is wrong by one
-character, discovered only after `/speckit.plan` has run.
+character, discovered only after `/speckit-plan` has run.
 
 The `artifacts` group creates `<repo-root>/.claude/claude/{prompts,analyze,specs,pipeline,implemented,compacts}`
 when the repository does not have them. That layout is a rule of this plugin, not a discovery: never
@@ -105,7 +105,7 @@ Locate the approved spec, then classify its layout. **This decides whether the r
 
 Detection is exact: `basename == "spec.md"` ⇒ current layout, `<base>` is the parent folder's name. Anything else matching `*.spec.md` is legacy. (Legacy files always carry a `feat-` / `bug-` prefix, so they can never be a bare `spec.md`.)
 
-**Legacy spec → STOP.** A legacy spec has no folder to hold `plan.md` / `tasks.md`, so `/speckit.plan`, `/speckit.tasks` and `/speckit.analyze` have nowhere to write. Report and wait:
+**Legacy spec → STOP.** A legacy spec has no folder to hold `plan.md` / `tasks.md`, so `/speckit-plan`, `/speckit-tasks` and `/speckit-analyze` have nowhere to write. Report and wait:
 
 ```
 Spec đang ở layout cũ: <path>
@@ -113,7 +113,7 @@ Nhánh speckit (STEP 6 / 6.5 / 7) cần FEATURE_DIR nên không chạy được.
 Chọn: (1) viết lại spec theo layout mới qua /ktkit:feat-req-specs · (2) tự chuyển tay rồi chạy lại · (3) abort
 ```
 
-Do **not** move, rename, or convert the file yourself — legacy specs are left untouched by design. Do **not** quietly skip to STEP 7 either: this workflow promises a real `/speckit.analyze` pass, and silently dropping it delivers something else while reporting success.
+Do **not** move, rename, or convert the file yourself — legacy specs are left untouched by design. Do **not** quietly skip to STEP 7 either: this workflow promises a real `/speckit-analyze` pass, and silently dropping it delivers something else while reporting success.
 
 **Current layout → pin the feature directory.** ⛔ This is the step, not a detail of the next one:
 
@@ -157,7 +157,7 @@ SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
 
 This skill is **generic** SDD. Some repositories have a skill of their own that produces an
 **execution runbook** — a file describing the order of work, the tools and the review gates specific
-to that repository. Running plain `/speckit.implement` while such a runbook exists produces code that
+to that repository. Running plain `/speckit-implement` while such a runbook exists produces code that
 does not follow the repository's conventions.
 
 **Detect with one command, and do NOT parse the contents**:
@@ -176,7 +176,7 @@ Feature dir này đã có execution runbook: <path>
 Chọn:
   (1) Thi hành theo runbook  → thoát skill này, mở <path> và làm theo.
                                Runbook tự mang coverage matrix + gate + verify + finalize của nó.
-  (2) Tiếp tục speckit thuần → plan.md + tasks.md + /speckit.implement.
+  (2) Tiếp tục speckit thuần → plan.md + tasks.md + /speckit-implement.
                                Code có thể KHÔNG theo convention repo.
   (3) Abort
 ```
@@ -195,7 +195,7 @@ do not edit older directories.
 
 ---
 
-### STEP 6 — PLAN (call skill `/speckit.plan`)
+### STEP 6 — PLAN (call skill `/speckit-plan`)
 > Goal: HOW to build it — architecture, stack, data flow
 
 **Two ways to produce the plan. Both write the same files into the same feature directory.** STEP
@@ -203,12 +203,12 @@ do not edit older directories.
 
 | Mode | When | What runs |
 |---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit.plan` then `/speckit.tasks`, per the guard below |
+| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit-plan` then `/speckit-tasks`, per the guard below |
 | **internalised** | anything else | write `plan.md` and `tasks.md` directly, same contents, same paths |
 
 > ⚠️ **SPECKIT GUARD** *(mode `speckit` only)* — **is the pin from STEP 5.9 still on this feature?**
-> Every skill in this branch is script-backed — `/speckit.plan` runs `setup-plan.sh`,
-> `/speckit.tasks` runs `setup-tasks.sh`, `/speckit.analyze` runs `check-prerequisites.sh` — and
+> Every skill in this branch is script-backed — `/speckit-plan` runs `setup-plan.sh`,
+> `/speckit-tasks` runs `setup-tasks.sh`, `/speckit-analyze` runs `check-prerequisites.sh` — and
 > they do not behave the same, so verify rather than assume:
 >
 > | Script | Feature directory | Branch-name gate |
@@ -217,14 +217,14 @@ do not edit older directories.
 > | `check-prerequisites.sh` | the pin | enforced always — needs inline `SPECIFY_FEATURE` |
 >
 > So **`.specify/` existing is a false green**, and so is "STEP 5.9 ran": another session, or a
-> `/speckit.specify` call in between, can have moved the pin since. Verify — it writes nothing:
+> `/speckit-specify` call in between, can have moved the pin since. Verify — it writes nothing:
 > ```bash
 > python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" --verify \
 >   --dir ".claude/claude/specs/<rel-dir>/<base>" \
 >   --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 > ```
 > - Exit 1 (pin points elsewhere) → repin (drop `--verify`) before any speckit call. Calling
->   `/speckit.plan` on a wrong pin does not fail: it writes into that other feature's directory.
+>   `/speckit-plan` on a wrong pin does not fail: it writes into that other feature's directory.
 > - Exit 0 → proceed.
 >
 > ⛔ **`setup-plan.sh` copies the plan template over `plan.md` unconditionally** — no prompt, no
@@ -233,7 +233,7 @@ do not edit older directories.
 > ```bash
 > cp "<feature-dir>/plan.md" "<feature-dir>/plan.pre-speckit.md"
 > ```
-> Then decide deliberately: let speckit regenerate and merge back, or skip `/speckit.plan` for this
+> Then decide deliberately: let speckit regenerate and merge back, or skip `/speckit-plan` for this
 > run and stay in mode `internalised`. Either is fine; losing the file is not.
 >
 > If a check still fails, do NOT fall back to a manual plan while still calling it a speckit run.
@@ -247,7 +247,7 @@ cross-artifact check is a comparison you can perform directly. Report the mode a
 - Generate plan following the WHAT-WHY-HOW framework
 
 ```
-/speckit.plan
+/speckit-plan
 ```
 
 Writes **`$SPECIFY_FEATURE_DIRECTORY/plan.md`** — beside the spec, inside the feature dir. It contains:
@@ -257,18 +257,18 @@ Writes **`$SPECIFY_FEATURE_DIRECTORY/plan.md`** — beside the spec, inside the 
 - Risk Level (LOW/MEDIUM/HIGH/CRITICAL from GitNexus blast radius)
 - File-level changes (which files to create/modify)
 
-Then run `/speckit.tasks` to produce **`$SPECIFY_FEATURE_DIRECTORY/tasks.md`** — STEP 6.5 cannot run without it.
+Then run `/speckit-tasks` to produce **`$SPECIFY_FEATURE_DIRECTORY/tasks.md`** — STEP 6.5 cannot run without it.
 
 **HARD GATE**: Present plan to user. Do NOT proceed to STEP 7 until confirmed. If Risk Level is HIGH/CRITICAL → require explicit approval.
 
 ---
 
-### STEP 6.5 — ANALYZE (call skill `/speckit.analyze`)
+### STEP 6.5 — ANALYZE (call skill `/speckit-analyze`)
 > Goal: catch cross-artifact gaps before implementation starts
 
-**Precondition** — all three files must exist in `$SPECIFY_FEATURE_DIRECTORY`: `spec.md`, `plan.md`, `tasks.md`. `/speckit.analyze` runs `check-prerequisites.sh --json --require-tasks --include-tasks` and aborts otherwise; it is a cross-artifact comparison and has nothing to compare without all three. If `tasks.md` is missing, run `/speckit.tasks` first (STEP 6) — do not skip this step.
+**Precondition** — all three files must exist in `$SPECIFY_FEATURE_DIRECTORY`: `spec.md`, `plan.md`, `tasks.md`. `/speckit-analyze` runs `check-prerequisites.sh --json --require-tasks --include-tasks` and aborts otherwise; it is a cross-artifact comparison and has nothing to compare without all three. If `tasks.md` is missing, run `/speckit-tasks` first (STEP 6) — do not skip this step.
 
-After plan and tasks are generated, invoke `/speckit.analyze` to validate consistency across spec × plan × tasks:
+After plan and tasks are generated, invoke `/speckit-analyze` to validate consistency across spec × plan × tasks:
 - Requirements with no tasks → coverage gap
 - Tasks with no mapped requirement → scope creep risk
 - Acceptance criteria not measurable → testability issue
@@ -281,24 +281,24 @@ Action by severity:
 
 ---
 
-### STEP 7 — IMPLEMENT (call skill `/speckit.implement`)
+### STEP 7 — IMPLEMENT (call skill `/speckit-implement`)
 > Goal: execute plan with TDD discipline and task tracking
 
-**Before calling `/speckit.implement`**, run symbol-level impact check for each planned change:
+**Before calling `/speckit-implement`**, run symbol-level impact check for each planned change:
 ```
 gitnexus_impact({target: "<symbol>", direction: "upstream"})
 ```
 - LOW/MEDIUM → proceed
 - HIGH/CRITICAL → STOP, report to user (plan is file-level; impact is symbol-level — different granularity, different risk)
 
-Call `/speckit.implement` to execute the task plan:
+Call `/speckit-implement` to execute the task plan:
 - Reads `tasks.md` phase-by-phase (Setup → Tests → Core → Integration → Polish)
 - Gates on checklist completion before starting — incomplete checklists require user confirmation
 - Enforces TDD order: test tasks execute before their implementation counterparts
 - Marks tasks `[X]` as completed in real-time
 - Validates each phase before proceeding to next; halts on non-parallel task failure
 
-**FORMAT GATE still applies** — only touch lines that change logic. `/speckit.implement` does not override the FORMAT GATE defined above.
+**FORMAT GATE still applies** — only touch lines that change logic. `/speckit-implement` does not override the FORMAT GATE defined above.
 
 ---
 

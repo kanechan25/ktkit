@@ -518,7 +518,7 @@ no gate — the single gate lives downstream.
 
 ### 6.5 — SELF-AUDIT (mandatory, before 6c)
 
-> Source: 6 detection passes adapted from `speckit.analyze` (snapshot 2026-08-24). Internalised on purpose — `speckit.analyze` compares `spec.md` × `plan.md` × `tasks.md` and refuses to run before `tasks.md` exists; this skill runs before any of them. Same passes, different target: **the report you just wrote**.
+> Source: 6 detection passes adapted from `speckit-analyze` (snapshot 2026-08-24). Internalised on purpose — `speckit-analyze` compares `spec.md` × `plan.md` × `tasks.md` and refuses to run before `tasks.md` exists; this skill runs before any of them. Same passes, different target: **the report you just wrote**.
 
 Re-read the file you just saved and run these 6 passes over it. This catches the failure mode where each section is individually plausible but the document as a whole contradicts itself — the exact defect that survives into the spec.
 

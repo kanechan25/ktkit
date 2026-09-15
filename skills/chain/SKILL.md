@@ -175,7 +175,7 @@ into `steps/03-spec.md` and continue. Otherwise this is the gate. See below.
 
 `--plan no` ⇒ skip, and say in `steps/04-plan.md` that `B` is where the chain stopped and why.
 
-`--plan yes` ⇒ `/speckit.plan` writes `plan.md` in the feature dir. If `runbook.ref` is present the
+`--plan yes` ⇒ `/speckit-plan` writes `plan.md` in the feature dir. If `runbook.ref` is present the
 chain **stops here and hands over**: this skill does not read a runbook, does not run a command
 taken from one, and does not call the skill that produced it.
 
@@ -185,7 +185,7 @@ taken from one, and does not call the skill that produced it.
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" --verify --dir <feature-dir> --repo <root>
 ```
 
-`/speckit.plan` runs `setup-plan.sh`, which resolves its feature directory from
+`/speckit-plan` runs `setup-plan.sh`, which resolves its feature directory from
 `.specify/feature.json` — one mutable pointer for the whole repository — and then copies the plan
 template over `plan.md` there. A pin aimed at an unrelated feature does not make it fail: it
 writes into **that** feature's directory and reports success, destroying whatever `plan.md` held.
@@ -198,7 +198,7 @@ Anything the plan reveals that contradicts the spec is **synced back** — see b
 ### 05 — implement
 
 Only with `--execute`. Runs the arm's execute skill. Its own STOP conditions stand unchanged: a
-`/speckit.analyze` CRITICAL finding and a HIGH/CRITICAL blast radius are gates, always. They are
+`/speckit-analyze` CRITICAL finding and a HIGH/CRITICAL blast radius are gates, always. They are
 "expensive if wrong", which is the definition of T4.
 
 ⭐ **Pass the run directory and require a deviation record.** The execute skill records every
@@ -291,7 +291,7 @@ At most **two questions** in a whole run, and a clean run has none:
 | When | Where |
 | ---- | ----- |
 | T4 survivors after step 02, or the spec skill's own T4 pool | step 03 |
-| `/speckit.analyze` CRITICAL, or blast radius HIGH/CRITICAL | step 05 |
+| `/speckit-analyze` CRITICAL, or blast radius HIGH/CRITICAL | step 05 |
 
 ⭐ **A contract-level deviation is a third stop and is not counted here**, because it is not a
 question: the change has already happened, and what is being asked is whether the specification may

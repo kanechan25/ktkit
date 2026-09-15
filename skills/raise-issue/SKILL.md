@@ -22,7 +22,7 @@ $ARGUMENTS
 | Locating the entry point from an anchor the user gave (ladder L1→L4, hard cap) | **`/ktkit:raise-issue`** | ✅ yes — stops at *where the string appears* |
 | Root cause, 5-Whys, tracing a flow, climbing from the entry point | `/ktkit:rca`, `/ktkit:bug-fix-specs` | ❌ FORBIDDEN |
 | Blast radius, impact, solution options | `/ktkit:analyze-feat` | ❌ FORBIDDEN |
-| Spec, plan, tasks | `/ktkit:feat-req-specs`, `/speckit.*` | ❌ FORBIDDEN |
+| Spec, plan, tasks | `/ktkit:feat-req-specs`, `/speckit-*` | ❌ FORBIDDEN |
 | Editing code, running tests | `/ktkit:bug-fix-execute`, `/ktkit:feat-req-execute` | ❌ FORBIDDEN |
 
 **Two success criteria, in this order:**

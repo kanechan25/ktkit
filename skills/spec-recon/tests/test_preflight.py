@@ -225,12 +225,22 @@ def test_speckit_skills_are_found_under_either_layout():
         check("user-level dotted layout is still found",
               found is not None and found.startswith(home), found)
 
-        # The fix text must name the flag that actually installs it.
+        # The fix text must name the thing that actually installs the skills,
+        # and it must not be `specify init --here`: that renders fifteen
+        # directories into THIS repository's `.claude/skills/`, which is checked
+        # in and shared on the repositories this plugin is used against. The
+        # remediation for a missing skill is the global installer.
         f = tempfile.mkdtemp()
         os.makedirs(os.path.join(f, ".specify"))
         rc, out, _ = run(["--groups", "speckit", "--repo", f], env={"HOME": empty})
-        check("the converge fix names the integration flag",
-              "--integration claude" in out, out)
+        skills_row = [l for l in out.splitlines() if "speckit skills" in l]
+        check("the missing-skills row is the one reporting the failure",
+              len(skills_row) == 1 and skills_row[0].startswith("FAIL"), skills_row)
+        row = skills_row[0] if skills_row else ""
+        check("the skills fix names the global installer",
+              "speckit_global.py" in row, row)
+        check("and does not send the reader back to a project-local init",
+              "specify init" not in row, row)
     finally:
         if old_home is not None:
             os.environ["HOME"] = old_home

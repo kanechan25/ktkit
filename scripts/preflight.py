@@ -392,18 +392,19 @@ def check_speckit(repo):
         res.append(Result("PASS", "speckit scaffolding", scaffold))
     else:
         res.append(Result("FAIL", "speckit scaffolding",
-                          "no %s in this repository -> run `specify init` at the "
-                          "repository root, or re-run the skill with --no-speckit"
-                          % SPECKIT_SCAFFOLD))
+                          "no %s in this repository -> run `specify init --here "
+                          "--integration claude` at the repository root then "
+                          "`rm -rf .claude/skills/speckit-*`, or re-run the "
+                          "skill with --no-speckit" % SPECKIT_SCAFFOLD))
     skill = speckit_skill(repo, SPECKIT_SKILL_NAMES)
     if skill:
         res.append(Result("PASS", "speckit skills", skill))
     else:
         res.append(Result("FAIL", "speckit skills",
                           "none of %s under .claude/skills, in this repository "
-                          "or your home -> run `specify init --here "
-                          "--integration claude`, or re-run the skill with "
-                          "--no-speckit" % ", ".join(SPECKIT_SKILL_NAMES)))
+                          "or your home -> run scripts/speckit_global.py, "
+                          "or re-run the skill with --no-speckit"
+                          % ", ".join(SPECKIT_SKILL_NAMES)))
     converge = speckit_skill(repo, SPECKIT_CONVERGE_NAMES)
     if converge:
         res.append(Result("PASS", "speckit converge", converge))
@@ -411,8 +412,7 @@ def check_speckit(repo):
         res.append(Result("WARN", "speckit converge",
                           "no %s -- speckit predates 1.0.0, so the loop cannot "
                           "check delivered code against the spec -> `uv tool "
-                          "upgrade specify-cli` then `specify init --here "
-                          "--integration claude`"
+                          "upgrade specify-cli` then scripts/speckit_global.py"
                           % " or ".join(SPECKIT_CONVERGE_NAMES)))
     if os.path.isdir(scaffold):
         res.append(check_speckit_pin(scaffold))

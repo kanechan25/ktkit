@@ -34,7 +34,7 @@ If you catch yourself about to make a format-only edit: **stop, undo the mental 
 
 ## 🌐 LANGUAGE GATE (Vietnamese for clarifications & assumptions)
 
-Whenever this workflow — or any `speckit.*` skill it calls — produces **open questions, assumptions,
+Whenever this workflow — or any `speckit-*` skill it calls — produces **open questions, assumptions,
 verification findings or recommendations**:
 
 - **Write in Vietnamese**: every question, assumption label, rationale, severity description and

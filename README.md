@@ -356,7 +356,7 @@ its feature directory from `SPECIFY_FEATURE_DIRECTORY` first and `.specify/featu
 The environment variable is the obvious lever and the one that cannot work here: it lives in one
 Bash invocation, and the shell that runs the script belongs to the skill, opened later, clean. So
 resolution falls through to the file, which is a single mutable pointer for the whole repository,
-written by whichever run touched it last. Left alone, `/speckit.plan` then resolves someone else's
+written by whichever run touched it last. Left alone, `/speckit-plan` then resolves someone else's
 feature, copies the plan template over **that** feature's `plan.md`, and exits 0 — a wrong write
 reported as a success. `scripts/speckit_pin.py` writes the pointer at the feature in play, reports
 `<old> -> <new>` so an inherited one is visible, and skips cleanly in a repository with no
@@ -593,10 +593,10 @@ preflight the first time a skill needs one — which is cheap, but knowing up fr
 | **spec-kit** | **1.0.6** | `specify --version` | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` |
 | **superpowers** | **6.3.0** | `/plugin` | `claude plugin install superpowers@claude-plugins-official` |
 
-Then, **in every repository** where you run ktkit:
+Then, **once per machine**:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"   # once per machine
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
 ```
 
 Then, **in every repository** where you run ktkit:
@@ -779,12 +779,12 @@ Nothing to do, and one thing to know: if you run any SDD skill in a repository w
 scaffolding, it now writes `.specify/feature.json` before calling a speckit skill, and prints the
 value it replaced.
 
-That file is spec-kit's own persisted pointer — the same key `/speckit.specify` writes — and until
+That file is spec-kit's own persisted pointer — the same key `/speckit-specify` writes — and until
 now these skills relied on `SPECIFY_FEATURE_DIRECTORY` instead, which is first in spec-kit's
 resolution order and therefore looked sufficient. It is not reachable: an `export` lives in one
 Bash invocation, and the shell that runs `setup-plan.sh` belongs to the speckit skill, opened
 later, clean. Resolution fell through to the file, which no skill was writing, so a pointer from an
-unrelated feature stayed in place and `/speckit.plan` copied the plan template into **that**
+unrelated feature stayed in place and `/speckit-plan` copied the plan template into **that**
 feature's directory and exited 0.
 
 - The previous pointer is saved to `.specify/feature.json.bak` on the first repin.
@@ -795,7 +795,7 @@ feature's directory and exited 0.
   spend. It never fails on it: at preflight time there is no feature directory to compare against.
 - ⛔ One thing the pin cannot fix: `setup-plan.sh` copies the plan template over `plan.md`
   unconditionally, with no prompt and no backup. `feat-req-execute` and `chain` now say so and copy
-  an existing plan aside first. If you drive `/speckit.plan` yourself over a hand-written plan, do
+  an existing plan aside first. If you drive `/speckit-plan` yourself over a hand-written plan, do
   the same.
 
 ### Upgrading to 3.1.0 — the chain, and the half of the ladder that was missing

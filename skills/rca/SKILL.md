@@ -132,7 +132,7 @@ If you reach WHY 5 and the root cause is still unclear, state: `ROOT CAUSE INCON
 
 ### Step 3.5: REQUIREMENT CLARIFY (conditional — usually SKIPPED)
 
-> Source: taxonomy adapted from `speckit.clarify` (snapshot 2026-08-24). Internalised on purpose — `speckit.clarify` reads and writes a `spec.md` under a spec-kit `FEATURE_DIR`, which does not exist at RCA time.
+> Source: taxonomy adapted from `speckit-clarify` (snapshot 2026-08-24). Internalised on purpose — `speckit-clarify` reads and writes a `spec.md` under a spec-kit `FEATURE_DIR`, which does not exist at RCA time.
 
 **Trigger — run ONLY if one of these is true.** Otherwise skip silently and go to Step 4:
 

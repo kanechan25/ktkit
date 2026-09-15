@@ -1,6 +1,6 @@
 ---
 name: bug-fix-specs
-description: "Use when the user submits a bug report and wants to review specs BEFORE fixing. Runs STEP 0→4 (memory check, explore, reproduce, blast radius, root cause), then writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit.specify when the repository has speckit scaffolding, through this skill's own internalised equivalent when it does not or when called with --no-speckit. STOPS and waits for user approval before any code changes. Hand off to /ktkit:bug-fix-execute."
+description: "Use when the user submits a bug report and wants to review specs BEFORE fixing. Runs STEP 0→4 (memory check, explore, reproduce, blast radius, root cause), then writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify when the repository has speckit scaffolding, through this skill's own internalised equivalent when it does not or when called with --no-speckit. STOPS and waits for user approval before any code changes. Hand off to /ktkit:bug-fix-execute."
 ---
 
 # Bug-Fix Specs Workflow
@@ -23,7 +23,7 @@ The executor (`/ktkit:bug-fix-execute`) has its own FORMAT GATE and will refuse 
 
 ## 🌐 LANGUAGE GATE (Vietnamese for clarifications & assumptions)
 
-Whenever this workflow — or any `speckit.*` skill it calls — produces **open questions,
+Whenever this workflow — or any `speckit-*` skill it calls — produces **open questions,
 assumptions, ambiguity findings or recommendations**:
 
 - **Write in Vietnamese**: every question, assumption label, rationale, severity description and
@@ -64,10 +64,16 @@ your own. Degrading silently ships something other than what was asked for, unde
 ⛔ /ktkit:bug-fix-specs — stopped before STEP 0b
 
   ✗ .specify/ is not in this repository
-  ✗ ~/.claude/skills/speckit.specify is not installed
+  ✗ no speckit-specify under .claude/skills, here or in your home
 
   Pick one:
-    1. Run `specify init` at the repository root   → full speckit
+    1. Install both halves                         → full speckit
+         python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
+         specify init --here --force --non-interactive --integration claude
+         rm -rf .claude/skills/speckit-*
+       The skills go to ~/.claude/skills once per machine; `specify init` writes
+       the per-repository .specify/ scaffolding, and a copy of the skills this
+       repository does not need -- hence the rm.
     2. Re-run with --no-speckit                    → internalised path, the spec still comes out whole
 
   Nothing ran. No tokens spent on any step.
@@ -160,7 +166,7 @@ one this run is in — do not re-decide here, and do not fall back silently.
 
 | Mode | When | What runs |
 |---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit.specify`, per the guard below |
+| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit-specify`, per the guard below |
 | **internalised** | anything else | the equivalent defined in this file, below |
 
 The internalised mode is a supported way to run, not a degraded one: `.specify/` is scaffolding that
@@ -178,9 +184,9 @@ them. Whichever mode ran, **name it at the HARD STOP.**
 >
 > | Skill | Runs a script? | Clears the branch gate |
 > |---|---|---|
-> | `speckit.specify` | **No** — safe to call directly | n/a |
-> | `speckit.plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` | **the pin** (below) |
-> | `speckit.clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` | only `SPECIFY_FEATURE` |
+> | `speckit-specify` | **No** — safe to call directly | n/a |
+> | `speckit-plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` | **the pin** (below) |
+> | `speckit-clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` | only `SPECIFY_FEATURE` |
 >
 > ⛔ **An `export` does not reach any of them.** It lives in one Bash invocation; the shell that runs
 > the script is a different shell, opened by the skill one or more tool calls later, with a clean
@@ -214,7 +220,7 @@ No speckit call, no shell script, no branch gate. Same destination, same filenam
    becomes an Open Question in the spec.
 6. Report at the HARD STOP as `internalised` with the same counts speckit would have reported.
 
-Do **not** call `/speckit.clarify` in this mode. STEP 4.6 has its own internalised branch.
+Do **not** call `/speckit-clarify` in this mode. STEP 4.6 has its own internalised branch.
 
 > **Language**: the whole spec file is written in **Vietnamese**. Code snippets, file paths, symbol
 > names and technical names (kebab-case, camelCase and so on) stay exactly as they are — only the
@@ -285,7 +291,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" \
 ```
 
 This writes `feature_directory` into `.specify/feature.json` — spec-kit's own persisted pointer,
-the same key `/speckit.specify` writes — and reports `<old> -> <new>`, so a pointer left behind by
+the same key `/speckit-specify` writes — and reports `<old> -> <new>`, so a pointer left behind by
 an unrelated feature is visible rather than inherited. It keeps every sibling key, backs the
 previous file up to `feature.json.bak`, and is idempotent. **`--dir` must already exist** — run it
 after the `mkdir -p`, never before.
@@ -310,7 +316,7 @@ SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
   stable because it is pinned on disk.
 - Derive `<slug>` from `<base>`. A bare `YYYYMMDD-HHMMSS` with no trailing slug is **rejected** by the gate.
 
-#### Do NOT truncate `/speckit.specify` at step 6 *(mode `speckit` only)*
+#### Do NOT truncate `/speckit-specify` at step 6 *(mode `speckit` only)*
 
 Older versions of this workflow overrode the output path and stopped once `spec.md` was written, which silently dropped the skill's own quality loop. With the feature directory pinned there is no reason to stop early — let it run **through step 7**: **7a** writes `checklists/requirements.md`, **7b** grades the spec against it, **7c** fixes the failures.
 
@@ -359,7 +365,7 @@ Route each one:
 | T3.5 — one reading better evidenced, cheap if wrong | spec §Assumptions, with falsifier |
 | T4 — undecidable **and** expensive if wrong | **pool for the HARD STOP gate** (max 3 total) |
 
-In mode `speckit` you may still invoke `/speckit.clarify` for its taxonomy, but its questions go
+In mode `speckit` you may still invoke `/speckit-clarify` for its taxonomy, but its questions go
 through the ladder before any of them reaches the user. In mode `internalised` run the scan yourself
 and write the conclusions back into `spec.md`.
 
@@ -370,7 +376,7 @@ and write the conclusions back into `spec.md`.
 ### STEP 4.7 — FIX QUALITY CHECKLIST (risk-gated — often SKIPPED)
 > Goal: unit-test the fix spec itself before anyone writes code against it
 
-> Source: item-writing rules + file semantics adapted from `speckit.checklist` (snapshot 2026-08-24). Internalised on purpose — that skill's `check-prerequisites.sh --json` demands a `plan.md`, and this workflow HARD-STOPs *before* planning.
+> Source: item-writing rules + file semantics adapted from `speckit-checklist` (snapshot 2026-08-24). Internalised on purpose — that skill's `check-prerequisites.sh --json` demands a `plan.md`, and this workflow HARD-STOPs *before* planning.
 
 **Gate — compute the risk first, then decide:**
 
@@ -389,7 +395,7 @@ LOW  <  LOW–MEDIUM  <  MEDIUM  <  MEDIUM–HIGH  <  HIGH  <  CRITICAL
 - Otherwise → **skip and say so** at the HARD STOP (`"risk = LOW, checklist skipped"`). Most bugs are narrow; a 40-item checklist on a one-line fix is noise.
 - No `.analyze.md` → single source, use the local value. A stale HIGH still forces the step: deliberate, fail-safe.
 
-**Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/bugfix.md` — a **separate file** from the `requirements.md` that `/speckit.specify` step 7a created, so there is no format collision. New file → number from `CHK001`; file already exists → append, continuing from the last CHK ID. Never delete or rewrite existing content.
+**Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/bugfix.md` — a **separate file** from the `requirements.md` that `/speckit-specify` step 7a created, so there is no format collision. New file → number from `CHK001`; file already exists → append, continuing from the last CHK ID. Never delete or rewrite existing content.
 
 **Write items that test the SPEC, not the running system.** The distinction matters more here than anywhere, because a bug spec is *about* behaviour:
 

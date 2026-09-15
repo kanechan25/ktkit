@@ -1,6 +1,6 @@
 ---
 name: feat-req-specs
-description: "Use when the user provides a feature request and wants to review specs BEFORE implementing. Runs STEP 0→5 (memory check, understand, blast radius, interview, design, spec) and writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit.specify when the repository has speckit scaffolding, through this skill's own internalised equivalent when it does not or when called with --no-speckit. Then STOPS and waits for user approval before any code or plan is written. Hand off to /ktkit:feat-req-execute."
+description: "Use when the user provides a feature request and wants to review specs BEFORE implementing. Runs STEP 0→5 (memory check, understand, blast radius, interview, design, spec) and writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify when the repository has speckit scaffolding, through this skill's own internalised equivalent when it does not or when called with --no-speckit. Then STOPS and waits for user approval before any code or plan is written. Hand off to /ktkit:feat-req-execute."
 ---
 
 # Feat-Req Specs Workflow
@@ -24,7 +24,7 @@ The executor (`/ktkit:feat-req-execute`) has its own FORMAT GATE and will refuse
 
 ## 🌐 LANGUAGE GATE (Vietnamese for clarifications & assumptions)
 
-Whenever this workflow — or any `speckit.*` skill it calls — produces **open questions, assumptions,
+Whenever this workflow — or any `speckit-*` skill it calls — produces **open questions, assumptions,
 ambiguity findings, cross-artifact issues or recommendations**:
 
 - **Write in Vietnamese**: every question, assumption label, rationale, severity description and
@@ -65,10 +65,16 @@ your own. Degrading silently ships something other than what was asked for, unde
 ⛔ /ktkit:feat-req-specs — stopped before STEP 0b
 
   ✗ .specify/ is not in this repository
-  ✗ ~/.claude/skills/speckit.specify is not installed
+  ✗ no speckit-specify under .claude/skills, here or in your home
 
   Pick one:
-    1. Run `specify init` at the repository root   → full speckit
+    1. Install both halves                         → full speckit
+         python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
+         specify init --here --force --non-interactive --integration claude
+         rm -rf .claude/skills/speckit-*
+       The skills go to ~/.claude/skills once per machine; `specify init` writes
+       the per-repository .specify/ scaffolding, and a copy of the skills this
+       repository does not need -- hence the rm.
     2. Re-run with --no-speckit                    → internalised path, the spec still comes out whole
 
   Nothing ran. No tokens spent on any step.
@@ -237,7 +243,7 @@ one this run is in — do not re-decide here, and do not fall back silently.
 
 | Mode | When | What runs |
 |---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit.specify`, per the guard below |
+| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit-specify`, per the guard below |
 | **internalised** | anything else | the equivalent defined in this file, below |
 
 The internalised mode is a supported way to run, not a degraded one: `.specify/` is scaffolding that
@@ -255,9 +261,9 @@ them. Whichever mode ran, **name it at the HARD STOP.**
 >
 > | Skill | Runs a script? | Clears the branch gate |
 > |---|---|---|
-> | `speckit.specify` | **No** — safe to call directly | n/a |
-> | `speckit.plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` | **the pin** (below) |
-> | `speckit.clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` | only `SPECIFY_FEATURE` |
+> | `speckit-specify` | **No** — safe to call directly | n/a |
+> | `speckit-plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` | **the pin** (below) |
+> | `speckit-clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` | only `SPECIFY_FEATURE` |
 >
 > ⛔ **An `export` does not reach any of them.** It lives in one Bash invocation; the shell that runs
 > the script is a different shell, opened by the skill one or more tool calls later, with a clean
@@ -295,7 +301,7 @@ No speckit call, no shell script, no branch gate. Same destination, same filenam
    becomes an Open Question in the spec.
 6. Report at the HARD STOP as `internalised` with the same counts speckit would have reported.
 
-Do **not** call `/speckit.clarify` or `/speckit.analyze` in this mode. STEP 5.5 has its own
+Do **not** call `/speckit-clarify` or `/speckit-analyze` in this mode. STEP 5.5 has its own
 internalised branch.
 
 > **Language**: the whole spec file is written in **Vietnamese**. Code snippets, file paths, symbol
@@ -367,7 +373,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" \
 ```
 
 This writes `feature_directory` into `.specify/feature.json` — spec-kit's own persisted pointer,
-the same key `/speckit.specify` writes — and reports `<old> -> <new>` so a pointer left behind by
+the same key `/speckit-specify` writes — and reports `<old> -> <new>` so a pointer left behind by
 an unrelated feature is visible rather than inherited. It keeps every sibling key, backs the
 previous file up to `feature.json.bak`, and is idempotent, so calling it once per run costs
 nothing. **`--dir` must already exist** — run it after the `mkdir -p`, never before.
@@ -394,7 +400,7 @@ SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
   the feature directory stays stable because it is pinned on disk.
 - Derive `<slug>` from `<base>`. A bare `YYYYMMDD-HHMMSS` with no trailing slug is **rejected** by the gate.
 
-#### Do NOT truncate `/speckit.specify` at step 6 *(mode `speckit` only)*
+#### Do NOT truncate `/speckit-specify` at step 6 *(mode `speckit` only)*
 
 Older versions of this workflow overrode the output path and stopped once `spec.md` was written, which silently dropped the skill's own quality loop. With the feature directory pinned there is no reason to stop early — let it run **through step 7**:
 
@@ -463,7 +469,7 @@ The spec file must cover:
 
 ---
 
-### STEP 5.5 — CLARIFY (call skill `/speckit.clarify`) — ⛔ **CONDITIONAL, usually SKIPPED**
+### STEP 5.5 — CLARIFY (call skill `/speckit-clarify`) — ⛔ **CONDITIONAL, usually SKIPPED**
 > Goal: reduce spec ambiguity before user reviews
 
 **Gate — run this step only when BOTH hold:**
@@ -473,16 +479,16 @@ risk >= MEDIUM            (same merged ladder as STEP 5.6)
 AND the T4 pool is EMPTY  (nothing from STEP 3 survived to the gate)
 ```
 
-**Why the second condition.** `/speckit.clarify` asks its questions **one at a time** — its own body
+**Why the second condition.** `/speckit-clarify` asks its questions **one at a time** — its own body
 says *"Do NOT output them all at once"*, up to 5 — so it can cost **five sequential round-trips**.
 It also has no view of what `/ktkit:escalation-ladder` already settled, so it re-asks resolved ground. When
 the T4 pool is non-empty, its questions would be a second gate on top of the one gate this workflow
 is allowed. ⛔ Skip it and say so at the HARD STOP: `"T4 pool non-empty — clarify skipped"`.
 
-⛔ **Never edit `speckit.clarify` itself** — it is an upstream skill and an update would erase the
+⛔ **Never edit `speckit-clarify` itself** — it is an upstream skill and an update would erase the
 change. The condition lives here, in the caller.
 
-When the gate does open, invoke `/speckit.clarify` with the spec file as context — or, in mode
+When the gate does open, invoke `/speckit-clarify` with the spec file as context — or, in mode
 `internalised`, run the same taxonomy scan yourself and write the answers back into `spec.md`. The
 categories below are the whole of it; none of them needs a shell script.
 
@@ -508,7 +514,7 @@ expected path, not a shortcut.
 ### STEP 5.6 — SPEC QUALITY CHECKLIST (risk-gated — often SKIPPED)
 > Goal: unit-test the requirements themselves before anyone plans against them
 
-> Source: item-writing rules + file semantics adapted from `speckit.checklist` (snapshot 2026-08-24). Internalised on purpose — that skill's `check-prerequisites.sh --json` demands a `plan.md`, and this workflow HARD-STOPs *before* planning.
+> Source: item-writing rules + file semantics adapted from `speckit-checklist` (snapshot 2026-08-24). Internalised on purpose — that skill's `check-prerequisites.sh --json` demands a `plan.md`, and this workflow HARD-STOPs *before* planning.
 
 **Gate — compute the risk first, then decide:**
 
@@ -524,10 +530,10 @@ LOW  <  LOW–MEDIUM  <  MEDIUM  <  MEDIUM–HIGH  <  HIGH  <  CRITICAL
 ```
 
 - `risk ≥ MEDIUM` → run this step.
-- Otherwise → **skip and say so** at the HARD STOP (`"risk = LOW, checklist skipped"`). The `/speckit.specify` step-7 loop already covered the baseline.
+- Otherwise → **skip and say so** at the HARD STOP (`"risk = LOW, checklist skipped"`). The `/speckit-specify` step-7 loop already covered the baseline.
 - No `.analyze.md` → single source, use the local value. A stale HIGH in the analyze file still forces the step: that is deliberate, the failure mode is one extra checklist, not a missed one.
 
-**Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/requirements.md` — the same file `/speckit.specify` step 7a created. Append under a **new `##` heading**, numbering CHK IDs independently from `CHK001`:
+**Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/requirements.md` — the same file `/speckit-specify` step 7a created. Append under a **new `##` heading**, numbering CHK IDs independently from `CHK001`:
 
 ```markdown
 ## Requirements Quality (STEP 5.6)
