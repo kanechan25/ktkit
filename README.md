@@ -22,7 +22,7 @@ Seventeen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:d
 | **Decide** | [`escalation-ladder`](#supporting-skills) | resolve an unknown from the repository before asking a human |
 | | [`confirm-with-me`](#supporting-skills) | gate one irreversible step on an explicit yes |
 | **Translate** | [`translate-file`](#supporting-skills) | a file into Vietnamese, without touching one identifier |
-| **Help** | [`help`](#help) | the index, and one page per skill |
+| **Help** | [`help`](#getting-help) | the index, and one page per skill |
 
 Three of them carry the heavy machinery. `chain` is the one you type: it routes a requirement into one of four lanes and runs the whole path, carrying a ledger between phases so nothing is settled twice. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work. `spec-recon` adds the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control state, and hands each measurement back as a document the reviewers can read.
 
@@ -32,11 +32,173 @@ Three of them carry the heavy machinery. `chain` is the one you type: it routes 
 - **A preflight before the first token.** Each skill probes exactly what it is about to use and stops, with the fix command, if something required is absent. A capability is proved with a real request, never with a tool's opinion of itself.
 - **speckit and superpowers are required, and a missing one stops the skill before it starts.** A `PreToolUse` hook checks them when a ktkit skill is invoked and refuses with the install command; the per-skill preflight then proves the same thing in-run. There is no flag that turns either into a warning. Nothing ever degrades on its own — delivering something else under the same name is worse than stopping.
 
+## The four lanes
+
+One road in, four ways down it. The lane is chosen **before anything is spent** — by a flag, else by the `type:` in the file's frontmatter, else by asking. It is never inferred from the prose, because the wrong lane produces a plausible artifact of the wrong kind and nobody notices until a phase has been paid for.
+
+```text
+                  what somebody actually said
+                              │
+                    /ktkit:raise-issue
+              → prompts/<slug>/<slug>-<ts>.md        type: BUG | NR | CR
+                              │
+   ┌──────────────┬───────────┴───────────┬──────────────┐
+  BUG            CR                      NR           TRIVIAL
+   │              │                       │          (--trivial only)
+/ktkit:rca   /ktkit:cr-delta      /ktkit:analyze-feat      │
+   │              │                       │                │
+   └──────┬───────┴───────────┬───────────┘                │
+   bug-fix-specs        feat-req-specs                     │
+   → specs/<b>/fix.md   → specs/<b>/spec.md                │
+          │                   │                            │
+     ── HARD STOP: you read it and approve ──              │
+          │                   │                            │
+   bug-fix-execute      feat-req-execute            test-driven change
+   red test → fix       plan → tasks → code          under a 50k ceiling
+          │                   │
+          │            /speckit-converge  ← the only step that reads the code
+          │              (at most two rounds)
+          └───────────┬───────┘
+              implemented/<name>.implt.md
+```
+
+| Lane | The request is | Analysis | Spec | Execute |
+| ---- | -------------- | -------- | ---- | ------- |
+| **BUG** | exists, does **not** behave as designed | `rca` | `fix.md` | red test first, then the fix |
+| **CR** | exists, behaves **as designed**, must behave differently | `cr-delta` | `spec.md` amended | plan → tasks → code |
+| **NR** | does not exist yet | `analyze-feat` | `spec.md` | plan → tasks → code |
+| **TRIVIAL** | small enough that a spec costs more than the change | — | — | test-driven, 50k ceiling |
+
+**BUG runs on superpowers, NR and CR run on spec-kit.** A bug is a disagreement with a specification that already exists; writing a second one to describe the disagreement adds a document that has to be kept true, while the failing test says the same thing and cannot drift. So the BUG lane never touches `specify`/`plan`/`tasks`/`converge` — it runs `systematic-debugging`, `test-driven-development` and `verification-before-completion`, and it writes `fix.md` rather than `spec.md`.
+
+**CR is not NR with different wording.** A new requirement starts from nothing. A change request starts from a spec somebody approved and tasks somebody may already have built, so the expensive question is *what did we already do that this undoes* — and `cr-delta` answers it from the run's task ledger rather than by re-reading the repository.
+
+**TRIVIAL is never inferred.** It is the one lane that produces no document anybody reads before the code changes, so its four entry conditions are a conjunction — one file, no contract change, no schema change, tests already there — and crossing its ceiling escalates to CR rather than pushing through.
+
+- **`raise-issue`** — the step before analysis, and the one people skip. It turns a chat message, a screenshot or half a GitHub issue into a single file stating the problem, the current state, the evidence and the unknowns — **and nothing else**. It is banned from naming a cause even when the cause looks obvious, because a cause written down here anchors every later phase to one line of enquiry before any evidence exists. Every fact carries a label saying where it came from and how far it can be trusted (`[CONFIRMED]` · `[VERIFIED path:line]` · `[UNVERIFIED]` · `[LOCATED …]` · `[ASSUMED: …]` with a falsifier · `[MISSING]`), so a bare identifier anywhere in the file is a bug. It ends by replaying the problem in ten lines and **blocking until you say that is the problem you are hitting** — no flag skips that gate, because a perfectly framed description of the wrong problem is the most expensive artifact in the pipeline. Missing data, by contrast, never blocks: the field is written `[MISSING]` and the run continues.
+- **`analyze-feat`** — reads a new requirement and works out what it touches, what it conflicts with, and what is genuinely unknown, *before* anyone writes a spec. It also classifies the request as **Spike**, **Bounded** or **Architectural** and says which out loud: a spike stops at the analysis and its output is an answer, not code anybody keeps. Unknowns go through the escalation ladder rather than into an interview: what the repository can answer is answered, and what reaches you comes as at most three rows, each with a default already applied and a recommendation.
+- **`rca`** — a bug report to a root cause, running `systematic-debugging` Phases 1 to 3. Each Why carries evidence; the last step states **one** hypothesis and proves it with a **failing test**. That test stays red when it hands off — making it green is the execute skill's job, after it has confirmed the test is red for the stated reason.
+- **`cr-delta`** — what a change request undoes. Reads the CR's old-behaviour and new-behaviour sections, the current spec and the task ledger, and reports which finished work is now wrong. It stops rather than deciding: on a contradiction, on an invalidation nothing can cite, and on a change reaching more than 60% of tasks, which is a new requirement wearing a change request's clothes.
+- **`feat-req-specs` / `bug-fix-specs`** — turn that analysis into a reviewable document with acceptance criteria, scenarios and a quality checklist that tests *the document*, not the running system. Both stop dead afterwards. No plan, no tasks, no code.
+- **`feat-req-execute` / `bug-fix-execute`** — carry out an approved one. Both refuse format-only edits; both read the repository's own test command instead of guessing it. `bug-fix-execute` runs the failing test red first and **stops after a third failed attempt** rather than trying a fourth, because three failures is an architectural signal, not bad luck. `feat-req-execute` detects a repository with its own execution runbook and hands the decision back to you rather than silently running generic speckit over it.
+
+⛔ **The four specs/execute skills are no longer entry points.** They are phases of a lane, and each one says so at the top of its own file. Running one directly still works and still writes the same files — what it does not get is the ledger, the budget gate at each boundary, the deviation record, or step 07. `rca` keeps its entry point on purpose: "find the root cause and stop" is a complete piece of work somebody wants on its own.
+
+Every one of them writes its output under the artifact root and tells you the path. Nothing is printed into the conversation twice.
+
+**Where speckit is installed, the pipeline pins the feature directory rather than exporting it.** Every script-backed speckit skill — `plan`, `tasks`, `clarify`, `checklist`, `analyze` — resolves its feature directory from `SPECIFY_FEATURE_DIRECTORY` first and `.specify/feature.json` second. The environment variable is the obvious lever and the one that cannot work here: it lives in one Bash invocation, and the shell that runs the script belongs to the skill, opened later, clean. So resolution falls through to the file, which is a single mutable pointer for the whole repository, written by whichever run touched it last. Left alone, `/speckit-plan` then resolves someone else's feature, copies the plan template over **that** feature's `plan.md`, and exits 0 — a wrong write reported as a success. `scripts/speckit_pin.py` writes the pointer at the feature in play, reports `<old> -> <new>` so an inherited one is visible, and skips cleanly in a repository with no `.specify/`. It also removes the branch-name gate from `setup-plan.sh` and `setup-tasks.sh`, which skip it entirely when the pin matches — no branch renamed, no git state touched. The preflight prints the current pin next to the scaffolding checks, before anything is spent.
+
+## Prerequisites
+
+Install these **before** ktkit. The plugin installs fine without them and then stops at its own preflight the first time a skill needs one — which is cheap, but knowing up front is cheaper.
+
+### Required
+
+| | Minimum | Check | Install |
+| - | ------- | ----- | ------- |
+| **Python** | 3.9 | `python3 --version` | stdlib only — no package is ever installed |
+| **git** | any | `git rev-parse --show-toplevel` | the artifact root hangs off the repository root |
+| **Claude Code** | a build with plugins + subagents | `/plugin` | ktkit dispatches twenty agents |
+| **spec-kit** | **1.0.6** | `specify --version` | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` |
+| **superpowers** | **6.3.0** | `/plugin` | `claude plugin install superpowers@claude-plugins-official` |
+
+Then, **once per machine**:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
+```
+
+Then, **in every repository** where you run ktkit:
+
+```bash
+specify init --here --force --non-interactive --integration claude
+specify preset add lean          # core command templates total 135 KB without it
+rm -rf .claude/skills/speckit-*  # the skills are already global; see below
+```
+
+Add `.specify/` to `.gitignore` — it is scaffolding pinned to a CLI version, not source.
+
+**Both are enforced, not suggested.** A `PreToolUse` hook checks them when a ktkit skill is invoked and refuses to start it with the install command; `/ktkit:help` is exempt, because a gate that hides the way to clear it leaves you nowhere to go. There is no flag that turns either check into a warning.
+
+**Why the extra step.** speckit's Claude integration writes its skills *into the project*: `ClaudeIntegration.config` hard-codes `folder: ".claude/"`, `skills_dest` returns `project_root / folder / "skills"`, and no flag changes it. Where `.claude/skills/` is checked in and shared across a team — 76 tracked files in one real case — `specify init` drops fifteen untracked directories in the middle of it, and the next `git add -A` commits speckit into everyone's repository.
+
+They do not need to be there. The skills reference `.specify/` relative to the repository root and resolve it at run time, so one copy under `~/.claude/skills/` serves every repository. `speckit_global.py` renders them with speckit's own `specify init` into a throwaway directory, copies the result out, and removes the pre-1.0 dotted layout if it is still around. Only `.specify/` scaffolding stays per-repository, and that one belongs there.
+
+**Why these two and nothing else.** spec-kit owns the truth artifacts and, from 1.0.0, `converge` — the only step that reads the delivered code and asks whether it satisfies the spec. superpowers owns execution discipline: `systematic-debugging` (no fix without a root cause), `test-driven-development`, `verification-before-completion` (no completion claim without fresh evidence). ktkit owns intake, routing, the escalation ladder, the ledger, budget and the loop. Three layers, one owner each — anything that blurs that boundary is not a dependency worth having.
+
+A machine whose spec-kit predates 1.0.0 has a `.specify/` that looks complete and a loop that cannot close. The preflight reports that as its own row, and since 5.0.0 it is a **FAIL** rather than a warning — step 07 of `chain` is the only step that opens the delivered code and asks whether it satisfies the spec, so without `converge` this is a pipeline, not a loop:
+
+```text
+FAIL  speckit converge   no speckit-converge or speckit.converge -- speckit predates 1.0.0 ...
+```
+
+Both skill layouts are accepted: `<repo>/.claude/skills/speckit-converge`, which is what a current `specify init` writes, and `~/.claude/skills/speckit.converge` from older releases.
+
+### Not required, and deliberately so
+
+| | Why not |
+| - | ------- |
+| `speckit-superpowers-bridge`, `superspec`, `superb` | 37 / 71 / 33 stars, one author each, months between pushes, against a spec-kit that releases roughly weekly. They also duplicate the ledger, manifest and cost log ktkit already has tests for. |
+| Community spec-kit extensions | Each one loads its command templates into context. The cap here is **three**, the default is **zero**. `bug` and `assess` are exceptions only because they ship bundled with spec-kit itself. |
+| Agent libraries installed into `~/.claude/agents/` | ktkit's agents declare `tools:` so a reviewer cannot write to what it is judging. An agent that does not declare them gets everything. |
+| Any MCP server | ktkit ships one and requires none of yours. |
+
+### Model routing is deliberate
+
+Each agent declares the model it runs on, and `skills/*/references/` documents that choice next to the agent's tools — `check_agent_table.py` fails when the two disagree. The five roles that make a terminal judgement (`adjudicator`, `failure`, `fix-safety`, `implication`, `arbiter-impl`) are **pinned to `opus`** rather than inheriting the session's model, because `inherit` hands a gate whatever model happens to be running and a gate that weakens is worth less than no gate. Roles whose output another role attacks stay on `sonnet` or `inherit`; `spec-recon-probe-code` runs on `haiku` because its contract forbids it from drawing a conclusion at all.
+
+`cost.jsonl` records the model beside the tokens, so a run's total can be compared against the next one's rather than read in isolation.
+
+### Verify the whole set
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
+  --groups runtime,write,read,vcs,artifacts,speckit --repo "$(git rev-parse --show-toplevel)"
+```
+
+Every row proves a capability with a real request rather than trusting a tool's opinion of itself. Exit 1 means at least one FAIL — fix those before spending a token.
+
+## Install
+
+### Option A — Plugin marketplace (recommended)
+
+```bash
+# one-time: register this repo as a marketplace
+claude plugin marketplace add kanechan25/ktkit
+
+# then install — plugin@marketplace, both named ktkit
+claude plugin install ktkit@ktkit
+```
+
+Or via the interactive UI:
+
+```text
+/plugin marketplace add kanechan25/ktkit
+/plugin install ktkit@ktkit
+```
+
+Installing as a plugin is what registers the twenty agents and the MCP server. Verify after install:
+
+```text
+/context          # Custom agents: ktkit:docs-review-* and ktkit:spec-recon-*
+                  # MCP tools:     mcp__plugin_ktkit_sequential-thinking__sequentialthinking
+```
+
+**What installing costs you, before you run anything.** Two of the thirteen skills use sequential-thinking for their reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
+
+### Option B — Manual (copy a skill)
+
+```bash
+cp -R skills/docs-review ~/.claude/skills/docs-review
+```
+
+Copying works for any skill here, but it skips three things the plugin provides: `agents/`, `.mcp.json`, and `${CLAUDE_PLUGIN_ROOT}`. Concretely — `docs-review` falls back to a single generic reviewer (it still runs and still says so: the report's first line reads `DEGRADED` and `## Review team` marks the rows, but the roles no longer see the documents independently); `bug-fix-specs` and `feat-req-specs` lose their reasoning tool; and every skill's preflight loses the shared `scripts/preflight.py` it resolves through the plugin root. Prefer Option A.
+
 ## chain
 
-One requirement, one command, and you read the document at the end. `chain` is the entry point for all four lanes: it routes, carries a ledger between phases so a question settled in analysis is never asked again, gates the budget at every boundary, and closes the loop at step 07.
+One requirement, one command, and you read the document at the end. `chain` is the door to the four lanes above: it routes, carries a ledger between phases so a question settled in analysis is never asked again, gates the budget at every boundary, and closes the loop at step 07.
 
-The lane skills below still run — as phases of this, which is where they get the ledger.
+The lane skills run inside it — that is where they get the ledger. Run one directly and it still works; it simply has no ledger to read.
 
 ```bash
 /ktkit:chain .claude/claude/prompts/2472-share-links/expiry-rules.md
@@ -119,62 +281,6 @@ Four files land beside the ledger: `cost.jsonl`/`cost.md`, `budget.jsonl`, `disp
 **The ledger lookup is now counted rather than claimed.** It had always been listed as one of five places the tokens are saved, with the arithmetic — 6,619 per spawn against one grep — but nothing counted the hits. `ledger.py --cache-metric` reports them as a **floor** on tokens not spent, labelled as one, plus the near-misses between 0.45 and 0.60 that are the only evidence for where `--threshold` belongs.
 
 **A row now records when it was settled and against which commit.** A conclusion is only as current as the tree it came from. That also makes `--ledger-scope dir` safe: it reads sibling runs' ledgers in the same directory and reports a match as `FOREIGN` with **exit 2** — a lead for a resolver, never a conclusion, printed with its age and its commit. Last week's answer may be stale, and a wrong `HIT` is worse than a `MISS`, because the chain then cites an answer to a question nobody asked now and stops looking.
-
-## The four lanes
-
-One road in, four ways down it. The lane is chosen **before anything is spent** — by a flag, else by the `type:` in the file's frontmatter, else by asking. It is never inferred from the prose, because the wrong lane produces a plausible artifact of the wrong kind and nobody notices until a phase has been paid for.
-
-```text
-                  what somebody actually said
-                              │
-                    /ktkit:raise-issue
-              → prompts/<slug>/<slug>-<ts>.md        type: BUG | NR | CR
-                              │
-   ┌──────────────┬───────────┴───────────┬──────────────┐
-  BUG            CR                      NR           TRIVIAL
-   │              │                       │          (--trivial only)
-/ktkit:rca   /ktkit:cr-delta      /ktkit:analyze-feat      │
-   │              │                       │                │
-   └──────┬───────┴───────────┬───────────┘                │
-   bug-fix-specs        feat-req-specs                     │
-   → specs/<b>/fix.md   → specs/<b>/spec.md                │
-          │                   │                            │
-     ── HARD STOP: you read it and approve ──              │
-          │                   │                            │
-   bug-fix-execute      feat-req-execute            test-driven change
-   red test → fix       plan → tasks → code          under a 50k ceiling
-          │                   │
-          │            /speckit-converge  ← the only step that reads the code
-          │              (at most two rounds)
-          └───────────┬───────┘
-              implemented/<name>.implt.md
-```
-
-| Lane | The request is | Analysis | Spec | Execute |
-| ---- | -------------- | -------- | ---- | ------- |
-| **BUG** | exists, does **not** behave as designed | `rca` | `fix.md` | red test first, then the fix |
-| **CR** | exists, behaves **as designed**, must behave differently | `cr-delta` | `spec.md` amended | plan → tasks → code |
-| **NR** | does not exist yet | `analyze-feat` | `spec.md` | plan → tasks → code |
-| **TRIVIAL** | small enough that a spec costs more than the change | — | — | test-driven, 50k ceiling |
-
-**BUG runs on superpowers, NR and CR run on spec-kit.** A bug is a disagreement with a specification that already exists; writing a second one to describe the disagreement adds a document that has to be kept true, while the failing test says the same thing and cannot drift. So the BUG lane never touches `specify`/`plan`/`tasks`/`converge` — it runs `systematic-debugging`, `test-driven-development` and `verification-before-completion`, and it writes `fix.md` rather than `spec.md`.
-
-**CR is not NR with different wording.** A new requirement starts from nothing. A change request starts from a spec somebody approved and tasks somebody may already have built, so the expensive question is *what did we already do that this undoes* — and `cr-delta` answers it from the run's task ledger rather than by re-reading the repository.
-
-**TRIVIAL is never inferred.** It is the one lane that produces no document anybody reads before the code changes, so its four entry conditions are a conjunction — one file, no contract change, no schema change, tests already there — and crossing its ceiling escalates to CR rather than pushing through.
-
-- **`raise-issue`** — the step before analysis, and the one people skip. It turns a chat message, a screenshot or half a GitHub issue into a single file stating the problem, the current state, the evidence and the unknowns — **and nothing else**. It is banned from naming a cause even when the cause looks obvious, because a cause written down here anchors every later phase to one line of enquiry before any evidence exists. Every fact carries a label saying where it came from and how far it can be trusted (`[CONFIRMED]` · `[VERIFIED path:line]` · `[UNVERIFIED]` · `[LOCATED …]` · `[ASSUMED: …]` with a falsifier · `[MISSING]`), so a bare identifier anywhere in the file is a bug. It ends by replaying the problem in ten lines and **blocking until you say that is the problem you are hitting** — no flag skips that gate, because a perfectly framed description of the wrong problem is the most expensive artifact in the pipeline. Missing data, by contrast, never blocks: the field is written `[MISSING]` and the run continues.
-- **`analyze-feat`** — reads a new requirement and works out what it touches, what it conflicts with, and what is genuinely unknown, *before* anyone writes a spec. It also classifies the request as **Spike**, **Bounded** or **Architectural** and says which out loud: a spike stops at the analysis and its output is an answer, not code anybody keeps. Unknowns go through the escalation ladder rather than into an interview: what the repository can answer is answered, and what reaches you comes as at most three rows, each with a default already applied and a recommendation.
-- **`rca`** — a bug report to a root cause, running `systematic-debugging` Phases 1 to 3. Each Why carries evidence; the last step states **one** hypothesis and proves it with a **failing test**. That test stays red when it hands off — making it green is the execute skill's job, after it has confirmed the test is red for the stated reason.
-- **`cr-delta`** — what a change request undoes. Reads the CR's old-behaviour and new-behaviour sections, the current spec and the task ledger, and reports which finished work is now wrong. It stops rather than deciding: on a contradiction, on an invalidation nothing can cite, and on a change reaching more than 60% of tasks, which is a new requirement wearing a change request's clothes.
-- **`feat-req-specs` / `bug-fix-specs`** — turn that analysis into a reviewable document with acceptance criteria, scenarios and a quality checklist that tests *the document*, not the running system. Both stop dead afterwards. No plan, no tasks, no code.
-- **`feat-req-execute` / `bug-fix-execute`** — carry out an approved one. Both refuse format-only edits; both read the repository's own test command instead of guessing it. `bug-fix-execute` runs the failing test red first and **stops after a third failed attempt** rather than trying a fourth, because three failures is an architectural signal, not bad luck. `feat-req-execute` detects a repository with its own execution runbook and hands the decision back to you rather than silently running generic speckit over it.
-
-⛔ **The four specs/execute skills are no longer entry points.** They are phases of a lane, and each one says so at the top of its own file. Running one directly still works and still writes the same files — what it does not get is the ledger, the budget gate at each boundary, the deviation record, or step 07. `rca` keeps its entry point on purpose: "find the root cause and stop" is a complete piece of work somebody wants on its own.
-
-Every one of them writes its output under the artifact root and tells you the path. Nothing is printed into the conversation twice.
-
-**Where speckit is installed, the pipeline pins the feature directory rather than exporting it.** Every script-backed speckit skill — `plan`, `tasks`, `clarify`, `checklist`, `analyze` — resolves its feature directory from `SPECIFY_FEATURE_DIRECTORY` first and `.specify/feature.json` second. The environment variable is the obvious lever and the one that cannot work here: it lives in one Bash invocation, and the shell that runs the script belongs to the skill, opened later, clean. So resolution falls through to the file, which is a single mutable pointer for the whole repository, written by whichever run touched it last. Left alone, `/speckit-plan` then resolves someone else's feature, copies the plan template over **that** feature's `plan.md`, and exits 0 — a wrong write reported as a success. `scripts/speckit_pin.py` writes the pointer at the feature in play, reports `<old> -> <new>` so an inherited one is visible, and skips cleanly in a repository with no `.specify/`. It also removes the branch-name gate from `setup-plan.sh` and `setup-tasks.sh`, which skip it entirely when the pin matches — no branch renamed, no git state touched. The preflight prints the current pin next to the scaffolding checks, before anything is spent.
 
 ## docs-review
 
@@ -551,7 +657,11 @@ Until 3.4.0 it was not like that. `--out` defaulted to the bare string `spec-rec
 
 `analyze-feat`, `rca`, both `*-specs` and both `*-execute` skills write their **reports and specs in Vietnamese**, keeping every identifier, path, snippet and technical term in English. That is deliberate: the reviewer reads Vietnamese, and prose in Vietnamese removes friction without costing any precision. The skill files themselves, and everything they write to a forge, are English.
 
-## help
+## Getting help
+
+Two kinds, answering two different questions.
+
+### `/ktkit:help` — what are the flags
 
 ```bash
 /ktkit:help                  # the index: every skill, one line each
@@ -566,9 +676,9 @@ Each page lives beside the skill it documents, at `skills/<name>/references/help
 
 **The pages are checked against the skills.** `skills/spec-recon/tests/test_help.py` compares every page with that skill's own `## Arguments` section in both directions: a flag a page documents that the skill does not accept fails the suite, and so does a flag the skill accepts that no page mentions. Help that is merely written drifts; help that is checked cannot drift without going red.
 
-## Runbooks
+### Runbooks — what do I actually type on a Tuesday
 
-`/ktkit:help <skill>` answers "what are the flags". A runbook answers the other question — "what do I actually type on a Tuesday" — and is written for the person driving rather than for the model: worked cases end to end, the gate transcript, how to read a verdict, what to do when a ceiling stops a run.
+A runbook is written for the person driving rather than for the model: worked cases end to end, the gate transcript, how to read a verdict, what to do when a ceiling stops a run.
 
 Two exist for the two heavy skills, `chain` and `spec-recon`, and they live in the repository you are working in rather than in this one:
 
@@ -578,112 +688,6 @@ Two exist for the two heavy skills, `chain` and `spec-recon`, and they live in t
 ```
 
 ⛔ They are **not** shipped with the plugin and this README does not link to them, because `.claude/` is gitignored in the repository they were written in — a README pointing at a file nobody who clones gets is a dead link that reads like documentation. Ask the skill for its own guidance instead: `/ktkit:help chain`, `/ktkit:help spec-recon`.
-
-## Prerequisites
-
-Install these **before** ktkit. The plugin installs fine without them and then stops at its own preflight the first time a skill needs one — which is cheap, but knowing up front is cheaper.
-
-### Required
-
-| | Minimum | Check | Install |
-| - | ------- | ----- | ------- |
-| **Python** | 3.9 | `python3 --version` | stdlib only — no package is ever installed |
-| **git** | any | `git rev-parse --show-toplevel` | the artifact root hangs off the repository root |
-| **Claude Code** | a build with plugins + subagents | `/plugin` | ktkit dispatches twenty agents |
-| **spec-kit** | **1.0.6** | `specify --version` | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` |
-| **superpowers** | **6.3.0** | `/plugin` | `claude plugin install superpowers@claude-plugins-official` |
-
-Then, **once per machine**:
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
-```
-
-Then, **in every repository** where you run ktkit:
-
-```bash
-specify init --here --force --non-interactive --integration claude
-specify preset add lean          # core command templates total 135 KB without it
-rm -rf .claude/skills/speckit-*  # the skills are already global; see below
-```
-
-Add `.specify/` to `.gitignore` — it is scaffolding pinned to a CLI version, not source.
-
-**Both are enforced, not suggested.** A `PreToolUse` hook checks them when a ktkit skill is invoked and refuses to start it with the install command; `/ktkit:help` is exempt, because a gate that hides the way to clear it leaves you nowhere to go. There is no flag that turns either check into a warning.
-
-**Why the extra step.** speckit's Claude integration writes its skills *into the project*: `ClaudeIntegration.config` hard-codes `folder: ".claude/"`, `skills_dest` returns `project_root / folder / "skills"`, and no flag changes it. Where `.claude/skills/` is checked in and shared across a team — 76 tracked files in one real case — `specify init` drops fifteen untracked directories in the middle of it, and the next `git add -A` commits speckit into everyone's repository.
-
-They do not need to be there. The skills reference `.specify/` relative to the repository root and resolve it at run time, so one copy under `~/.claude/skills/` serves every repository. `speckit_global.py` renders them with speckit's own `specify init` into a throwaway directory, copies the result out, and removes the pre-1.0 dotted layout if it is still around. Only `.specify/` scaffolding stays per-repository, and that one belongs there.
-
-**Why these two and nothing else.** spec-kit owns the truth artifacts and, from 1.0.0, `converge` — the only step that reads the delivered code and asks whether it satisfies the spec. superpowers owns execution discipline: `systematic-debugging` (no fix without a root cause), `test-driven-development`, `verification-before-completion` (no completion claim without fresh evidence). ktkit owns intake, routing, the escalation ladder, the ledger, budget and the loop. Three layers, one owner each — anything that blurs that boundary is not a dependency worth having.
-
-A machine whose spec-kit predates 1.0.0 has a `.specify/` that looks complete and a loop that cannot close. The preflight reports that as its own row, and since 5.0.0 it is a **FAIL** rather than a warning — step 07 of `chain` is the only step that opens the delivered code and asks whether it satisfies the spec, so without `converge` this is a pipeline, not a loop:
-
-```text
-FAIL  speckit converge   no speckit-converge or speckit.converge -- speckit predates 1.0.0 ...
-```
-
-Both skill layouts are accepted: `<repo>/.claude/skills/speckit-converge`, which is what a current `specify init` writes, and `~/.claude/skills/speckit.converge` from older releases.
-
-### Not required, and deliberately so
-
-| | Why not |
-| - | ------- |
-| `speckit-superpowers-bridge`, `superspec`, `superb` | 37 / 71 / 33 stars, one author each, months between pushes, against a spec-kit that releases roughly weekly. They also duplicate the ledger, manifest and cost log ktkit already has tests for. |
-| Community spec-kit extensions | Each one loads its command templates into context. The cap here is **three**, the default is **zero**. `bug` and `assess` are exceptions only because they ship bundled with spec-kit itself. |
-| Agent libraries installed into `~/.claude/agents/` | ktkit's agents declare `tools:` so a reviewer cannot write to what it is judging. An agent that does not declare them gets everything. |
-| Any MCP server | ktkit ships one and requires none of yours. |
-
-### Model routing is deliberate
-
-Each agent declares the model it runs on, and `skills/*/references/` documents that choice next to the agent's tools — `check_agent_table.py` fails when the two disagree. The five roles that make a terminal judgement (`adjudicator`, `failure`, `fix-safety`, `implication`, `arbiter-impl`) are **pinned to `opus`** rather than inheriting the session's model, because `inherit` hands a gate whatever model happens to be running and a gate that weakens is worth less than no gate. Roles whose output another role attacks stay on `sonnet` or `inherit`; `spec-recon-probe-code` runs on `haiku` because its contract forbids it from drawing a conclusion at all.
-
-`cost.jsonl` records the model beside the tokens, so a run's total can be compared against the next one's rather than read in isolation.
-
-### Verify the whole set
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
-  --groups runtime,write,read,vcs,artifacts,speckit --repo "$(git rev-parse --show-toplevel)"
-```
-
-Every row proves a capability with a real request rather than trusting a tool's opinion of itself. Exit 1 means at least one FAIL — fix those before spending a token.
-
-## Install
-
-### Option A — Plugin marketplace (recommended)
-
-```bash
-# one-time: register this repo as a marketplace
-claude plugin marketplace add kanechan25/ktkit
-
-# then install — plugin@marketplace, both named ktkit
-claude plugin install ktkit@ktkit
-```
-
-Or via the interactive UI:
-
-```text
-/plugin marketplace add kanechan25/ktkit
-/plugin install ktkit@ktkit
-```
-
-Installing as a plugin is what registers the twenty agents and the MCP server. Verify after install:
-
-```text
-/context          # Custom agents: ktkit:docs-review-* and ktkit:spec-recon-*
-                  # MCP tools:     mcp__plugin_ktkit_sequential-thinking__sequentialthinking
-```
-
-**What installing costs you, before you run anything.** Two of the thirteen skills use sequential-thinking for their reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
-
-### Option B — Manual (copy a skill)
-
-```bash
-cp -R skills/docs-review ~/.claude/skills/docs-review
-```
-
-Copying works for any skill here, but it skips three things the plugin provides: `agents/`, `.mcp.json`, and `${CLAUDE_PLUGIN_ROOT}`. Concretely — `docs-review` falls back to a single generic reviewer (it still runs and still says so: the report's first line reads `DEGRADED` and `## Review team` marks the rows, but the roles no longer see the documents independently); `bug-fix-specs` and `feat-req-specs` lose their reasoning tool; and every skill's preflight loses the shared `scripts/preflight.py` it resolves through the plugin root. Prefer Option A.
 
 ## Update
 
