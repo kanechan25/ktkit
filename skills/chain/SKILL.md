@@ -106,8 +106,29 @@ Cheap, and before anything is spent. In order:
    | | Source | How |
    | - | ------ | -- |
    | 1 | **`--bug` / `--feature`** | Settled. Stop here, and do not read the input to second-guess it. |
-   | 2 | **Frontmatter of the input file** | `type: bug` / `type: bug-analysis` / `type: feature`. Anything else in `type:` is not a vote — fall through. |
+   | 2 | **Frontmatter of the input file** | `type:` matched against the vocabulary below, case-insensitively. Anything else is not a vote — fall through. |
    | 3 | **⛔ Ask.** | State which arm you would pick and the one phrase that made you pick it, so a wrong guess is visible in one line. |
+
+   **The `type:` vocabulary.** Matched case-insensitively, because these values are written by
+   different hands: `/ktkit:raise-issue` emits an uppercase code, `/ktkit:rca` emits a slug, and a
+   person writing frontmatter by hand writes neither.
+
+   | `type:` | Arm | Written by |
+   | ------- | --- | ---------- |
+   | `BUG` | bug | `/ktkit:raise-issue` |
+   | `bug-analysis` | bug | `/ktkit:rca` |
+   | `bug` | bug | a person, by hand |
+   | `NR` | feature | `/ktkit:raise-issue` |
+   | `CR` | feature | `/ktkit:raise-issue` |
+   | `feature` | feature | a person, by hand |
+
+   `CR` is the feature arm, not the bug arm. `form-cr.md` defines a CR as something that **already
+   exists and works as designed** but needs different behaviour — nothing is wrong, so there is no
+   root cause to find, and `/ktkit:rca` would spend a whole phase looking for one.
+
+   ⛔ **A value not in that table is not a near miss to be interpreted.** It falls to row 3 and is
+   asked about. `skills/chain/tests/test_route_vocab.py` keeps the table and the forms in step, in
+   both directions.
 
    ⛔ **There is no fourth row.** The chain never routes itself from the prose alone. Getting this
    wrong is expensive in a way the later gates cannot catch: the wrong arm produces a plausible
