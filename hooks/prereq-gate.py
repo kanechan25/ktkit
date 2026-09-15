@@ -54,7 +54,12 @@ SPECKIT_PROBE = ("speckit-specify", "speckit.specify")
 
 # The skills that run `preflight.py --groups ...speckit...`. Anything else does
 # not touch speckit and must not be blocked for its absence.
-SPECKIT_SKILLS = ("chain", "feat-req-specs", "feat-req-execute", "bug-fix-specs")
+#
+# `bug-fix-specs` was on this list until the BUG lane moved onto superpowers. It
+# came off because it stopped preflighting the group -- not because anybody
+# remembered this line: P8 of test_prereq_gate.py compares the two and failed
+# until it was edited.
+SPECKIT_SKILLS = ("chain", "feat-req-specs", "feat-req-execute")
 
 # `help` prints the install commands. Gating it would hide the way out.
 EXEMPT = ("help",)

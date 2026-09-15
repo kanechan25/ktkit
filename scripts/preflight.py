@@ -25,7 +25,8 @@ Two lessons are wired into this file and must not be undone:
     exist". It is reported as SKIP, never as FAIL.
 
 Usage
-    preflight.py --groups runtime,write,read,vcs,forge,artifacts,speckit,mcp [options]
+    preflight.py --groups runtime,write,read,vcs,forge,artifacts,speckit,superpowers,mcp
+                 [options]
 
     --out <dir>        directory the run will write to (group: write)
     --inputs <p> [..]  paths the run will read (group: read)
@@ -58,7 +59,7 @@ import subprocess
 import sys
 
 GROUPS = ("runtime", "write", "read", "vcs", "forge",
-          "artifacts", "speckit", "mcp")
+          "artifacts", "speckit", "superpowers", "mcp")
 
 # Every skill in this plugin writes its artifacts here, and nowhere else. The
 # path is a rule, not a discovery: a repository that does not have the directory
@@ -97,6 +98,20 @@ SPECKIT_SKILL_NAMES = ("speckit-specify", "speckit.specify")
 # cannot close. Probing for the skill proves the capability; parsing
 # `specify --version` would only prove what the CLI says about itself.
 SPECKIT_CONVERGE_NAMES = ("speckit-converge", "speckit.converge")
+
+# The skills of superpowers that ktkit actually invokes. The BUG lane depends on
+# the first three outright -- it has no spec to fall back on, so a missing
+# `systematic-debugging` leaves it with nothing but improvisation -- and
+# `analyze-feat` takes its three-path classification from the fourth.
+#
+# Probed by name rather than by version string, for the same reason `converge`
+# is: a version tells you what the CLI says about itself, a directory tells you
+# what is there to call.
+SUPERPOWERS_SKILLS = ("systematic-debugging", "test-driven-development",
+                      "verification-before-completion", "brainstorming")
+
+INSTALLED_PLUGINS = os.path.expanduser(
+    os.path.join("~", ".claude", "plugins", "installed_plugins.json"))
 
 
 def speckit_skill(repo, names):
@@ -452,6 +467,53 @@ def check_speckit_pin(scaffold):
                   "script-backed speckit call" % value.strip())
 
 
+def superpowers_root():
+    """Where superpowers is installed, or None.
+
+    Read from the installed-plugin record rather than by globbing the cache: a
+    cache directory survives an uninstall, and this must answer "is it installed"
+    rather than "was it ever". The record carries the install path, so the
+    version in the directory name never has to be guessed.
+    """
+    try:
+        with open(INSTALLED_PLUGINS, "r") as fh:
+            data = jsonlib.load(fh)
+    except (OSError, ValueError):
+        return None
+    for key, entries in (data.get("plugins") or {}).items():
+        if key.split("@")[0] != "superpowers":
+            continue
+        for entry in entries or []:
+            path = entry.get("installPath")
+            if path and os.path.isdir(path):
+                return path
+    return None
+
+
+def check_superpowers():
+    """The execution discipline the BUG lane runs on.
+
+    This is a FAIL and never a WARN. The BUG lane stopped writing a spec when it
+    moved to this engine, so a missing `systematic-debugging` does not leave a
+    degraded path -- it leaves improvisation under the same name, which is the
+    one thing every other group here exists to prevent.
+    """
+    root = superpowers_root()
+    if root is None:
+        return [Result("FAIL", "superpowers",
+                       "not installed -> claude plugin install "
+                       "superpowers@claude-plugins-official")]
+    absent = [n for n in SUPERPOWERS_SKILLS
+              if not os.path.isdir(os.path.join(root, "skills", n))]
+    if absent:
+        return [Result("FAIL", "superpowers skills",
+                       "%s missing from %s -> claude plugin update "
+                       "superpowers@claude-plugins-official"
+                       % (", ".join(absent), root))]
+    return [Result("PASS", "superpowers",
+                   "%d skills under %s" % (len(SUPERPOWERS_SKILLS), root))]
+
+
 def check_mcp():
     """The transport for the MCP server this plugin ships in `.mcp.json`.
 
@@ -479,6 +541,7 @@ CHECKS = {
     "forge": lambda a: check_forge(a.repo),
     "artifacts": lambda a: check_artifacts(a.repo),
     "speckit": lambda a: check_speckit(a.repo),
+    "superpowers": lambda a: check_superpowers(),
     "mcp": lambda a: check_mcp(),
 }
 

@@ -439,9 +439,22 @@ The spec file must cover:
 **Gate — run this step only when BOTH hold:**
 
 ```
-risk >= MEDIUM            (same merged ladder as STEP 5.6)
-AND the T4 pool is EMPTY  (nothing from STEP 3 survived to the gate)
+( path == Architectural  OR  risk >= MEDIUM )   (merged ladder, same as STEP 5.6)
+AND the T4 pool is EMPTY                        (nothing from STEP 3 survived to the gate)
 ```
+
+**`path`** is the three-path verdict `/ktkit:analyze-feat` Phase 0d wrote into §0 of the input
+`.analyze.md` — Spike, Bounded or Architectural. An Architectural change earns this step whatever
+the blast radius says, because the radius measures what breaks today and the path measures what
+somebody else will build against tomorrow. A **Bounded** change below MEDIUM does not: it alters one
+flow that already exists, and the clarify loop would be five round-trips to confirm what the flow
+already answers.
+
+⛔ **A Spike never reaches this file at all** — `analyze-feat` stops at the analysis, so there is no
+spec to clarify. Reaching STEP 5.5 on a Spike means the path was wrong; raise it and say so.
+
+⛔ No `.analyze.md`, or no §0 in it ⇒ treat the path as **Architectural**. The ratchet only turns one
+way, and an unknown path is not evidence of a small one.
 
 **Why the second condition.** `/speckit-clarify` asks its questions **one at a time** — its own body
 says *"Do NOT output them all at once"*, up to 5 — so it can cost **five sequential round-trips**.
@@ -492,8 +505,11 @@ LOW  <  LOW–MEDIUM  <  MEDIUM  <  MEDIUM–HIGH  <  HIGH  <  CRITICAL
 └────── skip this step ───────┘  └───────────── run it ─────────────┘
 ```
 
+- `path == Architectural` → run this step, **whatever the risk says**. An interface other people
+  will depend on is exactly the thing a stale blast radius cannot see.
 - `risk ≥ MEDIUM` → run this step.
-- Otherwise → **skip and say so** at the HARD STOP (`"risk = LOW, checklist skipped"`). The `/speckit-specify` step-7 loop already covered the baseline.
+- Otherwise → **skip and say so** at the HARD STOP (`"path = Bounded, risk = LOW, checklist skipped"`). The `/speckit-specify` step-7 loop already covered the baseline.
+- No `.analyze.md`, or no §0 path in it → treat the path as **Architectural** and run it.
 - No `.analyze.md` → single source, use the local value. A stale HIGH in the analyze file still forces the step: that is deliberate, the failure mode is one extra checklist, not a missed one.
 
 **Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/requirements.md` — the same file `/speckit-specify` step 7a created. Append under a **new `##` heading**, numbering CHK IDs independently from `CHK001`:

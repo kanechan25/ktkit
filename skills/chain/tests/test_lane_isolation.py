@@ -16,6 +16,8 @@ Prose cannot enforce a boundary. This can:
       declared below, by name and with a reason
   L3  every declared exception is still an exception. A file that has been
       cleaned up must be removed from the list, and this fails until it is.
+      The list is empty now; the check stays, because the next exception will
+      be added by somebody who means to remove it later.
   L4  the CR and NR lanes are NOT constrained -- they are the lanes speckit is
       for, and a check that silently covered them would be enforcing something
       nobody decided
@@ -43,14 +45,13 @@ LANES = os.path.join(ROOT, "skills", "chain", "references", "lanes.md")
 SDD_STEPS = ("specify", "plan", "tasks", "analyze", "converge")
 
 # Skills the BUG lane dispatches that have NOT been brought in line with the
-# contract yet, each with the reason it is still here. The owner has said rca
-# and bug-fix-specs will move to superpowers separately; until then the gap is
-# named here rather than passed over.
-DECLARED = {
-    "skills/bug-fix-specs/SKILL.md":
-        "still carries a `speckit` mode from before the lanes existed; "
-        "scheduled to move to the superpowers path with /ktkit:rca",
-}
+# contract, each with the reason it is still here.
+#
+# Empty, and that is the finished state. `bug-fix-specs` was the one entry: it
+# carried a `speckit` mode from before the lanes existed, and C1.5 removed it.
+# L3 below is what forced the removal to be noticed -- an exception that stops
+# being needed fails the suite until it is deleted.
+DECLARED = {}
 
 failures = []
 
@@ -163,8 +164,9 @@ def test_l3_every_declared_exception_is_still_needed():
     check("L3 and every one of them still invokes an SDD step -- "
           "remove it from DECLARED once it does not",
           not stale, stale)
-    check("L3 lanes.md admits the gap rather than hiding it",
-          "Not yet true of" in read(LANES), "")
+    check("L3 an empty list means lanes.md claims no gap either",
+          bool(DECLARED) == ("Not yet true of" in read(LANES)),
+          sorted(DECLARED))
 
 
 def test_l4_the_cr_and_nr_lanes_are_left_alone():

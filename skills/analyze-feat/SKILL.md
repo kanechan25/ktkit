@@ -83,6 +83,32 @@ Re-deciding a logged question silently overwrites a decision somebody made on pu
 
 No log, or no matching entry → proceed.
 
+### 0d — Classify the path, and say which one out loud
+
+> Source: three-path classification adapted from `superpowers:brainstorming` (snapshot 2026-09-15).
+> Internalised on purpose — that skill also carries an interview that asks one question at a time
+> and a hard gate of its own, and both collide with `/ktkit:escalation-ladder`, which resolves first,
+> opens exactly one gate, and treats silence as accepting the default. The classification is the
+> half worth having.
+
+Every feature request is one of three, and the answer decides what the rest of the pipeline costs:
+
+| Path | What it is | What follows |
+| ---- | ---------- | ------------ |
+| **Spike** | a feasibility question — "can we", "is it possible", "how would we". The output is an **answer**, not code anybody keeps | ⛔ **Stop at the analysis.** No `/ktkit:feat-req-specs`, no `spec.md`. Anything built to answer the question is labelled throwaway, in the report, at the moment it is written |
+| **Bounded** | a change to a flow that **already exists in this repository** — a flag, one endpoint, one rule | `/ktkit:feat-req-specs` runs, but STEP 5.5 (clarify) and STEP 5.6 (checklist) stay **off** while risk is below MEDIUM |
+| **Architectural** | a new subsystem, a change to how components fit together, or a change to an interface somebody else depends on | the full path: STEP 5.5 **on**, STEP 5.6 **on regardless of risk** |
+
+⛔ **Bounded measures the repository, not your familiarity with the kind of app.** A flow that does
+not exist here yet is not bounded, however ordinary it sounds.
+
+⛔ **The ratchet turns one way.** Torn between two ⇒ take the heavier. Complexity surfacing mid-run ⇒
+**raise the path and say so**. It never goes down — reaching for the lighter label to skip work is
+itself the doubt that disqualifies it.
+
+Write the verdict, in one line with the reason, into report §0 and into `steps/01-analyze.md` when
+running under `/ktkit:chain`.
+
 ---
 
 ## Phase 1: Resolve Requirements (⛔ do not ask yet)
@@ -398,6 +424,15 @@ Write EXACTLY this structure. Omit a section only when it genuinely has no conte
 > **Suggested next skill**: `/ktkit:feat-req-specs` | `/ktkit:bug-fix-specs` | `/feature-dev`
 
 ---
+
+## 0. Path
+
+**Path**: <Spike | Bounded | Architectural>
+**Because**: <one sentence — for Bounded, name the existing flow in this repository>
+**Raised from**: <only if the ratchet turned mid-run: the earlier path and what raised it>
+
+<For Spike: the answer, and the explicit statement that anything built to reach it is throwaway.
+A spike stops here — no spec follows.>
 
 ## 1. What This Feature Does
 [3–5 sentences. Plain language. What user problem does it solve? What does the user experience before vs after? Why does this feature exist now?]

@@ -65,8 +65,9 @@ the next TRIVIAL estimate better than this one.
 
 ## BUG does not touch SDD
 
-The BUG lane runs `/ktkit:rca`, then `superpowers:systematic-debugging`, then a failing test, then
-the fix, then `superpowers:verification-before-completion`. It does **not** run `speckit-specify`,
+The BUG lane runs `/ktkit:rca` on `superpowers:systematic-debugging`, then a failing test
+through `superpowers:test-driven-development`, then the fix, then
+`superpowers:verification-before-completion`. It does **not** run `speckit-specify`,
 `speckit-plan`, `speckit-tasks`, `speckit-analyze` or `speckit-converge`.
 
 The reason is not economy. A bug is a disagreement between the code and a specification that already
@@ -76,11 +77,3 @@ should this do"; a bug has already answered that, and the open question is "why 
 
 ⛔ The single exception: an investigation that proves the code matches the spec and the **spec** is
 what is wrong. That is a CR, and it is re-routed as one — see above.
-
-### Not yet true of `/ktkit:bug-fix-specs`
-
-`skills/bug-fix-specs/SKILL.md` still carries a `speckit` mode that calls `/speckit-specify`, from
-before the lanes existed. The lane contract above is what the chain promises; that skill has not
-been brought in line with it yet, and `skills/chain/tests/test_lane_isolation.py` names it as a
-declared exception rather than passing over it in silence. When it is fixed, that test fails until
-the exception is removed — which is the point of listing it.

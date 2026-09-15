@@ -61,12 +61,19 @@ Artifacts stay exactly where the skills already put them. The chain adds only a 
     resolved.md                                    the ledger — see below
     steps/00-route.md   01-analyze.md   02-clarify.md
           03-spec.md    04-plan.md      05-implement.md   06-syncback.md
+                        ^^^^^^^^^ CR · NR only — the BUG lane has no plan phase
 
 .claude/claude/analyze/<rel>/<base>.analyze.md              A
-.claude/claude/specs/<rel>/<base>/spec.md                   B
-.claude/claude/specs/<rel>/<base>/plan.md                   C
+.claude/claude/specs/<rel>/<base>/spec.md                   B   CR · NR
+.claude/claude/specs/<rel>/<base>/fix.md                    B   BUG
+.claude/claude/specs/<rel>/<base>/plan.md                   C   CR · NR only
 .claude/claude/implemented/<rel>/<base>.implt.md            D  (only with --execute)
 ```
+
+⛔ **The BUG lane writes `fix.md`, never `spec.md`, and has no phase C.** A specification says what a
+system should do; a bug is a disagreement with one that already exists, and writing a second thinner
+one beside it leaves the next reader unable to tell which is authoritative. There is no plan phase
+either: the plan for a bug is the failing test.
 
 `<rel>` and `<base>` mirror the input's sub-path under `prompts/`, exactly as `/ktkit:analyze-feat`
 resolves them. Do not re-slugify. The artifact root `.claude/claude/` is a rule of this plugin:

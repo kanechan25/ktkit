@@ -248,6 +248,44 @@ def test_speckit_skills_are_found_under_either_layout():
             os.environ["HOME"] = old_home
 
 
+def test_superpowers_group_fails_loudly_when_absent():
+    """The BUG lane has no spec to fall back on, so this is FAIL and never WARN.
+
+    A missing `systematic-debugging` does not leave a lesser version of
+    `/ktkit:rca` -- it leaves improvisation under the same name, which is the one
+    thing every other group in this file exists to prevent.
+    """
+    empty = tempfile.mkdtemp()
+    os.makedirs(os.path.join(empty, ".claude", "plugins"))
+    io.open(os.path.join(empty, ".claude", "plugins",
+                         "installed_plugins.json"), "w",
+            encoding="utf-8").write('{"plugins": {}}')
+    rc, out, _ = run(["--groups", "superpowers"], env={"HOME": empty})
+    check("a missing superpowers exits 1", rc == 1, "rc=%d\n%s" % (rc, out))
+    check("it is FAIL, not WARN", "FAIL" in out and "WARN" not in out, out)
+    check("and the fix text is the install command",
+          "claude plugin install superpowers@claude-plugins-official" in out, out)
+
+    # Installed, but without the skills the lane calls: a different failure, and
+    # the fix is an update rather than an install.
+    half = tempfile.mkdtemp()
+    os.makedirs(os.path.join(half, ".claude", "plugins"))
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "skills", "systematic-debugging"))
+    io.open(os.path.join(half, ".claude", "plugins",
+                         "installed_plugins.json"), "w",
+            encoding="utf-8").write(
+        '{"plugins": {"superpowers@claude-plugins-official": '
+        '[{"installPath": "%s"}]}}' % root)
+    rc, out, _ = run(["--groups", "superpowers"], env={"HOME": half})
+    check("an incomplete superpowers exits 1 too", rc == 1,
+          "rc=%d\n%s" % (rc, out))
+    check("it names the skills that are absent",
+          "test-driven-development" in out, out)
+    check("and tells you to update, not to install",
+          "claude plugin update" in out, out)
+
+
 def test_mcp_group_never_tells_the_user_to_install_the_server():
     """The plugin ships the server, so the fix is never "go install it".
 

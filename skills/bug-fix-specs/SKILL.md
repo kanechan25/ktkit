@@ -1,6 +1,6 @@
 ---
 name: bug-fix-specs
-description: "Use when the user submits a bug report and wants to review specs BEFORE fixing. Runs STEP 0→4 (memory check, explore, reproduce, blast radius, root cause), then writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify today, through this skill's own internalised equivalent once the BUG lane moves off speckit. STOPS and waits for user approval before any code changes. Hand off to /ktkit:bug-fix-execute."
+description: "Use when a bug has been through /ktkit:rca and the fix plan needs reviewing BEFORE any code changes. Reads the .analyze.md that skill wrote — it does not investigate again — and writes fix.md under .claude/claude/specs/<rel-dir>/<base>/, with a quality checklist it grades itself against. No speckit: the BUG lane runs on superpowers:systematic-debugging, and a bug is a disagreement with a specification that already exists rather than a reason to write another. STOPS and waits for user approval. Hand off to /ktkit:bug-fix-execute."
 ---
 
 # Bug-Fix Specs Workflow
@@ -23,7 +23,7 @@ The executor (`/ktkit:bug-fix-execute`) has its own FORMAT GATE and will refuse 
 
 ## 🌐 LANGUAGE GATE (Vietnamese for clarifications & assumptions)
 
-Whenever this workflow — or any `speckit-*` skill it calls — produces **open questions,
+Whenever this workflow produces **open questions,
 assumptions, ambiguity findings or recommendations**:
 
 - **Write in Vietnamese**: every question, assumption label, rationale, severity description and
@@ -32,7 +32,7 @@ assumptions, ambiguity findings or recommendations**:
   messages, stack traces, code snippets, and technical terms with no settled translation
   (e.g. "race condition", "blast radius", "off-by-one", "null deref").
 - Applies **in reasoning as well as in the final output** shown to the user.
-- Spec file content (`spec.md`) follows the template it came from — never translate headers or
+- Fix plan content (`fix.md`) follows the template it came from — never translate headers or
   keywords.
 
 Why: the reviewer reads in Vietnamese, so prose in Vietnamese removes friction while the identifiers
@@ -43,53 +43,25 @@ stay exact.
 ## Pipeline (Sequential — Do Not Skip Steps)
 
 ### STEP 0a — PREFLIGHT (runs before anything is spent)
-> Goal: fail in one second rather than at STEP 4.5, after four steps have been paid for
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
-  --groups artifacts,speckit,mcp --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  --groups artifacts,mcp --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 
-There is no flag that drops `speckit` from `--groups`. spec-kit is a prerequisite of this plugin,
-not a mode: `hooks/prereq-gate.py` refuses to start this skill without it, and this group is the
-in-run proof of the same fact.
+⛔ **No `speckit` group, and that is the point.** The BUG lane does not touch spec-driven
+development: a bug is a disagreement with a specification that already exists, and writing a second
+one to describe the disagreement produces a document that has to be kept true, while the failing
+test from `/ktkit:rca` Step 3.9 says the same thing and cannot drift. The lane contract
+`/ktkit:chain` publishes says so; this skill is where it becomes true.
 
-⛔ **A missing half stops the run.** Never fall back to the internalised path on your own. Degrading
-silently ships something other than what was asked for, under the same name.
+The investigation itself runs on `superpowers:systematic-debugging`, and it has already happened —
+in `/ktkit:rca`, once. This skill does not repeat it, so it does not need that group either.
 
-**Exit 1 → STOP before STEP 0b.** Print what is missing and how to fix it, then wait:
+**Exit 1 → STOP.** Print what is missing and the command that fixes it. Nothing has been spent.
 
-```
-⛔ /ktkit:bug-fix-specs — stopped before STEP 0b
-
-  ✗ .specify/ is not in this repository
-  ✗ no speckit-specify under .claude/skills, here or in your home
-
-  spec-kit is a prerequisite of ktkit, not a mode. Install both halves:
-
-    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
-    specify init --here --force --non-interactive --integration claude
-    rm -rf .claude/skills/speckit-*
-
-  The skills go to ~/.claude/skills once per machine; `specify init` writes the
-  per-repository .specify/ scaffolding, and a copy of the skills this repository
-  does not need -- hence the rm.
-
-  Nothing ran. No tokens spent on any step.
-```
-
-**Exit 0 → continue**, and say which mode the run is in. Optional capabilities that are absent are
-named here too, with the exact consequence:
-
-```
-▶ /ktkit:bug-fix-specs — degraded run
-  ✗ mcp__memory absent → STEP 0b skipped, no recall from earlier sessions
-  ✓ artifact root · ✓ speckit scaffolding · ✓ sequential-thinking (shipped by ktkit)
-```
-
-The `artifacts` group creates `<repo-root>/.claude/claude/{prompts,analyze,specs,pipeline,implemented,compacts}`
-when the repository does not have them. That layout is a rule of this plugin, not a discovery: never
-probe for an alternative, never ask, and never write outside `<repo-root>/.claude/`.
+**Exit 0 → continue.** Optional capabilities that are absent are named with their exact
+consequence, never silently worked around.
 
 ---
 
@@ -108,133 +80,95 @@ mcp__memory__search_nodes({query: "<symptom keywords>"})
 
 ---
 
-### STEP 1 — UNDERSTAND (`GitNexus` + `Context7`)
-> Goal: locate the bug in the codebase with evidence
+### STEP 1 — READ THE ANALYSIS. DO NOT INVESTIGATE AGAIN.
+> Goal: start from what `/ktkit:rca` already established, and add nothing to it
 
-Run in parallel:
+⛔ **One bug, one investigator.** This skill used to re-run `gitnexus_query`, a reproduction, an
+impact query and a 5 Whys — every one of them a step `/ktkit:rca` had just finished. On the BUG
+lane the chain runs both, so the whole investigation was paid for twice and the second pass could
+disagree with the first with nothing to say which was right.
+
+**Input**: the `.analyze.md` written by `/ktkit:rca`, carrying `type: bug-analysis` and
+`status: rca-complete` in its frontmatter.
+
+Read from it, and take these as settled:
+
+| From the analysis | Used for |
+| ----------------- | -------- |
+| Root Cause + Location | what the fix has to change |
+| Evidence Chain (the 5 Whys) | why that is the cause, quoted rather than re-derived |
+| Blast Radius | the risk level that gates STEP 4.7 |
+| Hypothesis & Minimal Experiment | the failing test `/ktkit:bug-fix-execute` must see red first |
+| Defence in depth, when present | the layers STEP 6.2 of the execute skill will guard |
+
+⛔ **No analysis file ⇒ STOP.** Say exactly this and wait:
+
 ```
-gitnexus_query({query: "<symptom description>"})
-gitnexus_context({name: "<suspected function>"})
-git log -10 --oneline -- <suspected file>
+⛔ /ktkit:bug-fix-specs — stopped before STEP 1
+
+  No .analyze.md with `status: rca-complete` for this bug.
+
+  Run `/ktkit:rca <bug-report>` first. That skill owns the investigation:
+  it runs superpowers:systematic-debugging Phases 1-3 and leaves a failing
+  test this skill's fix is written against.
+
+  Nothing ran. No tokens spent on any step.
 ```
+
+Investigating here instead would be the same work under a different name, done with less of the
+method — which is worse than stopping.
+
+⛔ **Do not "verify" the root cause by re-deriving it.** If you believe the analysis is wrong, say
+which line of its Evidence Chain you disbelieve and stop; do not quietly produce a second answer.
 
 ---
 
-### STEP 2 — REPRODUCE
-> Goal: identify the exact condition that triggers the bug
+### STEP 2 — WRITE THE FIX PLAN
+> Goal: one reviewable document saying what will change and why, before any code moves
 
-- Identify the exact log line / state / network call that confirms wrong behavior
-- Write a failing test case if possible
-
-**Hard stop**: do not proceed without a reproduction case.
-
----
-
-### STEP 3 — BLAST RADIUS (`GitNexus`)
-> Goal: know what will break before touching anything
+**One way to write it, and the artifact is `fix.md`.**
 
 ```
-gitnexus_impact({target: "<symbol to modify>", direction: "upstream"})
+.claude/claude/specs/<rel-dir>/<base>/fix.md
+.claude/claude/specs/<rel-dir>/<base>/checklists/bugfix.md
 ```
 
-| Risk | Action |
-|---|---|
-| LOW / MEDIUM | Proceed |
-| **HIGH / CRITICAL** | **STOP — report to user, do not proceed without explicit approval** |
+⛔ **`fix.md`, not `spec.md`.** A specification says what a system should do; this document says what
+is wrong with one and what will change. Calling it a spec put a second, thinner specification beside
+the real one, and the next reader had no way to tell which was authoritative.
 
----
-
-### STEP 4 — ROOT CAUSE (`sequential-thinking`)
-> Goal: structured diagnosis, not guessing
-
-Use `mcp__plugin_ktkit_sequential-thinking__sequentialthinking` to reason through 5 Whys:
-
-1. **Symptom** — What is the observed wrong behavior?
-2. **Trigger** — What condition causes it to happen?
-3. **Gap** — What does the current logic fail to handle?
-4. **AgentRx class** — Logic error / Misinterpretation / System failure / Plan misalignment?
-5. **Root cause** — One clear sentence stating the actual cause
-
----
-
-### STEP 4.5 — WRITE SPEC
-> Goal: document the fix plan for user review before touching code
-
-**Two ways to write it. Both produce the same file at the same path.** STEP 0a already decided which
-one this run is in — do not re-decide here, and do not fall back silently.
-
-| Mode | When | What runs |
-|---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills | `/speckit-specify`, per the guard below |
-| **internalised** | anything else | the equivalent defined in this file, below |
-
-⚠️ **This table is on its way out.** The lane contract `/ktkit:chain` publishes says the BUG
-lane does not touch spec-driven development at all: a bug is a disagreement with a specification that already
-exists, and a second specification describing the disagreement is a document that has to be kept
-true while the failing test cannot drift. When this skill moves to the superpowers path, the
-`speckit` row goes and the internalised one becomes the only one. Until then, **name the mode that
-ran at the HARD STOP.**
-
-#### Mode `speckit` — the guard
-
-> **Does the skill you are about to call run a shell script?**
-> `.specify/scripts/bash/check-prerequisites.sh` enforces a branch-name pattern (`NNN-…` or
-> `YYYYMMDD-HHMMSS-…`) that ordinary branch conventions (`feat/…`, `bugfix/…`,
-> `<system>/feature/…`) do **not** match — so a script-backed skill aborts on line 1 even though
-> `.specify/` exists. Directory-exists alone is a **false green**.
->
-> | Skill | Runs a script? | Clears the branch gate |
-> |---|---|---|
-> | `speckit-specify` | **No** — safe to call directly | n/a |
-> | `speckit-plan` / `tasks` | Yes — `setup-plan.sh` / `setup-tasks.sh` | **the pin** (below) |
-> | `speckit-clarify` / `checklist` / `analyze` | Yes — `check-prerequisites.sh` | only `SPECIFY_FEATURE` |
->
-> ⛔ **An `export` does not reach any of them.** It lives in one Bash invocation; the shell that runs
-> the script is a different shell, opened by the skill one or more tool calls later, with a clean
-> environment. So `SPECIFY_FEATURE_DIRECTORY` is unset by the time the script reads it, and
-> resolution falls through to `.specify/feature.json` — one mutable pointer for the whole
-> repository, written by whichever run touched it last. **Pin that file instead** (next section):
-> it is the only channel that survives the gap between tool calls, and it makes `setup-plan.sh`
-> and `setup-tasks.sh` skip the branch gate outright, with nothing renamed and no git state touched.
->
-> `check-prerequisites.sh` has no such bypass and validates the branch every time. For those three
-> skills, prefer the internalised equivalent for that one call and say so.
-
-#### Mode `internalised` — write the spec directly
-
-No speckit call, no shell script, no branch gate. Same destination, same filenames, so
-`/ktkit:bug-fix-execute` and every later step read it without knowing which mode produced it:
-
-```
-.claude/claude/specs/<rel-dir>/<base>/spec.md
-.claude/claude/specs/<rel-dir>/<base>/checklists/requirements.md
-```
+*Migration*: `fix.md` absent but `spec.md` present in that same directory ⇒ read the `spec.md`, and
+⛔ **do not edit it and do not rename it.** Same rule the legacy-spec case already follows: an old
+file is left exactly as it is, and the new rule applies to new work.
 
 1. Resolve `<rel-dir>` and `<base>` by the priority order below, and run the collision check.
-2. `mkdir -p` the feature directory and its `checklists/`, then **pin it** — the pin section below
-   applies to this mode too, and says why.
-3. Write `spec.md` covering the sections listed at the end of this step.
-4. Write `checklists/requirements.md` yourself — the quality loop is the point of step 7, and it is
-   the only always-on gate in this workflow. Items test **the spec**, not the running system; the
-   rules for writing them are in STEP 4.7, which applies here verbatim.
-5. Grade the spec against that checklist and fix every failure you can fix. What you cannot fix
-   becomes an Open Question in the spec.
-6. Report at the HARD STOP as `internalised` with the same counts speckit would have reported.
+2. `mkdir -p` the feature directory and its `checklists/`.
+3. Write `fix.md` covering the sections listed at the end of this step. Root Cause, Evidence Chain
+   and Blast Radius are **quoted from the analysis**, not re-derived; cite the analysis path.
+4. Write `checklists/bugfix.md` yourself — the quality loop is the only always-on gate in this
+   workflow. Items test **this document**, not the running system; the rules for writing them are in
+   STEP 4.7, which applies here verbatim.
+5. Grade `fix.md` against that checklist and fix every failure you can fix. What you cannot fix
+   becomes an Open Question in the document.
 
-Do **not** call `/speckit-clarify` in this mode. STEP 4.6 has its own internalised branch.
+⛔ **No feature pin here.** `scripts/speckit_pin.py` exists so a script-backed speckit skill resolves
+the right directory. Nothing on this lane runs one — `/ktkit:bug-fix-execute` states outright that it
+needs no speckit — so pinning was a rite with nothing on the other end of it.
 
-> **Language**: the whole spec file is written in **Vietnamese**. Code snippets, file paths, symbol
+> **Language**: the whole document is written in **Vietnamese**. Code snippets, file paths, symbol
 > names and technical names (kebab-case, camelCase and so on) stay exactly as they are — only the
 > descriptive prose is Vietnamese.
 
-**ALWAYS write spec to a NEW file** under `.claude/claude/specs/`. NEVER modify the original bug report or analyze file provided by the user.
+**ALWAYS write to a NEW file** under `.claude/claude/specs/`. NEVER modify the original bug report or
+analyze file provided by the user.
 
 #### The `<base>` is a FOLDER, not a filename
 
-One bug = one folder. Everything it produces lives inside it, under fixed filenames — which is exactly the shape spec-kit calls a `FEATURE_DIR`, so speckit skills work natively with no shim and no copying:
+One bug = one folder. Everything it produces lives inside it, under fixed filenames, so every
+later step finds them by construction rather than by searching:
 
 ```
-.claude/claude/specs/<rel-dir>/<base>/spec.md          ← this step writes this
+.claude/claude/specs/<rel-dir>/<base>/fix.md           ← this step writes this
 .claude/claude/specs/<rel-dir>/<base>/checklists/…     ← quality checklists
 ```
 
@@ -253,10 +187,10 @@ Resolve `<rel-dir>` and `<base>` in this priority order:
 
 ```
 analyze  .claude/claude/analyze/2474-share-files/bug-share-link-expired.analyze.md
-→ spec   .claude/claude/specs/2474-share-files/bug-share-link-expired/spec.md
+→ fix    .claude/claude/specs/2474-share-files/bug-share-link-expired/fix.md
 
 analyze  .claude/claude/analyze/2410-keep-user-preference/no-render-department-data.analyze.md
-→ spec   .claude/claude/specs/2410-keep-user-preference/no-render-department-data/spec.md
+→ fix    .claude/claude/specs/2410-keep-user-preference/no-render-department-data/fix.md
 ```
 
 *(A `bug-` already present inside `<base>` stays — it is part of the name, not a prefix this step adds.)*
@@ -265,77 +199,23 @@ If the base file is a raw bug report under `.claude/claude/prompts/` (RCA step s
 
 **Keep `<base>` verbatim** — do NOT re-slugify, shorten, reorder words, or strip a layer suffix.
 
-**3. No base file** (bug reported directly in chat) → `<rel-dir>` empty, `<base>` = kebab-case symptom description → `.claude/claude/specs/<base>/spec.md`.
+**3. No base file** (bug reported directly in chat) → `<rel-dir>` empty, `<base>` = kebab-case symptom description → `.claude/claude/specs/<base>/fix.md`.
 
 #### Collision check — MANDATORY before writing
 
-The `feat-` / `bug-` prefix used to keep a feature and a bug of the same name apart (`feat-X.spec.md` vs `bug-X.spec.md`). Without it, both resolve to the **same folder** `<rel-dir>/<base>/`, so this step can silently overwrite a feature spec. This is a real shape in practice — sub-folders such as `<feature>/bugs/` already exist.
+The `feat-` / `bug-` prefix used to keep a feature and a bug of the same name apart (`feat-X.spec.md` vs `bug-X.spec.md`). Without it, both resolve to the **same folder** `<rel-dir>/<base>/`. The artifacts no longer collide -- a feature writes `spec.md`, a bug writes `fix.md` -- but `checklists/` is shared, so the check below still runs. This is a real shape in practice — sub-folders such as `<feature>/bugs/` already exist.
 
-Before `mkdir`/write, check whether `.claude/claude/specs/<rel-dir>/<base>/spec.md` already exists:
+Before `mkdir`/write, check whether `.claude/claude/specs/<rel-dir>/<base>/fix.md` already exists:
 
 - **Does not exist** → proceed.
 - **Exists** → STOP and ask, do not guess:
   ```
-  Spec đã tồn tại: .claude/claude/specs/<rel-dir>/<base>/spec.md
+  Fix plan đã tồn tại: .claude/claude/specs/<rel-dir>/<base>/fix.md
   (u) update — ghi đè spec cũ, giữ nguyên checklists/
   (n) new — đặt <base> khác, nhập tên
   (a) abort
   ```
-  Wait for the answer. On `u`, overwrite `spec.md` **only** — never delete or rewrite anything under `checklists/`.
-
-#### Pin the feature directory — ⛔ **MANDATORY, both modes, right after `mkdir -p`**
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" \
-  --dir ".claude/claude/specs/<rel-dir>/<base>" \
-  --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-```
-
-This writes `feature_directory` into `.specify/feature.json` — spec-kit's own persisted pointer,
-the same key `/speckit-specify` writes — and reports `<old> -> <new>`, so a pointer left behind by
-an unrelated feature is visible rather than inherited. It keeps every sibling key, backs the
-previous file up to `feature.json.bak`, and is idempotent. **`--dir` must already exist** — run it
-after the `mkdir -p`, never before.
-
-Run it in **mode `internalised` as well**: the spec is a spec-kit `FEATURE_DIR` whichever mode
-wrote it, `/ktkit:bug-fix-execute` may legitimately run its speckit branch over it, and a pin
-nobody wrote still points at whatever came before. No `.specify/` → `SKIP`, exit 0.
-
-Then, **on the same command line** as any speckit script you invoke yourself, in mode `speckit`:
-
-```bash
-SPECIFY_FEATURE_DIRECTORY=".claude/claude/specs/<rel-dir>/<base>" \
-SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
-  bash .specify/scripts/bash/<script>.sh --json     # slug MANDATORY — bare timestamp is rejected
-```
-
-- Inline, not `export`: the variables must be on the invocation that runs the script, because no
-  shell state crosses a tool-call boundary. The pin covers the calls made *by a skill*, where you
-  do not own the command line.
-- `SPECIFY_FEATURE` only clears the branch-name gate in `check-prerequisites.sh`. It does **not**
-  touch git and does **not** rename any branch. Its value is throwaway — the feature directory is
-  stable because it is pinned on disk.
-- Derive `<slug>` from `<base>`. A bare `YYYYMMDD-HHMMSS` with no trailing slug is **rejected** by the gate.
-
-#### Do NOT truncate `/speckit-specify` at step 6 *(mode `speckit` only)*
-
-Older versions of this workflow overrode the output path and stopped once `spec.md` was written, which silently dropped the skill's own quality loop. With the feature directory pinned there is no reason to stop early — let it run **through step 7**: **7a** writes `checklists/requirements.md`, **7b** grades the spec against it, **7c** fixes the failures.
-
-That loop is the only always-on quality gate in this workflow — STEP 4.7 below is risk-gated and often does not run. Report the checklist result at the HARD STOP.
-
-**Migration note**: older specs exist as flat `.claude/claude/specs/<rel-dir>/bug-<name>.spec.md`. Leave them exactly as they are — never move, rename, or "tidy" them. The folder layout applies to new specs only; both shapes coexist.
-
-The spec file must cover:
-- Root cause (from STEP 4)
-- Detailed flow showing where the bug occurs
-- Expected vs actual behavior
-- Proposed fix approach (with code snippets)
-- Files to be changed
-- Acceptance criteria
-- Open questions (if any)
-- Blast radius assessment
-
----
+  Wait for the answer. On `u`, overwrite `fix.md` **only** — never delete or rewrite anything under `checklists/`.
 
 ### STEP 4.6 — RESOLVE, THEN (MAYBE) ASK
 > Goal: tighten the spec by **resolving** what is unclear, not by interviewing the user
@@ -366,9 +246,9 @@ Route each one:
 | T3.5 — one reading better evidenced, cheap if wrong | spec §Assumptions, with falsifier |
 | T4 — undecidable **and** expensive if wrong | **pool for the HARD STOP gate** (max 3 total) |
 
-In mode `speckit` you may still invoke `/speckit-clarify` for its taxonomy, but its questions go
-through the ladder before any of them reaches the user. In mode `internalised` run the scan yourself
-and write the conclusions back into `spec.md`.
+Run the scan yourself and write the conclusions back into `fix.md`. ⛔ Do not call speckit
+for the taxonomy — that skill reads and writes a `spec.md` under a spec-kit `FEATURE_DIR`, and this
+lane produces neither.
 
 **No gate here.** Merge the surviving T4 rows into the HARD STOP pool and continue.
 
@@ -396,7 +276,7 @@ LOW  <  LOW–MEDIUM  <  MEDIUM  <  MEDIUM–HIGH  <  HIGH  <  CRITICAL
 - Otherwise → **skip and say so** at the HARD STOP (`"risk = LOW, checklist skipped"`). Most bugs are narrow; a 40-item checklist on a one-line fix is noise.
 - No `.analyze.md` → single source, use the local value. A stale HIGH still forces the step: deliberate, fail-safe.
 
-**Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/bugfix.md` — a **separate file** from the `requirements.md` that `/speckit-specify` step 7a created, so there is no format collision. New file → number from `CHK001`; file already exists → append, continuing from the last CHK ID. Never delete or rewrite existing content.
+**Write to** `.claude/claude/specs/<rel-dir>/<base>/checklists/bugfix.md`. New file → number from `CHK001`; file already exists → append, continuing from the last CHK ID. Never delete or rewrite existing content.
 
 **Write items that test the SPEC, not the running system.** The distinction matters more here than anywhere, because a bug spec is *about* behaviour:
 
@@ -454,14 +334,14 @@ This is the **only** gate in the workflow. It is answer-by-exception, not an int
 Then output the following and wait:
 
 ```
-## Spec Ready for Review
+## Fix Plan Ready for Review
 
 **Root Cause**: <one sentence>
 **Blast Radius**: <LOW/MEDIUM/HIGH/CRITICAL>
-**Spec written by**: <`speckit` | `internalised` — and why, in four words>
-**Feature dir**: `.claude/claude/specs/<rel-dir>/<base>/`
-**Spec written to**: `<…>/spec.md`
-**Spec quality checklist**: `<…>/checklists/requirements.md` — <N/16 passed, M fixed by step 7c>
+**Analysis read**: `<path to the .analyze.md this was written from>`
+**Fix dir**: `.claude/claude/specs/<rel-dir>/<base>/`
+**Fix plan written to**: `<…>/fix.md`
+**Quality checklist**: `<…>/checklists/bugfix.md` — <N passed, M fixed>
 **Clarifications**: <N questions answered / "no critical ambiguities detected">
 **Fix quality checklist (STEP 4.7)**: <"risk = <band>, N items, M spec defects fixed, K left open" | "risk = <band> < MEDIUM — skipped">
 

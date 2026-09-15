@@ -1,24 +1,25 @@
 <!-- group: Execute | order: 41 -->
-# ktkit:bug-fix-execute — an approved fix spec becomes the fix, verified and recorded
+# ktkit:bug-fix-execute — an approved fix plan becomes the fix, red test first
 
 Picks up where `/ktkit:bug-fix-specs` stopped. It does **not** re-investigate: the root cause is
-already settled and cited. Fix → verify → document.
+already settled and cited. Red test → fix → verify → document.
 
 ```
-/ktkit:bug-fix-execute [<spec-path>]
+/ktkit:bug-fix-execute [<fix-plan-path>]
 ```
 
-**Prerequisite:** a fix spec under `.claude/claude/specs/` that you have read and approved. The skill
-searches recursively — do not assume a flat folder or a `bug-` prefix.
+**Prerequisite:** an approved fix plan under `.claude/claude/specs/`. Resolved by `basename`, in
+order: `<base>/fix.md`, then `<base>/spec.md` from before the rename, then a legacy flat
+`*.spec.md`. The older two are read, never renamed.
 
 ## The cases
 
 ```bash
-# the ordinary case: the fix spec was just written and approved
+# the ordinary case: the fix plan was just written and approved
 /ktkit:bug-fix-execute
 
-# name the spec outright when several are in flight
-/ktkit:bug-fix-execute .claude/claude/specs/bugs/duplicate-refund.spec.md
+# name the plan outright when several are in flight
+/ktkit:bug-fix-execute .claude/claude/specs/bugs/duplicate-refund/fix.md
 ```
 
 ## What you get
@@ -34,7 +35,9 @@ The fix itself, plus:
 | Anti-pattern | Why |
 | ------------ | --- |
 | Run it before the root cause is cited | The fix then targets the symptom. |
-| Expect a re-investigation | That was `/ktkit:rca` and `/ktkit:bug-fix-specs`. |
+| Expect a re-investigation | That was `/ktkit:rca`, once. |
+| Change code before the test is red | STEP 4.95 refuses. A fix written first can only confirm itself. |
+| Try a fourth fix | Three failed attempts is an architectural signal, not bad luck. The skill stops and says so. |
 
 ## See also
 

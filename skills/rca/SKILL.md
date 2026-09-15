@@ -53,8 +53,13 @@ Perform a disciplined, evidence-based root cause analysis. **NO guessing. NO ass
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
-  --groups artifacts --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+  --groups artifacts,superpowers --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
+
+The `superpowers` group is not optional here. Steps 2, 3 and 3.9 are `systematic-debugging` — this
+skill supplies the recording format and the artifact path, not the investigation method — so a
+missing plugin does not leave a lesser version of this skill, it leaves improvisation under the same
+name. FAIL, never WARN.
 
 Creates `<repo-root>/.claude/claude/{prompts,analyze,specs,pipeline,implemented,compacts}` when the
 repository does not have them, so Step 6 has somewhere to write. That layout is a rule of this
@@ -74,9 +79,9 @@ Search the memory server for similar bugs previously solved in this codebase:
 
 ### Step 2: UNDERSTAND — Map the Symptom to Code
 
-Invoke `superpowers:systematic-debugging`. Run **Phase 1** (Root Cause Investigation) and **Phase 2** (Pattern Analysis) ONLY.
+Invoke `superpowers:systematic-debugging`. Run **Phase 1** (Root Cause Investigation), **Phase 2** (Pattern Analysis) and, at Step 3.9 below, **Phase 3** (Hypothesis and Testing).
 
-**SCOPE NOTE**: Do NOT follow Phase 4 (Implementation) — fixes are handled by `/ktkit:bug-fix-specs` + `/ktkit:bug-fix-execute`. Stop after Phase 2 and continue to Step 3.
+**SCOPE NOTE**: Do NOT follow Phase 4 (Implementation) — fixes are handled by `/ktkit:bug-fix-execute`. Phase 3 stops at a failing test, which is evidence, not a fix.
 
 Phase 1 covers: reproduce consistently, check recent git changes, trace data flow.
 Phase 2 covers: find working examples of similar code, compare working vs broken, list every difference.
@@ -101,6 +106,17 @@ SYMPTOM MAPPED TO:
 
 
 ### Step 3: THE 5 WHYS (Evidence Chain)
+
+The **method** for finding each Why is the backward trace that `superpowers:systematic-debugging` names in its supporting techniques — symptom → the code that produced it → who called that → back again, until the original trigger. Follow the technique that skill names; ⛔ do not hard-code a path into another plugin's directory, because a plugin's cache path is a version number, not a contract.
+
+The **record** is the Evidence Chain below, unchanged.
+
+Two conditional branches, both costing no model tokens:
+
+| When | Use | Why |
+| ---- | --- | --- |
+| the bug shows up in a test run and it is unclear which test causes it | the bisection script that `systematic-debugging` ships beside that technique | a bisection is cheaper than any amount of reasoning about test order |
+| the root cause is bad data passing through several layers | its defence-in-depth technique — ⛔ **as a recommendation written into the report, not as an edit** | this skill does not change code; per-layer validation belongs to `/ktkit:bug-fix-execute` |
 
 Apply the 5 Whys iteratively. For **each Why**, you MUST:
 1. State the question.
@@ -173,6 +189,17 @@ evidence, not patched in prose.
 of writing it. Record it as a T3.5 row with its falsifier and carry the falsifier into *Recommended
 Fix Approach* as a precondition. ⛔ A row whose default you cannot state is not ready to be asked:
 send it back to T1.
+
+### Step 3.9: HYPOTHESIS & MINIMAL EXPERIMENT
+
+Phase 3 of `superpowers:systematic-debugging`, and the last step before classification.
+
+1. State **exactly one** hypothesis: "X is the root cause because Y". More than one means Step 3 is not finished — go back rather than carrying two forward.
+2. Build the smallest experiment that proves it, and ⛔ **the experiment is a failing test, not a fix.** This is what keeps this skill's "no fix yet" rule while still running Phase 3: a test that is red **for the right reason** is the strongest evidence a hypothesis can have, and it is the artifact `/ktkit:bug-fix-execute` needs before it may touch code.
+3. Hypothesis wrong ⇒ return to Step 3 with what the experiment taught. ⛔ Never stack a second hypothesis on top of the first.
+4. Record it: the hypothesis, the test path, the red output, and **why it is red**. Red for a wrong import or a wrong path is not evidence of anything.
+
+⛔ **Still no fix.** The test stays red when this skill hands off. Making it green is STEP 5 of `/ktkit:bug-fix-execute`, after that skill has confirmed the test is red for the stated reason.
 
 ### Step 4: AGENTX CLASSIFICATION
 
@@ -322,9 +349,27 @@ non-empty Falsifier, and every ⛔ row a Default that is already applied.
 
 ---
 
+## Hypothesis & Minimal Experiment
+
+**Hypothesis**: [exactly one — "X is the root cause because Y"]
+**Failing test**: `path/to/test:LINE` — [what it asserts]
+**Red output**:
+
+```
+[the actual failure, pasted]
+```
+
+**Why it is red**: [one sentence naming the assertion that failed and the value that failed it. Red because of a wrong import or a missing file is not evidence — fix the test and run it again.]
+
+⛔ The test stays red. `/ktkit:bug-fix-execute` confirms it is red for this reason before it changes any code.
+
+## Defence in depth — recommendation only
+
+[Fill in only when the root cause is bad data crossing more than one layer. List each layer the value passes through and the check that layer should have had. ⛔ Recommendations, not edits: this skill changes no code. Omit the section entirely when it does not apply — an empty section reads as "considered and found nothing", which is a different claim.]
+
 ## Recommended Fix Approach
 
-[2–3 sentences describing what needs to change and why — no code yet. Be precise about which function/file/logic to target. This section guides `/ktkit:bug-fix-specs` in generating the correct fix plan.]
+[2–3 sentences describing what needs to change and why — no code yet. Be precise about which function/file/logic to target. This section guides `/ktkit:bug-fix-execute` in making the correct change.]
 ```
 
 After writing the file, inform the user of the file path created.
