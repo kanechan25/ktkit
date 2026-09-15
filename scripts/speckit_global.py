@@ -72,8 +72,8 @@ def render(tmp):
                              stderr=subprocess.STDOUT)
         out, _ = p.communicate(timeout=180)
     except OSError:
-        return None, ("`specify` not found on PATH -> uv tool install specify-cli "
-                      "--from git+https://github.com/github/spec-kit.git")
+        return None, ("`specify` not found on PATH -> uv tool install specify-cli, "
+                      "or brew install specify")
     except subprocess.TimeoutExpired:
         return None, "`specify init` did not finish within 180s"
     if p.returncode != 0:

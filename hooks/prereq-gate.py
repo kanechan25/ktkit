@@ -155,8 +155,7 @@ def missing(name):
     if name in SPECKIT_SKILLS and not speckit_present():
         gaps.append(
             "speckit's Claude skills are not installed\n"
-            "      uv tool install specify-cli --from "
-            "git+https://github.com/github/spec-kit.git\n"
+            "      uv tool install specify-cli     (or: brew install specify)\n"
             "      python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py\"")
     return gaps
 

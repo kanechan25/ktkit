@@ -99,7 +99,7 @@ Install these **before** ktkit. The plugin installs fine without them and then s
 | **Python** | 3.9 | `python3 --version` | stdlib only — no package is ever installed |
 | **git** | any | `git rev-parse --show-toplevel` | the artifact root hangs off the repository root |
 | **Claude Code** | a build with plugins + subagents | `/plugin` | ktkit dispatches twenty agents |
-| **spec-kit** | **1.0.6** | `specify --version` | `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git` |
+| **spec-kit** | **1.0.6** | `specify --version` | `uv tool install specify-cli` — or `brew install specify` |
 | **superpowers** | **6.3.0** | `/plugin` | `claude plugin install superpowers@claude-plugins-official` |
 
 Then, **once per machine**:
