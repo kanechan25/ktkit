@@ -3,19 +3,20 @@
 Claude Code skills for spec-driven development: from a feature request or a bug report, to a
 reviewed specification, to the change itself, to a record of what was done.
 
-Sixteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on.
+Seventeen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on.
 `/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
 
 | | Skill | What it is for |
 | - | ----- | -------------- |
-| **Chain** | [`chain`](#chain) | a requirement → analysis → spec → plan, as one run instead of four commands |
-| **Frame** | [`raise-issue`](#the-sdd-pipeline) | a messy complaint → an issue statement another agent can start from |
-| **Understand** | [`analyze-feat`](#the-sdd-pipeline) | a feature request → an analysis, before any spec exists |
-| | [`rca`](#the-sdd-pipeline) | a bug report → root cause, by evidence rather than guesswork |
-| **Specify** | [`feat-req-specs`](#the-sdd-pipeline) | an analysed feature → a reviewed spec, then stop |
-| | [`bug-fix-specs`](#the-sdd-pipeline) | a diagnosed bug → a reviewed fix spec, then stop |
-| **Execute** | [`feat-req-execute`](#the-sdd-pipeline) | an approved spec → plan, tasks, code, report |
-| | [`bug-fix-execute`](#the-sdd-pipeline) | an approved fix spec → the fix, verified, reported |
+| **Enter** | [`chain`](#chain) | the door: one requirement, four lanes, analysis → spec → plan → code → converge |
+| **Frame** | [`raise-issue`](#the-four-lanes) | a messy complaint → an issue statement another agent can start from |
+| **Understand** | [`analyze-feat`](#the-four-lanes) | a new requirement → an analysis, and a Spike/Bounded/Architectural verdict |
+| | [`rca`](#the-four-lanes) | a bug report → root cause, one hypothesis, and a failing test that proves it |
+| | [`cr-delta`](#the-four-lanes) | a change request → what it undoes, read from the task ledger not the repository |
+| **Specify** *(lane phases)* | [`feat-req-specs`](#the-four-lanes) | an analysed requirement → a reviewed spec, then stop |
+| | [`bug-fix-specs`](#the-four-lanes) | a finished diagnosis → a reviewed `fix.md`, then stop |
+| **Execute** *(lane phases)* | [`feat-req-execute`](#the-four-lanes) | an approved spec → plan, tasks, code, converge, report |
+| | [`bug-fix-execute`](#the-four-lanes) | an approved fix plan → red test, the fix, verified |
 | **Audit** | [`docs-review`](#docs-review) | documents against a standard, against the repository, or against themselves |
 | | [`spec-recon`](#spec-recon) | measure what documents only claim: code, artifacts, version control |
 | **Survive** | [`ccompact`](#working-skills) | checkpoint in-flight state before `/compact` eats it |
@@ -31,7 +32,7 @@ out in agents with their own context, not in the session that produced the work.
 the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control
 state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all sixteen.** They are worth reading once, because they are what make the
+**Three rules hold across all seventeen.** They are worth reading once, because they are what make the
 skills composable rather than merely co-located.
 
 - **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in
@@ -230,11 +231,16 @@ The filename carries through the whole run: a requirement at
 `specs/<group>/<name>/spec.md`, then `plan.md` beside it. Nothing is re-slugified, so the trees
 mirror each other and anything is findable at the matching path.
 
-**Which arm it runs.** Three sources, first one that answers wins: `--bug`/`--feature` on the
-command line, then `type: bug` / `type: feature` in the input file's frontmatter, then it asks. There
-is no fourth — it never routes itself from the prose, because the wrong arm produces a plausible
-artifact of the wrong kind and no later gate catches that. Put `type:` in your requirement template
-and the question never comes up.
+**Which lane it runs.** Three sources, first one that answers wins: `--bug` / `--cr` / `--nr` /
+`--trivial` on the command line, then `type:` in the input file's frontmatter — `BUG`, `bug`,
+`bug-analysis` → BUG; `NR`, `feature` → NR; `CR` → CR, matched case-insensitively — then it asks.
+There is no fourth: it never routes itself from the prose, because the wrong lane produces a
+plausible artifact of the wrong kind and no later gate catches that. Put `type:` in your requirement
+template and the question never comes up.
+
+⛔ **TRIVIAL is not in that table and never will be.** No `type:` value selects it, because no
+producer can know whether its four entry conditions hold — that takes reading the repository, not
+reading the request. `--trivial` reaches it and nothing else does.
 
 **Where it stops.** A bare `/ktkit:chain <file>` runs analysis, spec and plan, then stops — `--to`
 already defaults to `C` and `--execute` already defaults to off, so neither needs typing. `--to B`
