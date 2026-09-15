@@ -18,11 +18,17 @@ the spec reads the ledger instead of re-deriving. Implementation is **off** unle
 # no file yet — describe it instead, in quotes
 /ktkit:chain "expiring share links: 24h default, owner can override to 7d"
 
-# a bug report — name the arm rather than letting step 00 ask
+# a bug report — name the lane rather than letting step 00 ask
 /ktkit:chain .claude/claude/prompts/bugs/duplicate-refund.md --bug
 
-# a feature, but the request reads ambiguously — say so outright
-/ktkit:chain requirement.md --feature
+# something that exists and works as designed, but must work differently
+/ktkit:chain requirement.md --cr
+
+# something that does not exist yet (--feature is the old name for this)
+/ktkit:chain requirement.md --nr
+
+# one file, no contract, no schema, tests already there — skip analysis and spec
+/ktkit:chain requirement.md --trivial --execute
 
 # stop at the spec; you will produce the plan some other way
 /ktkit:chain requirement.md --plan no
@@ -50,7 +56,8 @@ the spec reads the ledger instead of re-deriving. Implementation is **off** unle
 
 | Flag | Default | When you need it |
 | ---- | ------- | ---------------- |
-| `--bug` / `--feature` | inferred at step 00 | Names the arm outright. Nothing overrides it. Passing both is an error. |
+| `--bug` / `--cr` / `--nr` / `--trivial` | read from `type:` at step 00, else asked | Names the lane outright. Nothing overrides it. Passing two is an error. `--feature` is an alias for `--nr`. |
+| `--trivial` | — | The only lane with no analysis and no spec. All four conditions in `references/lanes.md` must hold, and it requires `--execute`. Crossing its 50,000-token ceiling escalates to CR with the reason recorded — it never extends the ceiling. |
 | `--to A\|B\|C` | `C` | Stop after analysis (`A`), spec (`B`) or plan (`C`). |
 | `--plan yes\|no` | asked at step 00 | Answers the plan question up front instead of being asked. |
 | `--execute` | **off** | Runs phase D — the change itself. Off by default on purpose. |

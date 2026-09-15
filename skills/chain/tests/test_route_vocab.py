@@ -20,8 +20,8 @@ two ends together in both directions:
   R4  every arm named in the table is an arm the dispatch table can run
   R5  two rows that fold to the same value agree about the arm, because the
       match is case-insensitive and `BUG` and `bug` are the same token
-  R6  raise-issue's own handoff table sends each type to the same arm chain
-      routes it to -- the two tables are written independently and read by
+  R6  raise-issue's own handoff table suggests skills the lane chain routes to
+      actually runs -- the two tables are written independently and read by
       different people, and the day they disagree one of them is lying
 
 R3 is the direction that catches an invented row. R1 catches a form added
@@ -62,12 +62,12 @@ def read(path):
 
 
 def vocabulary():
-    """[(value, arm, source)] parsed from the routing table in step 00."""
+    """[(value, lane, source)] parsed from the routing table in step 00."""
     rows = []
     seen_header = False
     for line in read(CHAIN).splitlines():
         stripped = line.strip()
-        if stripped.startswith("| `type:` | Arm | Written by |"):
+        if stripped.startswith("| `type:` | Lane | Written by |"):
             seen_header = True
             continue
         if not seen_header:
@@ -91,7 +91,7 @@ def test_r0_the_table_parses_at_all():
     rows = vocabulary()
     check("R0 the routing table is found and parses",
           len(rows) >= 4, rows)
-    check("R0 and every row has a value, an arm and a source",
+    check("R0 and every row has a value, a lane and a source",
           all(v and a and s for v, a, s in rows), rows)
 
 
@@ -159,18 +159,41 @@ def test_r3_every_named_producer_really_emits_that_value():
           not bad, bad)
 
 
-def test_r4_every_arm_is_one_the_chain_can_run():
-    body = read(CHAIN)
-    # The dispatch table at the end of step 00: `| feature | ... |`, `| bug | ... |`.
-    arms = set()
-    for line in body.splitlines():
-        m = re.match(r"^\|\s*(\w+)\s*\|\s*`/ktkit:", line)
-        if m:
-            arms.add(m.group(1))
-    check("R4 the dispatch table names at least two arms", len(arms) >= 2, arms)
-    unknown = sorted(set(a for _v, a, _s in vocabulary()) - arms)
-    check("R4 every arm in the vocabulary is one the dispatch table runs",
-          not unknown, (unknown, arms))
+def dispatch_lanes():
+    """{lane: [skills it dispatches]} from the table at the end of step 00.
+
+    TRIVIAL's 01 and 03 columns are em dashes, not skills: a lane with no
+    analysis step is still a lane, so the row is matched on its shape rather
+    than on finding a `/ktkit:` in the next cell.
+    """
+    out = {}
+    seen_header = False
+    for line in read(CHAIN).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("| Lane | 01 | 03 |"):
+            seen_header = True
+            continue
+        if not seen_header:
+            continue
+        if not stripped.startswith("|"):
+            break
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        if len(cells) != 4 or set(cells[0]) <= set("- "):
+            continue
+        out[cells[0]] = re.findall(r"`(/ktkit:[a-z-]+)`", " ".join(cells[1:]))
+    return out
+
+
+def test_r4_every_lane_is_one_the_chain_can_run():
+    lanes = dispatch_lanes()
+    check("R4 the dispatch table names four lanes", len(lanes) == 4, sorted(lanes))
+    check("R4 exactly one lane runs no skill at all",
+          sorted(k for k, v in lanes.items() if not v) == ["TRIVIAL"], lanes)
+    unknown = sorted(set(a for _v, a, _s in vocabulary()) - set(lanes))
+    check("R4 every lane in the vocabulary is one the dispatch table runs",
+          not unknown, (unknown, sorted(lanes)))
+    check("R4 no `type:` value selects TRIVIAL",
+          "TRIVIAL" not in set(a for _v, a, _s in vocabulary()), vocabulary())
 
 
 def test_r5_rows_that_fold_together_agree():
@@ -182,22 +205,19 @@ def test_r5_rows_that_fold_together_agree():
           not clashes, [(k, sorted(byfold[k])) for k in clashes])
 
 
-def arm_by_skill():
-    """{`/ktkit:rca`: "bug", ...} from the dispatch table at the end of step 00."""
+def lanes_by_skill():
+    """{`/ktkit:rca`: {"BUG"}, ...} -- a skill may serve more than one lane."""
     out = {}
-    for line in read(CHAIN).splitlines():
-        m = re.match(r"^\|\s*(\w+)\s*\|\s*(`/ktkit:.+)\|\s*$", line)
-        if not m:
-            continue
-        for cell in m.group(2).split("|"):
-            for skill in re.findall(r"`(/ktkit:[a-z-]+)`", cell):
-                out[skill] = m.group(1)
+    for lane, skills in dispatch_lanes().items():
+        for skill in skills:
+            out.setdefault(skill, set()).add(lane)
     return out
 
 
 def test_r6_the_handoff_table_agrees_with_the_routing_table():
-    arm_of = arm_by_skill()
-    check("R6 the dispatch table maps skills to arms", len(arm_of) >= 4, arm_of)
+    lanes_of = lanes_by_skill()
+    check("R6 the dispatch table maps skills to lanes", len(lanes_of) >= 4,
+          sorted(lanes_of))
     vocab = dict((v.lower(), a) for v, a, _s in vocabulary())
 
     disagree, checked = [], 0
@@ -217,16 +237,24 @@ def test_r6_the_handoff_table_agrees_with_the_routing_table():
         value = cells[0].strip("`")
         if value == "any":                          # the chain row, not a type
             continue
-        arms = set(arm_of[s] for s in re.findall(r"`(/ktkit:[a-z-]+)`", cells[1])
-                   if s in arm_of)
-        if not arms:
+        suggested = [s for s in re.findall(r"`(/ktkit:[a-z-]+)`", cells[1])
+                     if s in lanes_of]
+        if not suggested:
             continue
         checked += 1
         if value.lower() not in vocab:
             disagree.append("%s is not in the routing table" % value)
-        elif arms != set([vocab[value.lower()]]):
-            disagree.append("%s -> handoff %s, routing %s"
-                            % (value, sorted(arms), vocab[value.lower()]))
+            continue
+        routed = vocab[value.lower()]
+        # Every skill the handoff suggests must be one the routed lane runs.
+        # A skill shared by two lanes (CR and NR share a column until cr-delta
+        # exists) satisfies both -- what must not happen is the handoff naming a
+        # skill the routed lane never dispatches.
+        wrong = [s for s in suggested if routed not in lanes_of[s]]
+        if wrong:
+            disagree.append("%s -> routing %s, handoff suggests %s (lanes %s)"
+                            % (value, routed, wrong,
+                               [sorted(lanes_of[s]) for s in wrong]))
     check("R6 the handoff table was read", checked >= 3, checked)
     check("R6 both tables send each type to the same arm", not disagree, disagree)
 

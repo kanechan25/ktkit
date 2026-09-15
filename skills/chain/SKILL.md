@@ -1,6 +1,6 @@
 ---
 name: chain
-description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to the feature or the bug arm, runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
+description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to one of four lanes -- BUG, CR, NR or TRIVIAL -- runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
 ---
 
 # chain — one requirement in, a reviewed spec out
@@ -26,7 +26,8 @@ phase never re-asks it, and a single place where the run stops.
 
 ```
 /ktkit:chain <requirement.md | "described request">
-    [--bug | --feature]   which arm to run. Overrides everything below.
+    [--bug|--cr|--nr|--trivial]  which lane to run. Overrides everything below.
+    [--feature]           an alias for --nr, kept because it is what was here before
     [--to A|B|C]          stop after this phase. Default C.
     [--plan yes|no]       skip the question at step 00
     [--execute]           run phase D as well. Default OFF.
@@ -40,7 +41,8 @@ phase never re-asks it, and a single place where the run stops.
 
 | Flag | What it actually means |
 | ---- | ---------------------- |
-| `--bug` / `--feature` | **Names the arm outright**, and nothing overrides it — not the frontmatter, not the wording of the request. Use it whenever you already know, which is most of the time. Passing both is an error, not a preference. |
+| `--bug` / `--cr` / `--nr` / `--trivial` | **Names the lane outright**, and nothing overrides it — not the frontmatter, not the wording of the request. Use it whenever you already know, which is most of the time. Passing two of them is an error, not a preference. `--feature` is an alias for `--nr`. |
+| `--trivial` | The only lane with no analysis and no spec, so it is the only one where a wrong call produces a change nobody reviewed. It is **never** inferred — not from the frontmatter, not from the size of the diff — and its four entry conditions are all required, not weighed: see `references/lanes.md`. It also requires `--execute`: without it the lane has nothing to run, and the chain stops rather than writing an empty trace. |
 | `--no-speckit` | **Selects the internalised path**, it does not relax a check. Without it, a missing `.specify/` or missing speckit skills stops the run at step 00 and prints the install command — the chain never degrades on its own, because delivering something else under the same name is worse than stopping. |
 | `--budget` | ⭐ **Asked for, never assumed.** Without it, step 00 prints what a comparable run cost — from `cost.jsonl`, if one exists nearby — and **stops for your answer**. It does not pick a number: `ktkit:spec-recon` defaults to 4M because 453,571 tokens per agent was measured there, and this skill has a different shape and **no measurement yet**. Checked at every step boundary against `cost.jsonl`; reaching it writes `partial` into the manifest and stops **at a boundary** — never mid-step, which would leave a half-written artifact that reads as finished. |
 | `--budget-execute` | Phase D is the one phase whose cost tracks the size of a change rather than the number of questions, so it gets its own ceiling. Default: **what phases A–C actually cost**, measured. ⛔ Running out mid-implementation leaves a repository half-changed, which is worse than one not changed at all — so if the remainder is under that figure, phase D does not start. |
@@ -105,58 +107,74 @@ Cheap, and before anything is spent. In order:
 
    | | Source | How |
    | - | ------ | -- |
-   | 1 | **`--bug` / `--feature`** | Settled. Stop here, and do not read the input to second-guess it. |
+   | 1 | **`--bug` / `--cr` / `--nr` / `--trivial`** | Settled. Stop here, and do not read the input to second-guess it. |
    | 2 | **Frontmatter of the input file** | `type:` matched against the vocabulary below, case-insensitively. Anything else is not a vote — fall through. |
-   | 3 | **⛔ Ask.** | State which arm you would pick and the one phrase that made you pick it, so a wrong guess is visible in one line. |
+   | 3 | **⛔ Ask.** | State which lane you would pick and the one phrase that made you pick it, so a wrong guess is visible in one line. |
 
    **The `type:` vocabulary.** Matched case-insensitively, because these values are written by
    different hands: `/ktkit:raise-issue` emits an uppercase code, `/ktkit:rca` emits a slug, and a
    person writing frontmatter by hand writes neither.
 
-   | `type:` | Arm | Written by |
-   | ------- | --- | ---------- |
-   | `BUG` | bug | `/ktkit:raise-issue` |
-   | `bug-analysis` | bug | `/ktkit:rca` |
-   | `bug` | bug | a person, by hand |
-   | `NR` | feature | `/ktkit:raise-issue` |
-   | `CR` | feature | `/ktkit:raise-issue` |
-   | `feature` | feature | a person, by hand |
+   | `type:` | Lane | Written by |
+   | ------- | ---- | ---------- |
+   | `BUG` | BUG | `/ktkit:raise-issue` |
+   | `bug-analysis` | BUG | `/ktkit:rca` |
+   | `bug` | BUG | a person, by hand |
+   | `NR` | NR | `/ktkit:raise-issue` |
+   | `feature` | NR | a person, by hand |
+   | `CR` | CR | `/ktkit:raise-issue` |
 
-   `CR` is the feature arm, not the bug arm. `form-cr.md` defines a CR as something that **already
+   `CR` is its own lane and not the bug lane. `form-cr.md` defines a CR as something that **already
    exists and works as designed** but needs different behaviour — nothing is wrong, so there is no
    root cause to find, and `/ktkit:rca` would spend a whole phase looking for one.
+
+   **TRIVIAL is not in that table, and never will be.** No `type:` value selects it, because no
+   producer can know whether the four entry conditions hold — that takes reading the repository, not
+   reading the request. It is reached by `--trivial` and by nothing else.
 
    ⛔ **A value not in that table is not a near miss to be interpreted.** It falls to row 3 and is
    asked about. `skills/chain/tests/test_route_vocab.py` keeps the table and the forms in step, in
    both directions.
 
-   ⛔ **There is no fourth row.** The chain never routes itself from the prose alone. Getting this
-   wrong is expensive in a way the later gates cannot catch: the wrong arm produces a plausible
-   artifact of the wrong kind, and by the time that is obvious, phase 01 has been paid for.
+   ⛔ **There is still no fourth row.** Four lanes, three sources — the vocabulary widened, the
+   mechanism did not. The chain never routes itself from the prose alone. Getting this wrong is
+   expensive in a way the later gates cannot catch: the wrong lane produces a plausible artifact of
+   the wrong kind, and by the time that is obvious, phase 01 has been paid for.
 
    The reading in row 3 is a suggestion for the human, never a decision: a report of something
-   behaving wrongly is the bug arm, a request for something that does not exist yet is the feature
-   arm, and plenty of real requests ("change how X is calculated") are honestly both.
+   behaving wrongly is BUG, a request for something that does not exist yet is NR, and a request to
+   change something that exists and works as designed is CR. Plenty of real requests are honestly
+   between two of them; that is what row 3 is for.
 3. **Does a previous run exist?** `--resume` / `--fresh` decides; neither flag ⇒ ask here.
 4. **Does the repository have its own runbook?** `cat <feature-dir>/runbook.ref`. Present ⇒ default
    `--plan no`; absent ⇒ default `--plan yes`.
 
 Ask whatever of 2–4 is still open as **one block**, once, with the defaults filled in — not three
-separate questions. A run that passed `--bug`/`--feature`, `--resume`/`--fresh` and `--plan` asks
-nothing at all and goes straight to 01.
+separate questions. A run that passed a lane flag, `--resume`/`--fresh` and `--plan` asks nothing at
+all and goes straight to 01.
 
-Record the arm **and how it was decided** in `steps/00-route.md` — `flag`, `frontmatter`, or `asked`.
-When the artifacts later turn out to be the wrong kind, that one word says whether the chain guessed
-or was told. Then initialise `resolved.md` and `manifest.md`.
+Record the lane **and how it was decided** in `steps/00-route.md` — `flag`, `frontmatter`, or
+`asked`. When the artifacts later turn out to be the wrong kind, that one word says whether the
+chain guessed or was told. Then initialise `resolved.md` and `manifest.md`.
 
-| Arm | 01 | 03 | 05 (only with `--execute`) |
-| --- | -- | -- | -- |
-| feature | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
-| bug | `/ktkit:rca` | `/ktkit:bug-fix-specs` | `/ktkit:bug-fix-execute` |
+| Lane | 01 | 03 | 05 (only with `--execute`) |
+| ---- | -- | -- | -- |
+| BUG | `/ktkit:rca` | `/ktkit:bug-fix-specs` | `/ktkit:bug-fix-execute` |
+| CR | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
+| NR | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
+| TRIVIAL | — | — | a test-driven change, no spec |
+
+**CR runs the NR column until a dedicated `cr-delta` skill exists (C3).** It is a separate lane from today, so the
+manifest and the ledger record which one ran, and the day `cr-delta` exists only this table changes.
+Routing CR into NR now and splitting the lane later is recoverable; routing it into BUG and
+discovering the mistake after phase 01 is not.
+
+**TRIVIAL has no 01 and no 03**, so `--execute` is not optional for it — see `references/lanes.md`
+for the four conditions that must all hold before the lane may be named at all.
 
 ### 01 — analyse
 
-Run the arm's analysis skill on the input. It writes `A` and, by design, **asks nothing**: its
+Run the lane's analysis skill on the input. It writes `A` and, by design, **asks nothing**: its
 unknowns land in a table rather than in a question. Record the path in `steps/01-analyze.md`.
 
 ### 02 — self-clarify
@@ -186,7 +204,7 @@ one-line conclusion with its citation.
 
 ### 03 — spec
 
-Run the arm's spec skill, pointed at `A`, and **pass it the ledger path**. That skill runs its own
+Run the lane's spec skill, pointed at `A`, and **pass it the ledger path**. That skill runs its own
 ladder — the chain does not run one for it — but the ledger stops it re-asking what step 02 settled.
 
 Its HARD STOP is **conditional here**: `--metric` clean and no OPEN row ⇒ print the ✅ and 🟡 tables
@@ -218,9 +236,15 @@ Anything the plan reveals that contradicts the spec is **synced back** — see b
 
 ### 05 — implement
 
-Only with `--execute`. Runs the arm's execute skill. Its own STOP conditions stand unchanged: a
+Only with `--execute`. Runs the lane's execute skill. Its own STOP conditions stand unchanged: a
 `/speckit-analyze` CRITICAL finding and a HIGH/CRITICAL blast radius are gates, always. They are
 "expensive if wrong", which is the definition of T4.
+
+**TRIVIAL has no execute skill.** It runs `superpowers:test-driven-development` directly against the
+one file, under the ceiling in `references/lanes.md`: a failing test first, then the change, then
+`superpowers:verification-before-completion`. There is no spec to diverge from, so the deviation
+record below does not apply to it — what applies instead is the ceiling, and crossing it escalates
+to CR rather than finishing.
 
 ⭐ **Pass the run directory and require a deviation record.** The execute skill records every
 divergence **at the moment it happens**, into `<chain-dir>/deviations.jsonl`:
