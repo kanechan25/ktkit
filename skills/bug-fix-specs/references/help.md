@@ -1,6 +1,8 @@
 <!-- group: Specify | order: 31 -->
 # ktkit:bug-fix-specs — a finished diagnosis becomes a reviewed fix plan, then it stops
 
+> ⛔ **Not an entry point.** `/ktkit:chain --bug` runs this as part of the BUG lane, with the ledger, the budget gate and step 07's convergence check that a direct run does not get. Running it directly still works and writes the same files.
+
 Reads the `.analyze.md` that `/ktkit:rca` wrote — it does **not** investigate again — and turns it
 into `fix.md`, graded against a checklist it writes itself. Then it **hard stops**. Nothing is
 changed until you approve.

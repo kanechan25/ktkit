@@ -5,6 +5,24 @@ description: "Use when the user provides a feature request and wants to review s
 
 # Feat-Req Specs Workflow
 
+
+> ⛔ **Not an entry point.** `/ktkit:chain` runs this as phase 03 of the NR and CR lane, and
+> the chain is what carries the ledger between phases — the questions this workflow
+> would otherwise re-derive were already settled upstream, and they are settled in a
+> file rather than in a conversation this skill cannot see.
+>
+> Running it directly still works and still produces the same artifacts at the same
+> paths. What it does not get is the ledger, the budget gate at each boundary, the
+> deviation record, or step 07's convergence check — so a direct run answers
+> questions twice and closes no loop.
+>
+> ```
+> /ktkit:chain <file> --nr
+> ```
+>
+> This banner is the whole of the deprecation for now. The skill is removed as a
+> user-facing entry point in a later release; nothing is being taken away today.
+
 ## Purpose
 
 Same SDD pipeline as `feat-req-done`, but **stops at STEP 5** and writes a spec for user review. No plan, no tasks, no code until the user explicitly approves and runs `/ktkit:feat-req-execute`.

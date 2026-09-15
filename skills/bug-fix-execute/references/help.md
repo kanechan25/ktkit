@@ -1,6 +1,8 @@
 <!-- group: Execute | order: 41 -->
 # ktkit:bug-fix-execute — an approved fix plan becomes the fix, red test first
 
+> ⛔ **Not an entry point.** `/ktkit:chain --bug --execute` runs this as part of the BUG lane, with the ledger, the budget gate and step 07's convergence check that a direct run does not get. Running it directly still works and writes the same files.
+
 Picks up where `/ktkit:bug-fix-specs` stopped. It does **not** re-investigate: the root cause is
 already settled and cited. Red test → fix → verify → document.
 

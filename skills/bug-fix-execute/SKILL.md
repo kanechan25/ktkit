@@ -5,6 +5,24 @@ description: "Use after /ktkit:bug-fix-specs has been reviewed and approved. Run
 
 # Bug-Fix Execute Workflow (STEP 5→7 only)
 
+
+> ⛔ **Not an entry point.** `/ktkit:chain` runs this as phase 05 of the BUG lane, and
+> the chain is what carries the ledger between phases — the questions this workflow
+> would otherwise re-derive were already settled upstream, and they are settled in a
+> file rather than in a conversation this skill cannot see.
+>
+> Running it directly still works and still produces the same artifacts at the same
+> paths. What it does not get is the ledger, the budget gate at each boundary, the
+> deviation record, or step 07's convergence check — so a direct run answers
+> questions twice and closes no loop.
+>
+> ```
+> /ktkit:chain <file> --bug --execute
+> ```
+>
+> This banner is the whole of the deprecation for now. The skill is removed as a
+> user-facing entry point in a later release; nothing is being taken away today.
+
 ## Purpose
 
 Apply the fix described in the approved fix plan. Skip investigation — `/ktkit:rca` did it once, and `/ktkit:bug-fix-specs` turned it into a plan.

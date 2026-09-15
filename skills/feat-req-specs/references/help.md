@@ -1,6 +1,8 @@
 <!-- group: Specify | order: 30 -->
 # ktkit:feat-req-specs — an analysed feature becomes a reviewed spec, then it stops
 
+> ⛔ **Not an entry point.** `/ktkit:chain --nr` runs this as part of the NR and CR lane, with the ledger, the budget gate and step 07's convergence check that a direct run does not get. Running it directly still works and writes the same files.
+
 Runs understand → blast radius → interview → design → spec, writes the spec, and **hard stops**. No
 plan, no tasks, no code until you approve. The stop is the point of the skill.
 

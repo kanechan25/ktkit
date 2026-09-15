@@ -148,9 +148,11 @@ ktkit:spec-recon --resume <base> --budget 6000000      # continue where a ceilin
 
 ## chain
 
-The six pipeline skills below are meant to be driven one at a time, and that is often right — you
-read each artifact before the next one is written. `chain` is for when it is not: one requirement,
-one command, and you read the spec at the end.
+One requirement, one command, and you read the document at the end. `chain` is the entry point for
+all four lanes: it routes, carries a ledger between phases so a question settled in analysis is never
+asked again, gates the budget at every boundary, and closes the loop at step 07.
+
+The lane skills below still run — as phases of this, which is where they get the ledger.
 
 ```bash
 /ktkit:chain .claude/claude/prompts/2472-share-links/expiry-rules.md
@@ -307,33 +309,64 @@ a conclusion, printed with its age and its commit. Last week's answer may be sta
 is worse than a `MISS`, because the chain then cites an answer to a question nobody asked now and
 stops looking.
 
-## The SDD pipeline
+## The four lanes
 
-Seven skills, one road. Each stops at a gate you control, and each hands the next one a file rather
-than a conversation — so the pipeline survives a compaction, a new session, or a different person
-picking it up tomorrow.
+One road in, four ways down it. The lane is chosen **before anything is spent** —
+by a flag, else by the `type:` in the file's frontmatter, else by asking. It is
+never inferred from the prose, because the wrong lane produces a plausible
+artifact of the wrong kind and nobody notices until a phase has been paid for.
 
 ```text
                   what somebody actually said
                               │
                     /ktkit:raise-issue
-              → prompts/<slug>/<slug>-<ts>.md
+              → prompts/<slug>/<slug>-<ts>.md        type: BUG | NR | CR
                               │
-              ┌───────────────┴───────────────┐
-        a feature request                      a bug report
-                │                                    │
-     /ktkit:analyze-feat                        /ktkit:rca
-     → analyze/<name>.analyze.md          → analyze/<name>.analyze.md
-                │                                    │
-     /ktkit:feat-req-specs                 /ktkit:bug-fix-specs
-     → specs/<base>/spec.md                → specs/<base>/spec.md
-                │                                    │
-          ── HARD STOP: you review the spec and approve it ──
-                │                                    │
-    /ktkit:feat-req-execute               /ktkit:bug-fix-execute
-    → plan.md, tasks.md, code             → the fix, verified
-    → implemented/<base>.implt.md         → implemented/<name>.implt.md
+   ┌──────────────┬───────────┴───────────┬──────────────┐
+  BUG            CR                      NR           TRIVIAL
+   │              │                       │          (--trivial only)
+/ktkit:rca   /ktkit:cr-delta      /ktkit:analyze-feat      │
+   │              │                       │                │
+   └──────┬───────┴───────────┬───────────┘                │
+   bug-fix-specs        feat-req-specs                     │
+   → specs/<b>/fix.md   → specs/<b>/spec.md                │
+          │                   │                            │
+     ── HARD STOP: you read it and approve ──              │
+          │                   │                            │
+   bug-fix-execute      feat-req-execute            test-driven change
+   red test → fix       plan → tasks → code          under a 50k ceiling
+          │                   │
+          │            /speckit-converge  ← the only step that reads the code
+          │              (at most two rounds)
+          └───────────┬───────┘
+              implemented/<name>.implt.md
 ```
+
+| Lane | The request is | Analysis | Spec | Execute |
+| ---- | -------------- | -------- | ---- | ------- |
+| **BUG** | exists, does **not** behave as designed | `rca` | `fix.md` | red test first, then the fix |
+| **CR** | exists, behaves **as designed**, must behave differently | `cr-delta` | `spec.md` amended | plan → tasks → code |
+| **NR** | does not exist yet | `analyze-feat` | `spec.md` | plan → tasks → code |
+| **TRIVIAL** | small enough that a spec costs more than the change | — | — | test-driven, 50k ceiling |
+
+**BUG runs on superpowers, NR and CR run on spec-kit.** A bug is a disagreement
+with a specification that already exists; writing a second one to describe the
+disagreement adds a document that has to be kept true, while the failing test
+says the same thing and cannot drift. So the BUG lane never touches
+`specify`/`plan`/`tasks`/`converge` — it runs `systematic-debugging`,
+`test-driven-development` and `verification-before-completion`, and it writes
+`fix.md` rather than `spec.md`.
+
+**CR is not NR with different wording.** A new requirement starts from nothing. A
+change request starts from a spec somebody approved and tasks somebody may
+already have built, so the expensive question is *what did we already do that
+this undoes* — and `cr-delta` answers it from the run's task ledger rather than
+by re-reading the repository.
+
+**TRIVIAL is never inferred.** It is the one lane that produces no document
+anybody reads before the code changes, so its four entry conditions are a
+conjunction — one file, no contract change, no schema change, tests already there
+— and crossing its ceiling escalates to CR rather than pushing through.
 
 - **`raise-issue`** — the step before analysis, and the one people skip. It turns a chat message, a
   screenshot or half a GitHub issue into a single file stating the problem, the current state, the
@@ -346,19 +379,36 @@ picking it up tomorrow.
   are hitting** — no flag skips that gate, because a perfectly framed description of the wrong
   problem is the most expensive artifact in the pipeline. Missing data, by contrast, never blocks:
   the field is written `[MISSING]` and the run continues.
-- **`analyze-feat`** — reads a feature request and works out what it touches, what it conflicts with,
-  and what is genuinely unknown, *before* anyone writes a spec. Unknowns go through the escalation
-  ladder rather than into an interview: what the repository can answer is answered, and what reaches
-  you comes as at most three rows, each with a default already applied and a recommendation.
-- **`rca`** — a bug report to a root cause through five Whys, each link carrying evidence, plus an
-  explicit blast radius. It writes a report and hands off; it never fixes anything.
-- **`feat-req-specs` / `bug-fix-specs`** — turn that analysis into a specification with acceptance
-  criteria, scenarios and a quality checklist that tests *the spec*, not the running system. Both
-  stop dead afterwards. No plan, no tasks, no code.
-- **`feat-req-execute` / `bug-fix-execute`** — take an approved spec and carry it out. Both refuse
-  format-only edits; both read the repository's own test command instead of guessing it; and
-  `feat-req-execute` detects a repository that has its own execution runbook and hands the decision
-  back to you rather than silently running generic speckit over it.
+- **`analyze-feat`** — reads a new requirement and works out what it touches, what it conflicts with,
+  and what is genuinely unknown, *before* anyone writes a spec. It also classifies the request as
+  **Spike**, **Bounded** or **Architectural** and says which out loud: a spike stops at the analysis
+  and its output is an answer, not code anybody keeps. Unknowns go through the escalation ladder
+  rather than into an interview: what the repository can answer is answered, and what reaches you
+  comes as at most three rows, each with a default already applied and a recommendation.
+- **`rca`** — a bug report to a root cause, running `systematic-debugging` Phases 1 to 3. Each Why
+  carries evidence; the last step states **one** hypothesis and proves it with a **failing test**.
+  That test stays red when it hands off — making it green is the execute skill's job, after it has
+  confirmed the test is red for the stated reason.
+- **`cr-delta`** — what a change request undoes. Reads the CR's old-behaviour and new-behaviour
+  sections, the current spec and the task ledger, and reports which finished work is now wrong. It
+  stops rather than deciding: on a contradiction, on an invalidation nothing can cite, and on a
+  change reaching more than 60% of tasks, which is a new requirement wearing a change request's
+  clothes.
+- **`feat-req-specs` / `bug-fix-specs`** — turn that analysis into a reviewable document with
+  acceptance criteria, scenarios and a quality checklist that tests *the document*, not the running
+  system. Both stop dead afterwards. No plan, no tasks, no code.
+- **`feat-req-execute` / `bug-fix-execute`** — carry out an approved one. Both refuse format-only
+  edits; both read the repository's own test command instead of guessing it. `bug-fix-execute` runs
+  the failing test red first and **stops after a third failed attempt** rather than trying a fourth,
+  because three failures is an architectural signal, not bad luck. `feat-req-execute` detects a
+  repository with its own execution runbook and hands the decision back to you rather than silently
+  running generic speckit over it.
+
+⛔ **The four specs/execute skills are no longer entry points.** They are phases of a lane, and each
+one says so at the top of its own file. Running one directly still works and still writes the same
+files — what it does not get is the ledger, the budget gate at each boundary, the deviation record,
+or step 07. `rca` keeps its entry point on purpose: "find the root cause and stop" is a complete
+piece of work somebody wants on its own.
 
 Every one of them writes its output under the artifact root and tells you the path. Nothing is
 printed into the conversation twice.
@@ -379,7 +429,7 @@ prints the current pin next to the scaffolding checks, before anything is spent.
 
 ## Working skills
 
-The other five are small, and are used from inside the six above as much as directly.
+The rest are small, and are used from inside the lanes as much as directly.
 
 - **`ccompact` / `ccontinue`** — a long pipeline outlives its context window. `ccompact` writes the
   state that exists *only* in the conversation — decisions and the reasons for them, rejected
@@ -768,6 +818,39 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.0.0 — four lanes, one entry point
+
+**Breaking.** `feat-req-specs`, `feat-req-execute`, `bug-fix-specs` and
+`bug-fix-execute` are no longer entry points. They are phases of a lane, each says
+so at the top of its own file, and `/ktkit:chain` is the door.
+
+Running one directly still works today and still writes the same files at the
+same paths. What a direct run does not get: the ledger, so a question settled in
+phase 01 is asked again in phase 03; the budget gate at each boundary; the
+deviation record; and step 07, the only step that reads the delivered code. They
+are removed as user-facing entry points in a later release — nothing is taken
+away in this one.
+
+`/ktkit:rca` **keeps** its entry point, deliberately. "Find the root cause and
+stop" is a complete piece of work somebody wants on its own, and demoting it
+would mean a whole chain run to answer one question.
+
+**The duplicated user-level copies are gone.** Twelve skills existed both at
+`~/.claude/skills/` and inside this plugin, costing roughly 1,350 tokens of
+always-on context per session for the privilege of being ambiguous —
+`/analyze-feat` and `/ktkit:analyze-feat` were different files. Remove yours:
+
+```bash
+cd ~/.claude/skills
+rm -rf analyze-feat bug-fix-execute bug-fix-specs ccompact ccontinue \
+       escalation-ladder feat-req-execute feat-req-specs raise-issue rca \
+       translate-file
+```
+
+⛔ Check first that nothing else of yours reaches into them, and keep any copy you
+have edited: the plugin's versions have moved on, and a local one you changed on
+purpose is not a duplicate.
 
 ### Upgrading to 5.3.0 — the execution layer, and two agents nothing was checking
 

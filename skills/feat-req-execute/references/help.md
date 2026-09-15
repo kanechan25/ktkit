@@ -1,6 +1,8 @@
 <!-- group: Execute | order: 40 -->
 # ktkit:feat-req-execute — an approved spec becomes a plan, tasks, code and a record
 
+> ⛔ **Not an entry point.** `/ktkit:chain --nr --execute` runs this as part of the NR and CR lane, with the ledger, the budget gate and step 07's convergence check that a direct run does not get. Running it directly still works and writes the same files.
+
 Picks up where `/ktkit:feat-req-specs` stopped. It does **not** re-investigate and does **not**
 re-design: the spec is assumed approved. Plan → analyze → implement → verify → document.
 
