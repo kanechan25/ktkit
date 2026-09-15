@@ -248,6 +248,65 @@ def test_speckit_skills_are_found_under_either_layout():
             os.environ["HOME"] = old_home
 
 
+def test_converge_is_a_fail_not_a_warning_since_5_0():
+    """`converge` stopped being optional when step 07 started closing the loop.
+
+    It was a WARN while the chain could still produce a spec and some code and
+    call that finished. From 5.0.0 step 07 is the only step that opens the
+    delivered code and asks whether it satisfies the spec, so its absence is the
+    difference between a loop and a pipeline -- and a difference that size is
+    not a warning.
+    """
+    d = tempfile.mkdtemp()
+    os.makedirs(os.path.join(d, ".specify"))
+    os.makedirs(os.path.join(d, ".claude", "skills", "speckit-specify"))
+    empty = tempfile.mkdtemp()
+    rc, out, _ = run(["--groups", "speckit", "--repo", d], env={"HOME": empty})
+    row = [l for l in out.splitlines() if "speckit converge" in l]
+    check("converge has a row of its own", len(row) == 1, out)
+    if not row:
+        return
+    check("a missing converge is FAIL, not WARN",
+          row[0].startswith("FAIL"), row[0])
+    check("and it fails the run", rc == 1, "rc=%d\n%s" % (rc, out))
+    check("the fix names the upgrade and the installer",
+          "uv tool upgrade specify-cli" in row[0]
+          and "speckit_global.py" in row[0], row[0])
+
+
+def test_testcmd_group_reports_where_not_what():
+    """The gate that costs nothing needs a command this plugin cannot supply.
+
+    Reporting WHERE it is written is honest; reporting what it is would mean
+    guessing, and a green from the wrong command is worse than no gate at all --
+    a gate nobody trusts gets removed, a gate that is trusted and wrong gets
+    believed.
+    """
+    bare = tempfile.mkdtemp()
+    rc, out, _ = run(["--groups", "testcmd", "--repo", bare])
+    check("a repository that states no command is SKIP, not FAIL",
+          "SKIP" in out and "FAIL" not in out, out)
+    check("SKIP never blocks", rc == 0, "rc=%d\n%s" % (rc, out))
+    check("and it says the skill asks once rather than guessing",
+          "asks once" in out and "never guesses" in out, out)
+
+    mk = tempfile.mkdtemp()
+    io.open(os.path.join(mk, "Makefile"), "w",
+            encoding="utf-8").write("test:\n\techo hi\n")
+    rc, out, _ = run(["--groups", "testcmd", "--repo", mk])
+    check("a Makefile with a test target is found", "PASS" in out, out)
+    check("and the row names the file, not a command",
+          "Makefile" in out and "echo hi" not in out, out)
+
+    # A package.json with no test script must NOT be reported as a source.
+    nope = tempfile.mkdtemp()
+    io.open(os.path.join(nope, "package.json"), "w",
+            encoding="utf-8").write('{"scripts": {"build": "tsc"}}')
+    rc, out, _ = run(["--groups", "testcmd", "--repo", nope])
+    check("a package.json without a test script is not mistaken for one",
+          "SKIP" in out, out)
+
+
 def test_superpowers_group_fails_loudly_when_absent():
     """The BUG lane has no spec to fall back on, so this is FAIL and never WARN.
 

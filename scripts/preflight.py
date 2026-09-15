@@ -25,8 +25,8 @@ Two lessons are wired into this file and must not be undone:
     exist". It is reported as SKIP, never as FAIL.
 
 Usage
-    preflight.py --groups runtime,write,read,vcs,forge,artifacts,speckit,superpowers,mcp
-                 [options]
+    preflight.py --groups runtime,write,read,vcs,forge,artifacts,speckit,superpowers,
+                          testcmd,mcp [options]
 
     --out <dir>        directory the run will write to (group: write)
     --inputs <p> [..]  paths the run will read (group: read)
@@ -55,11 +55,12 @@ that is about to be required is visible before it becomes a FAIL.
 import argparse
 import json as jsonlib
 import os
+import re
 import subprocess
 import sys
 
 GROUPS = ("runtime", "write", "read", "vcs", "forge",
-          "artifacts", "speckit", "superpowers", "mcp")
+          "artifacts", "speckit", "superpowers", "testcmd", "mcp")
 
 # Every skill in this plugin writes its artifacts here, and nowhere else. The
 # path is a rule, not a discovery: a repository that does not have the directory
@@ -422,10 +423,14 @@ def check_speckit(repo):
     if converge:
         res.append(Result("PASS", "speckit converge", converge))
     else:
-        res.append(Result("WARN", "speckit converge",
-                          "no %s -- speckit predates 1.0.0, so the loop cannot "
-                          "check delivered code against the spec -> `uv tool "
-                          "upgrade specify-cli` then scripts/speckit_global.py"
+        # Was a WARN until 5.0.0, when step 07 of `chain` made `converge` the
+        # step that closes the loop. Without it the chain still produces a spec
+        # and still produces code, and nothing ever asks whether they agree --
+        # which is the whole difference between a pipeline and a closed loop.
+        res.append(Result("FAIL", "speckit converge",
+                          "no %s -- speckit predates 1.0.0, so nothing checks "
+                          "delivered code against the spec -> `uv tool upgrade "
+                          "specify-cli` then scripts/speckit_global.py"
                           % " or ".join(SPECKIT_CONVERGE_NAMES)))
     if os.path.isdir(scaffold):
         res.append(check_speckit_pin(scaffold))
@@ -514,6 +519,62 @@ def check_superpowers():
                    "%d skills under %s" % (len(SUPERPOWERS_SKILLS), root))]
 
 
+# Where a repository states how to run its tests. Read in this order, and the
+# first hit wins -- a repository with both a Makefile and a package.json has
+# usually made the package.json the entry point.
+TESTCMD_SOURCES = (
+    ("package.json", "scripts.test"),
+    ("Makefile", "a `test:` target"),
+    ("pyproject.toml", "[tool.pytest.ini_options] or a `test` script"),
+    ("pytest.ini", "a pytest configuration"),
+    ("tox.ini", "a tox configuration"),
+)
+
+
+def testcmd_source(repo):
+    """(filename, what was found) for the first file that states a test command.
+
+    Deliberately only reports WHERE the command is written, never what it is.
+    Guessing `npm test` from the presence of a package.json is how a gate ends
+    up running the wrong command and reporting the wrong colour -- the skill
+    reads the file and, failing that, asks once.
+    """
+    root = os.path.abspath(repo or ".")
+    for name, what in TESTCMD_SOURCES:
+        path = os.path.join(root, name)
+        if not os.path.isfile(path):
+            continue
+        try:
+            body = open(path, "r").read()
+        except OSError:
+            continue
+        if name == "package.json":
+            if '"test"' not in body:
+                continue
+        elif name == "Makefile":
+            if not re.search(r"^test:", body, re.M):
+                continue
+        return name, what
+    return None, None
+
+
+def check_testcmd(repo):
+    """Can the deterministic gate be run at all?
+
+    The gate that costs nothing -- build, test, lint, typecheck before any
+    reviewer is dispatched -- needs one thing this plugin cannot supply: the
+    command this repository uses. A SKIP here is honest; a guess is not, because
+    a green from the wrong command is worse than no gate at all.
+    """
+    name, what = testcmd_source(repo)
+    if name:
+        return [Result("PASS", "test command", "%s -> %s" % (name, what))]
+    return [Result("SKIP", "test command",
+                   "none of %s states one -> the skill asks once and records "
+                   "the answer in <chain-dir>/testcmd; it never guesses"
+                   % ", ".join(n for n, _w in TESTCMD_SOURCES))]
+
+
 def check_mcp():
     """The transport for the MCP server this plugin ships in `.mcp.json`.
 
@@ -542,6 +603,7 @@ CHECKS = {
     "artifacts": lambda a: check_artifacts(a.repo),
     "speckit": lambda a: check_speckit(a.repo),
     "superpowers": lambda a: check_superpowers(),
+    "testcmd": lambda a: check_testcmd(a.repo),
     "mcp": lambda a: check_mcp(),
 }
 

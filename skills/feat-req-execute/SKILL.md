@@ -385,6 +385,47 @@ report — ⛔ never hand-write it, because a hand-written copy can disagree wit
 
 Full rules: `references/syncback.md`.
 
+---
+
+### STEP 8.7 — CONVERGE (call skill `/speckit-converge`)
+> Goal: the one check that reads the delivered code and asks whether it satisfies the spec
+
+Every step before this compares one document with another — plan against spec, tasks against plan,
+deviations against spec. A set of documents can agree perfectly with each other while the code does
+something else. `/speckit-converge` is the only step that opens the code and asks the other question.
+
+```
+/speckit-converge
+```
+
+**Precondition**: `/speckit-implement` has run on the current `tasks.md` (STEP 7), and STEP 8.5 has
+already written its deviation block. 8.5 records what the author still remembers; 8.7 reads the
+finished code cold. Running them the other way round would converge against a spec about to change.
+
+It is **append-only by its own contract** — its only write is a new `## Phase N: Convergence` section
+in `tasks.md`, and it leaves the file byte-for-byte unchanged when nothing is missing. ⛔ Never
+renumber, reorder or delete what it appended, and never rewrite `tasks.md` wholesale afterwards.
+
+#### ⛔ Two rounds, and the third does not exist
+
+```
+converge → appended tasks → STEP 7 implement → converge     round 1
+         → appended tasks → STEP 7 implement → converge     round 2
+         → anything still missing                           ⛔ STOP
+```
+
+Round 3 is not a third attempt at the same problem — it is evidence of a different one. Work still
+outstanding after two rounds of *find the gap, build the gap, look again* is not missing code; the
+spec is wrong or ambiguous enough that each pass reads it differently. Appending a third round pays
+to chase a target that moves every time it is reached.
+
+At the cap: ⛔ **append nothing**, record in the report which gaps survived both rounds and what each
+round appended, and take the spec section you believe is wrong to the user. Report the round count
+either way — a run that converged clean on round 1 and one that hit the cap silently look identical
+otherwise.
+
+---
+
 ### STEP 9 — DOCUMENT (optional)
 > Goal: institutional memory so next feature can build on this one
 

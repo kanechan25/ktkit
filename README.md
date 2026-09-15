@@ -158,6 +158,19 @@ one command, and you read the spec at the end.
 /ktkit:chain <file> --plan no --execute    # skip the plan, apply the change
 ```
 
+⭐ **It closes.** Steps 01 to 06 compare one document with another — analysis against request, spec
+against analysis, plan against spec, deviations against spec — and a set of documents can agree
+perfectly with each other while the code does something else. Step 07 runs `/speckit-converge`, which
+opens the delivered code and asks the other question, then appends what is still unbuilt as new
+tasks. Capped at **two rounds**: work still outstanding after two passes of *find the gap, build the
+gap, look again* is a spec that is wrong or ambiguous, not code that is missing, and a third round
+pays to chase a target that moves every time it is reached.
+
+⭐ **The gate that costs nothing runs first.** Build, test, lint and typecheck before any reviewer is
+dispatched. A reviewer given code that does not compile returns findings about a file the compiler
+would have rejected in a second, and the run pays usage to be told something free. The test command
+is read from the repository, never guessed.
+
 It runs the same skills, writes the same artifacts to the same paths, and adds exactly two things
 they cannot add alone.
 
@@ -634,10 +647,12 @@ routing, the escalation ladder, the ledger, budget and the loop. Three layers, o
 anything that blurs that boundary is not a dependency worth having.
 
 A machine whose spec-kit predates 1.0.0 has a `.specify/` that looks complete and a loop that cannot
-close. The preflight reports that as its own row:
+close. The preflight reports that as its own row, and since 5.0.0 it is a **FAIL** rather than a
+warning — step 07 of `chain` is the only step that opens the delivered code and asks whether it
+satisfies the spec, so without `converge` this is a pipeline, not a loop:
 
 ```text
-WARN  speckit converge   no speckit-converge or speckit.converge -- speckit predates 1.0.0 ...
+FAIL  speckit converge   no speckit-converge or speckit.converge -- speckit predates 1.0.0 ...
 ```
 
 Both skill layouts are accepted: `<repo>/.claude/skills/speckit-converge`, which is what a current

@@ -61,7 +61,9 @@ Artifacts stay exactly where the skills already put them. The chain adds only a 
     resolved.md                                    the ledger — see below
     steps/00-route.md   01-analyze.md   02-clarify.md
           03-spec.md    04-plan.md      05-implement.md   06-syncback.md
-                        ^^^^^^^^^ CR · NR only — the BUG lane has no plan phase
+          07-converge.md
+                        ^^^^^^^^^ 04 and 07 are CR · NR only — the BUG lane has
+                                  no plan phase and no tasks.md to converge
 
 .claude/claude/analyze/<rel>/<base>.analyze.md              A
 .claude/claude/specs/<rel>/<base>/spec.md                   B   CR · NR
@@ -105,10 +107,22 @@ Full reference: `references/ledger.md`.
 
 Cheap, and before anything is spent. In order:
 
-1. **Preflight.** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" --groups artifacts,speckit,mcp --repo <root>`.
+1. **Preflight.**
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
+     --groups artifacts,speckit,superpowers,testcmd,mcp --repo <root>
+   ```
+
    Exit 1 ⇒ ⛔ **STOP**, print what is missing and the command that fixes it. Nothing has been
    spent. There is no flag that turns this into a warning: spec-kit is a prerequisite of the plugin,
    and `hooks/prereq-gate.py` has already refused to start this skill without it.
+
+   | Row | Why the run needs it |
+   | --- | -------------------- |
+   | `speckit converge` | **FAIL since 5.0.0.** Step 07 is the only step that opens the delivered code and asks whether it satisfies the spec. Without it this is a pipeline, not a loop. |
+   | `superpowers` | the BUG lane runs on it outright, and `05` dispatches its reviewer |
+   | `test command` | **SKIP is expected**, and it means *ask once*. See the free gate in `05`. |
 2. **Feature or bug?** Decided by the first of these that answers, and never by anything below it:
 
    | | Source | How |
@@ -278,6 +292,50 @@ Nothing diverged? That is a **statement**, not a silence:
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/deviation.py" none --base <chain-dir> --repo <root>
 ```
 
+#### ⛔ The free gate runs first, and the reviewer never sees code that failed it
+
+```
+worker finishes ──► build · test · lint · typecheck        0 tokens, 0 usage
+                              │
+                        FAIL ─┴─ PASS
+                          │        │
+                   back to worker  superpowers:requesting-code-review
+                                                            costs usage
+```
+
+⛔ **A reviewer must never be dispatched over code that does not compile.** Every finding it returns
+is then about a file the compiler would have rejected in a second, and the run pays model usage to
+be told something free. This is a cost lever and a quality lever at once, which is rare enough to be
+worth stating twice.
+
+**The command comes from the repository, never from a guess.** `preflight.py --groups testcmd` says
+which file states it — `package.json` `scripts.test`, a `Makefile` `test:` target, `pyproject.toml`,
+`pytest.ini`, `tox.ini`. Read that file and use what it says.
+
+⛔ **`SKIP` means ask, once.** No file states a command ⇒ ask for it in the same block as the other
+step-00 questions, write the answer to `<chain-dir>/testcmd`, and never ask again in that run.
+⛔ Never infer `npm test` from a `package.json` that has no test script: a green from the wrong
+command is worse than no gate, because it is believed.
+
+A failing gate sends the work back to the worker. It is not a finding, not a deviation, and not
+something to note and carry forward — it is unfinished work.
+
+#### Then, and only then, the reviewer
+
+```bash
+# gate PASS, and not before
+```
+
+Invoke `superpowers:requesting-code-review` on the change. This is the step that costs usage, and it
+is worth it precisely because everything a compiler can answer has already been answered for free.
+
+⛔ **Gate FAIL ⇒ this step does not run at all.** Not "runs with a note", not "runs and mentions the
+failure" — a reviewer given broken code spends its attention on the breakage and returns findings
+about a file that was never going to ship in that state.
+
+Findings come back as ordinary work for the worker, and the free gate runs again afterwards: a change
+made in response to a review is a change, and it can break the build like any other.
+
 ### 06 — sync back
 
 ⛔ **A specification that disagrees with the code is worse than no specification**: it reads as
@@ -334,6 +392,52 @@ is written. ⛔ "It could not be done" is not "it did not need doing".
 is confirmation of a change that has already happened.
 
 Conflicts found in step 04 go into the same block, by the same route.
+
+### 07 — converge
+
+Only with `--execute`, and only on the CR and NR lanes. **This is the step that closes the loop.**
+
+Every step before it compares one document with another: analysis against request, spec against
+analysis, plan against spec, deviations against spec. Not one of them opens the delivered code and
+asks *does this satisfy what we said it would do*. `/speckit-converge` does exactly that, and it is
+the only step in the whole path that does.
+
+```
+/speckit-converge
+```
+
+It is **append-only by its own contract** — its operating constraints say its only write is a new
+`## Phase N: Convergence` section in `tasks.md`, and that it must leave the file byte-for-byte
+unchanged when nothing is missing. So there is nothing to enforce here. There is something to avoid
+breaking: ⛔ never edit, renumber or reorder what it appended, and never let a later step rewrite
+`tasks.md` wholesale.
+
+**The BUG lane does not run it.** It has no `tasks.md` and no plan phase; what a bug converges
+against is its failing test, and `/ktkit:bug-fix-execute` already turned that green.
+
+#### ⛔ Two rounds, and the third does not exist
+
+```
+converge ─► appended tasks ─► 05 implement ─► converge      round 1
+         ─► appended tasks ─► 05 implement ─► converge      round 2
+         ─► anything still missing                          ⛔ STOP
+```
+
+Round 3 is not a third attempt — it is a different problem. Work still missing after two rounds of
+*find the gap, build the gap, look again* is not missing code; it is a spec that is wrong or
+ambiguous, and appending more tasks is paying to chase a target that moves every time you reach it.
+
+At the cap:
+
+1. ⛔ **Append nothing.** The convergence section from round 2 stands as the record.
+2. Write the reason into `manifest.md`: which gaps survived both rounds, what was appended each
+   time, and which reading of the spec each gap implies.
+3. Escalate to the user through **`/ktkit:confirm-with-me`**, naming the spec section you believe is
+   wrong or ambiguous. This is the same third-gate exemption the contract-level deviation has: it is
+   a report of something that happened, not a question about what to do next.
+
+Record the round count in the manifest as it goes. A run that shows `converge round 1 clean` cost one
+call; one that reaches the cap silently, with nothing saying it did, is how a loop becomes a spiral.
 
 ## The gate
 
@@ -488,3 +592,5 @@ the only evidence for whether `--threshold` sits where it should.
 | `references/syncback.md` | recording a deviation, and the gate a contract-level one hits |
 | `references/ledger.md` | The ledger's columns, the lookup threshold, and what closes a row |
 | `references/self-loop.md` | Step 02 in full, and the five places the tokens are saved |
+| `references/converge-loop.md` | Step 07 in full: what converge is, the two-round cap, and which lanes run it |
+| `references/lanes.md` | the four lanes, TRIVIAL's entry conditions, and the BUG lane's boundary with SDD |

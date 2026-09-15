@@ -1,9 +1,17 @@
 <!-- group: Chain | order: 10 -->
 # ktkit:chain — a requirement in, a reviewed spec and plan out, as one run
 
-Four skills in a row — analyse, self-clarify, spec, plan — with one thing none of them has alone:
-an append-only **ledger**. A question settled in analysis is never asked again in the spec, because
-the spec reads the ledger instead of re-deriving. Implementation is **off** unless you ask for it.
+Four skills in a row — analyse, self-clarify, spec, plan — with two things none of them has alone.
+
+An append-only **ledger**: a question settled in analysis is never asked again in the spec, because
+the spec reads the ledger instead of re-deriving.
+
+And a **closing step**. Everything up to 06 compares one document with another, and documents can
+agree perfectly with each other while the code does something else. Step 07 runs `/speckit-converge`,
+the only step that opens the delivered code and asks whether it satisfies the spec — capped at two
+rounds, because work still missing after two is a spec problem, not a code one.
+
+Implementation is **off** unless you ask for it.
 
 ```
 /ktkit:chain <requirement.md | "described request"> [flags]
@@ -77,6 +85,22 @@ dispatch.jsonl · dispatch.md what each agent was sent, against what it spent
 lookup.jsonl                 every ledger lookup, and what it saved
 ```
 
+### ⭐ The gate that costs nothing runs first
+
+```
+worker finishes ──► build · test · lint · typecheck        0 tokens
+                              │
+                        FAIL ─┴─ PASS
+                          │        │
+                   back to worker  superpowers:requesting-code-review
+```
+
+A reviewer dispatched over code that does not compile returns findings about a file the compiler
+would have rejected in a second — and the run pays usage to be told something free. The test command
+comes from the repository (`preflight --groups testcmd` says which file states it); when no file
+does, the chain asks **once** and records the answer. ⛔ It never guesses `npm test`: a green from
+the wrong command is worse than no gate.
+
 `quota.py --gate 80` runs before anything is spent; `budget.py` decides `GO` or `STOP` after every
 phase. On `STOP` the run stops **at a boundary** — and a boundary here is worth more than in a
 reconnaissance run, because each phase ends on a *complete artifact*: stopping after phase B leaves
@@ -144,7 +168,7 @@ Artifacts stay exactly where each skill already put them. The chain adds only a 
 .claude/claude/chain/<rel>/<base>/
     manifest.md          ← the index: one row per step, and the resume instruction
     resolved.md          ← the ledger: every question, its answer, and who settled it
-    steps/               ← 00-route.md · 01-analyze.md · … · 06-syncback.md
+    steps/               ← 00-route.md · 01-analyze.md · … · 06-syncback.md · 07-converge.md
 
 .claude/claude/analyze/<rel>/<base>.analyze.md         A
 .claude/claude/specs/<rel>/<base>/spec.md              B
