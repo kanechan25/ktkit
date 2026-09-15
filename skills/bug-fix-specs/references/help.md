@@ -5,7 +5,7 @@ The forensic pipeline — memory, explore, reproduce, blast radius, root cause �
 spec and **hard stops**. Nothing is changed until you approve.
 
 ```
-/ktkit:bug-fix-specs <bug-report.md | "described symptom"> [--no-speckit]
+/ktkit:bug-fix-specs <bug-report.md | "described symptom">
 ```
 
 ## The cases
@@ -17,15 +17,12 @@ spec and **hard stops**. Nothing is changed until you approve.
 # no file — describe the symptom
 /ktkit:bug-fix-specs "share link still opens after it expired, but only for the owner"
 
-# a repository with no speckit scaffolding
-/ktkit:bug-fix-specs bug-report.md --no-speckit
 ```
 
 ## Flags
 
 | Flag | Default | When you need it |
 | ---- | ------- | ---------------- |
-| `--no-speckit` | — | Take this skill's internalised path even where speckit is installed. It **selects a path, it does not relax a check**. |
 
 ## What you get
 

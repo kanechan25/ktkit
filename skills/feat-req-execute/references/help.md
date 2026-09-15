@@ -5,7 +5,7 @@ Picks up where `/ktkit:feat-req-specs` stopped. It does **not** re-investigate a
 re-design: the spec is assumed approved. Plan → analyze → implement → verify → document.
 
 ```
-/ktkit:feat-req-execute [<spec-path>] [--no-speckit]
+/ktkit:feat-req-execute [<spec-path>]
 ```
 
 **Prerequisite:** a spec under `.claude/claude/specs/` that you have read and approved. The skill
@@ -20,15 +20,12 @@ searches recursively — a flat file or a mirrored sub-folder both work.
 # name the spec outright when several are in flight
 /ktkit:feat-req-execute .claude/claude/specs/share-links/expiry-rules/spec.md
 
-# a repository with no speckit scaffolding
-/ktkit:feat-req-execute --no-speckit
 ```
 
 ## Flags
 
 | Flag | Default | When you need it |
 | ---- | ------- | ---------------- |
-| `--no-speckit` | — | Take the internalised path even where speckit is installed. Same artifacts either way; the run says which path it took. |
 
 ## What you get
 

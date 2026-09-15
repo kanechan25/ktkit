@@ -1,6 +1,6 @@
 ---
 name: feat-req-specs
-description: "Use when the user provides a feature request and wants to review specs BEFORE implementing. Runs STEP 0→5 (memory check, understand, blast radius, interview, design, spec) and writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify when the repository has speckit scaffolding, through this skill's own internalised equivalent when it does not or when called with --no-speckit. Then STOPS and waits for user approval before any code or plan is written. Hand off to /ktkit:feat-req-execute."
+description: "Use when the user provides a feature request and wants to review specs BEFORE implementing. Runs STEP 0→5 (memory check, understand, blast radius, interview, design, spec) and writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify, which this plugin requires. Then STOPS and waits for user approval before any code or plan is written. Hand off to /ktkit:feat-req-execute."
 ---
 
 # Feat-Req Specs Workflow
@@ -51,15 +51,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
   --groups artifacts,speckit,mcp --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 
-Drop `speckit` from `--groups` when the user passed `--no-speckit` — that flag *is* the decision to
-take the internalised path, so probing for scaffolding the run will not use would block for nothing.
-The flag holds **even when speckit is installed and scaffolded**: it selects the path, it does not
-merely relax the check.
+There is no flag that drops `speckit` from `--groups`. spec-kit is a prerequisite of this plugin,
+not a mode: `hooks/prereq-gate.py` refuses to start this skill without it, and this group is the
+in-run proof of the same fact.
 
-⛔ **Without that flag, a missing half stops the run.** Never fall back to the internalised path on
-your own. Degrading silently ships something other than what was asked for, under the same name.
+⛔ **A missing half stops the run.** Never write the spec some other way on your own. Degrading
+silently ships something other than what was asked for, under the same name.
 
-**Exit 1 → STOP before STEP 0b.** Print what is missing and both ways forward, then wait:
+**Exit 1 → STOP before STEP 0b.** Print what is missing and how to fix it, then wait:
 
 ```
 ⛔ /ktkit:feat-req-specs — stopped before STEP 0b
@@ -67,20 +66,20 @@ your own. Degrading silently ships something other than what was asked for, unde
   ✗ .specify/ is not in this repository
   ✗ no speckit-specify under .claude/skills, here or in your home
 
-  Pick one:
-    1. Install both halves                         → full speckit
-         python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
-         specify init --here --force --non-interactive --integration claude
-         rm -rf .claude/skills/speckit-*
-       The skills go to ~/.claude/skills once per machine; `specify init` writes
-       the per-repository .specify/ scaffolding, and a copy of the skills this
-       repository does not need -- hence the rm.
-    2. Re-run with --no-speckit                    → internalised path, the spec still comes out whole
+  spec-kit is a prerequisite of ktkit, not a mode. Install both halves:
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
+    specify init --here --force --non-interactive --integration claude
+    rm -rf .claude/skills/speckit-*
+
+  The skills go to ~/.claude/skills once per machine; `specify init` writes the
+  per-repository .specify/ scaffolding, and a copy of the skills this repository
+  does not need -- hence the rm.
 
   Nothing ran. No tokens spent on any step.
 ```
 
-**Exit 0 → continue**, and say which mode the run is in. Optional capabilities that are absent are
+**Exit 0 → continue.** Optional capabilities that are absent are
 named here too, with the exact consequence:
 
 ```
@@ -238,18 +237,9 @@ path forward is a guess.
 ### STEP 5 — SPEC + SCENARIOS
 > Goal: single source of truth — WHAT and WHY, no HOW yet
 
-**Two ways to write it. Both produce the same file at the same path.** STEP 0a already decided which
-one this run is in — do not re-decide here, and do not fall back silently.
-
-| Mode | When | What runs |
-|---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit-specify`, per the guard below |
-| **internalised** | anything else | the equivalent defined in this file, below |
-
-The internalised mode is a supported way to run, not a degraded one: `.specify/` is scaffolding that
-lives inside the repository being worked on, so no plugin can ship it on the user's behalf, and a
-skill that only worked in repositories someone had already initialised would be useless in most of
-them. Whichever mode ran, **name it at the HARD STOP.**
+**`/speckit-specify` writes it**, under the guard below. STEP 0a has already proved speckit is
+present; it is a prerequisite of this plugin, so there is no second path to choose between and
+nothing to fall back to. A missing half stopped the run before anything was spent.
 
 #### Mode `speckit` — the guard
 
@@ -277,32 +267,8 @@ them. Whichever mode ran, **name it at the HARD STOP.**
 >
 > `check-prerequisites.sh` has no such bypass; it validates the branch every time. For those three
 > skills, an inline `SPECIFY_FEATURE=…` on the same command line as the script is the only thing
-> that clears it — and since the call is made by the skill, not by you, prefer the internalised
-> equivalent for that one call and say so.
-
-#### Mode `internalised` — write the spec directly
-
-No speckit call, no shell script, no branch gate. Same destination, same filenames, so
-`/ktkit:feat-req-execute` and every later step read it without knowing which mode produced it:
-
-```
-.claude/claude/specs/<rel-dir>/<base>/spec.md
-.claude/claude/specs/<rel-dir>/<base>/checklists/requirements.md
-```
-
-1. Resolve `<rel-dir>` and `<base>` by the priority order below, and run the collision check.
-2. `mkdir -p` the feature directory and its `checklists/`, then **pin it** — the pin section below
-   applies to this mode too, and says why.
-3. Write `spec.md` with the sections listed at the end of this step — Testing Strategy and all three
-   Scenario groups included; they are what makes this a spec rather than a summary.
-4. Write `checklists/requirements.md` yourself. Items test **the spec**, not the running system; the
-   item-writing rules in STEP 5.6 apply here verbatim.
-5. Grade the spec against that checklist and fix every failure you can fix. What you cannot fix
-   becomes an Open Question in the spec.
-6. Report at the HARD STOP as `internalised` with the same counts speckit would have reported.
-
-Do **not** call `/speckit-clarify` or `/speckit-analyze` in this mode. STEP 5.5 has its own
-internalised branch.
+> that clears it — and since the call is made by the skill, not by you, set it on the same line and
+> say so at the HARD STOP.
 
 > **Language**: the whole spec file is written in **Vietnamese**. Code snippets, file paths, symbol
 > names and technical names (kebab-case, camelCase and so on) stay exactly as they are — only the
@@ -364,7 +330,7 @@ Before `mkdir`/write, check whether `.claude/claude/specs/<rel-dir>/<base>/spec.
   ```
   Wait for the answer. On `u`, overwrite `spec.md` **only** — never delete or rewrite anything under `checklists/`.
 
-#### Pin the feature directory — ⛔ **MANDATORY, both modes, right after `mkdir -p`**
+#### Pin the feature directory — ⛔ **MANDATORY, right after `mkdir -p`**
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_pin.py" \
@@ -378,13 +344,11 @@ an unrelated feature is visible rather than inherited. It keeps every sibling ke
 previous file up to `feature.json.bak`, and is idempotent, so calling it once per run costs
 nothing. **`--dir` must already exist** — run it after the `mkdir -p`, never before.
 
-Run it in **mode `internalised` as well**. The spec this workflow writes is a spec-kit
-`FEATURE_DIR` whichever mode produced it, `/ktkit:feat-req-execute` may legitimately run its
-speckit branch over an internalised spec, and a pin nobody wrote is a pin still aimed at whatever
-came before. A repository with no `.specify/` reports `SKIP` and exits 0 — one call site, both
-paths.
+A pin nobody wrote is a pin still aimed at whatever came before, and every script-backed speckit
+skill resolves its feature directory through it. A repository with no `.specify/` reports `SKIP` and
+exits 0.
 
-Then, **on the same command line** as any speckit script you invoke yourself, in mode `speckit`:
+Then, **on the same command line** as any speckit script you invoke yourself:
 
 ```bash
 SPECIFY_FEATURE_DIRECTORY=".claude/claude/specs/<rel-dir>/<base>" \
@@ -400,7 +364,7 @@ SPECIFY_FEATURE="$(date +%Y%m%d-%H%M%S)-<slug>" \
   the feature directory stays stable because it is pinned on disk.
 - Derive `<slug>` from `<base>`. A bare `YYYYMMDD-HHMMSS` with no trailing slug is **rejected** by the gate.
 
-#### Do NOT truncate `/speckit-specify` at step 6 *(mode `speckit` only)*
+#### Do NOT truncate `/speckit-specify` at step 6
 
 Older versions of this workflow overrode the output path and stopped once `spec.md` was written, which silently dropped the skill's own quality loop. With the feature directory pinned there is no reason to stop early — let it run **through step 7**:
 
@@ -488,9 +452,8 @@ is allowed. ⛔ Skip it and say so at the HARD STOP: `"T4 pool non-empty — cla
 ⛔ **Never edit `speckit-clarify` itself** — it is an upstream skill and an update would erase the
 change. The condition lives here, in the caller.
 
-When the gate does open, invoke `/speckit-clarify` with the spec file as context — or, in mode
-`internalised`, run the same taxonomy scan yourself and write the answers back into `spec.md`. The
-categories below are the whole of it; none of them needs a shell script.
+When the gate does open, invoke `/speckit-clarify` with the spec file as context. The categories
+below are the whole of it; none of them needs a shell script.
 
 The scan is structured across 8 categories:
 - Functional Scope & Behavior
@@ -597,7 +560,6 @@ Then output the following and wait:
 **Architecture**: <chosen approach from STEP 4>
 **Blast Radius**: <LOW/MEDIUM/HIGH/CRITICAL>
 **Related Features**: <list from STEP 1b>
-**Spec written by**: <`speckit` | `internalised` — and why, in four words>
 **Feature dir**: `.claude/claude/specs/<rel-dir>/<base>/`
 **Spec written to**: `<…>/spec.md`
 **Spec quality checklist**: `<…>/checklists/requirements.md` — <N/16 passed, M fixed by step 7c>

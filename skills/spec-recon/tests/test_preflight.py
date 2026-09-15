@@ -161,11 +161,12 @@ def test_artifacts_group_never_writes_outside_dot_claude():
     check("nothing is created beside .claude/", not stray, stray)
 
 
-def test_speckit_group_fails_with_both_ways_out():
-    """Missing scaffolding must name `specify init` AND `--no-speckit`.
+def test_speckit_group_fails_with_a_way_out():
+    """Missing scaffolding must name the command that creates it -- and only that.
 
-    Naming only the first strands anyone who does not want speckit at all; the
-    internalised path is a supported way to run, not a fallback to discover.
+    spec-kit is a prerequisite, so there is no second way out to offer. A fix
+    line that still mentioned `--no-speckit` would be describing an escape hatch
+    that no longer exists, which is worse than naming none.
     """
     d = tempfile.mkdtemp()
     rc, out, _ = run(["--groups", "speckit", "--repo", d])
@@ -173,7 +174,8 @@ def test_speckit_group_fails_with_both_ways_out():
     check("missing .specify/ is reported FAIL",
           "FAIL" in out and "speckit scaffolding" in out, out)
     check("the fix names `specify init`", "specify init" in out, out)
-    check("the fix also names --no-speckit", "--no-speckit" in out, out)
+    check("and offers no --no-speckit escape hatch, which no longer exists",
+          "--no-speckit" not in out, out)
 
 
 def test_speckit_skills_are_found_under_either_layout():

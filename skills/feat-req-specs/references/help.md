@@ -5,7 +5,7 @@ Runs understand → blast radius → interview → design → spec, writes the s
 plan, no tasks, no code until you approve. The stop is the point of the skill.
 
 ```
-/ktkit:feat-req-specs <requirement.md | "described request"> [--no-speckit]
+/ktkit:feat-req-specs <requirement.md | "described request">
 ```
 
 ## The cases
@@ -19,15 +19,12 @@ plan, no tasks, no code until you approve. The stop is the point of the skill.
 /ktkit:spec-recon docs/ --baseline docs/design/current-flow.md --scope "what is missing, and where"
 /ktkit:feat-req-specs .claude/claude/prompts/share-links/expiry-rules.md
 
-# a repository with no speckit scaffolding, and you do not want to install it
-/ktkit:feat-req-specs requirement.md --no-speckit
 ```
 
 ## Flags
 
 | Flag | Default | When you need it |
 | ---- | ------- | ---------------- |
-| `--no-speckit` | — | Take this skill's internalised path even where speckit is installed. It **selects a path, it does not relax a check** — without it, a missing `.specify/` stops the run at preflight and prints the install command. |
 
 ## What you get
 
@@ -43,7 +40,7 @@ Then it stops and waits. Approve, then run `/ktkit:feat-req-execute`.
 | ------------ | --- |
 | Expect code | It stops at the spec by design. |
 | Skip reading the spec before executing | The execute skill assumes the spec is approved and does not re-design. |
-| Reach for `--no-speckit` because preflight failed | Preflight prints the command that fixes it. The flag is a choice of path, not a way past a check. |
+| Look for a flag that skips speckit | There is none. spec-kit is a prerequisite; preflight prints the command that installs it, and the plugin's PreToolUse gate stops the skill before that. |
 
 ## See also
 

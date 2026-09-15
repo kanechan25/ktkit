@@ -379,12 +379,11 @@ def check_speckit(repo):
     and either one is a FAIL: a run that calls `/speckit.plan` without them
     burns tokens up to the point of the call and then cannot continue.
 
-    A FAIL here stops the run. It never degrades to the internalised path on its
-    own -- silently delivering a different thing under the same name is how a
-    workflow loses the user's trust. The internalised path is reached only when
-    the caller passes `--no-speckit`, which skips this group entirely. That flag
-    means "take the internalised path", not "check less": it holds even on a
-    machine where both halves are present.
+    A FAIL here stops the run, and there is no flag that turns it into a warning.
+    spec-kit is a stated prerequisite of this plugin, not a mode it can be run
+    without: `hooks/prereq-gate.py` refuses to start the skills that need it, and
+    this group is the in-run proof of the same fact. Silently delivering a
+    different thing under the same name is how a workflow loses the user's trust.
     """
     res = []
     scaffold = os.path.abspath(os.path.join(repo or ".", SPECKIT_SCAFFOLD))
@@ -393,17 +392,16 @@ def check_speckit(repo):
     else:
         res.append(Result("FAIL", "speckit scaffolding",
                           "no %s in this repository -> run `specify init --here "
-                          "--integration claude` at the repository root then "
-                          "`rm -rf .claude/skills/speckit-*`, or re-run the "
-                          "skill with --no-speckit" % SPECKIT_SCAFFOLD))
+                          "--integration claude` at the repository root, then "
+                          "`rm -rf .claude/skills/speckit-*` -- the skills are "
+                          "already global" % SPECKIT_SCAFFOLD))
     skill = speckit_skill(repo, SPECKIT_SKILL_NAMES)
     if skill:
         res.append(Result("PASS", "speckit skills", skill))
     else:
         res.append(Result("FAIL", "speckit skills",
                           "none of %s under .claude/skills, in this repository "
-                          "or your home -> run scripts/speckit_global.py, "
-                          "or re-run the skill with --no-speckit"
+                          "or your home -> run scripts/speckit_global.py"
                           % ", ".join(SPECKIT_SKILL_NAMES)))
     converge = speckit_skill(repo, SPECKIT_CONVERGE_NAMES)
     if converge:

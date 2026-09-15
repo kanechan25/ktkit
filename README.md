@@ -42,11 +42,11 @@ skills composable rather than merely co-located.
 - **A preflight before the first token.** Each skill probes exactly what it is about to use and
   stops, with the fix command, if something required is absent. A capability is proved with a real
   request, never with a tool's opinion of itself.
-- **speckit is required unless you say otherwise.** Four skills use it, and a missing `.specify/` or
-  missing speckit skills **stops the run** at its preflight, with the command that fixes it. Passing
-  `--no-speckit` selects the internalised equivalent instead — it chooses a path, it does not relax a
-  check, and it holds even where speckit is installed. Nothing ever degrades on its own: the
-  artifacts are the same either way, and the run always says which path it took.
+- **speckit and superpowers are required, and a missing one stops the skill before it starts.** A
+  `PreToolUse` hook checks them when a ktkit skill is invoked and refuses with the install command;
+  the per-skill preflight then proves the same thing in-run. There is no flag that turns either into
+  a warning. Nothing ever degrades on its own — delivering something else under the same name is
+  worse than stopping.
 
 ## docs-review
 
@@ -609,6 +609,11 @@ rm -rf .claude/skills/speckit-*  # the skills are already global; see below
 
 Add `.specify/` to `.gitignore` — it is scaffolding pinned to a CLI version, not source.
 
+**Both are enforced, not suggested.** A `PreToolUse` hook checks them when a ktkit skill is invoked
+and refuses to start it with the install command; `/ktkit:help` is exempt, because a gate that hides
+the way to clear it leaves you nowhere to go. There is no flag that turns either check into a
+warning.
+
 **Why the extra step.** speckit's Claude integration writes its skills *into the project*:
 `ClaudeIntegration.config` hard-codes `folder: ".claude/"`, `skills_dest` returns
 `project_root / folder / "skills"`, and no flag changes it. Where `.claude/skills/` is checked in and
@@ -749,6 +754,34 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 4.7.0 — the prerequisites are enforced, and `--no-speckit` is gone
+
+**Breaking.** `--no-speckit` no longer exists, in any skill. Passing it is an unknown flag.
+
+The README has listed spec-kit and superpowers as required since 4.5.0, and nothing enforced it. The
+first sign of a missing one was a skill failing partway through, after agents had been dispatched and
+half a trace directory written. A `PreToolUse` hook now checks before the skill starts:
+
+```
+⛔ /ktkit:chain did not start. ktkit has two required dependencies and one is missing:
+
+  ✗ superpowers is not installed
+      claude plugin install superpowers@claude-plugins-official
+
+Nothing ran. No tokens were spent.
+`/ktkit:help` still works and lists both.
+```
+
+`/ktkit:help` is exempt: a gate that hides the instructions for clearing it leaves you nowhere to go.
+superpowers is checked for every other skill; speckit only for the four that preflight it. The hook
+stands aside — never blocks — on anything it cannot measure, because a gate that fires on its own bug
+is worse than one that misses.
+
+`feat-req-specs` and `feat-req-execute` lose their internalised paths: there is one way to write a
+spec and one way to produce a plan. `bug-fix-specs` keeps both for now — `chain`'s lane contract says
+the BUG lane should not touch spec-driven development at all, and that skill is moving to the
+superpowers path separately.
+
 ### Upgrading to 4.3.0 — the step before the pipeline
 
 `raise-issue` is new, and nothing existing changes. Run it before `analyze-feat` or `rca` when the
@@ -832,7 +865,7 @@ removing the plugin now removes the rule.
 **`--no-speckit` is documented as what it always was.** A missing `.specify/` stops the run; the flag
 selects the internalised path deliberately, including on machines where speckit is present. No
 behaviour changed here, only the wording — the old text read as though the fallback might happen on
-its own.
+its own. *(The flag was removed in 4.7.0 — see that entry.)*
 
 ### Upgrading to 3.0.0 — ktkit became a toolkit
 
@@ -856,7 +889,8 @@ Four things are new, and all four affect skills you already had:
   used to stop and ask when `.specify/` was missing. They now run an internalised path that produces
   the same files at the same paths, and report which path they took. `--no-speckit` chooses it up
   front. If you *want* the old hard stop, the preflight still gives it to you: it fails when
-  scaffolding is absent, and names both ways forward.
+  scaffolding is absent, and names both ways forward. *(Reversed in 4.7.0: speckit is required and
+  the flag is gone.)*
 
 ### Upgrading to 1.9.0 — `--team off` does something again
 

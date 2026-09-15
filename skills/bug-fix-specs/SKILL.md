@@ -1,6 +1,6 @@
 ---
 name: bug-fix-specs
-description: "Use when the user submits a bug report and wants to review specs BEFORE fixing. Runs STEP 0→4 (memory check, explore, reproduce, blast radius, root cause), then writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify when the repository has speckit scaffolding, through this skill's own internalised equivalent when it does not or when called with --no-speckit. STOPS and waits for user approval before any code changes. Hand off to /ktkit:bug-fix-execute."
+description: "Use when the user submits a bug report and wants to review specs BEFORE fixing. Runs STEP 0→4 (memory check, explore, reproduce, blast radius, root cause), then writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify today, through this skill's own internalised equivalent once the BUG lane moves off speckit. STOPS and waits for user approval before any code changes. Hand off to /ktkit:bug-fix-execute."
 ---
 
 # Bug-Fix Specs Workflow
@@ -50,15 +50,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
   --groups artifacts,speckit,mcp --repo "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 ```
 
-Drop `speckit` from `--groups` when the user passed `--no-speckit` — that flag *is* the decision to
-take the internalised path, so probing for scaffolding the run will not use would block for nothing.
-The flag holds **even when speckit is installed and scaffolded**: it selects the path, it does not
-merely relax the check.
+There is no flag that drops `speckit` from `--groups`. spec-kit is a prerequisite of this plugin,
+not a mode: `hooks/prereq-gate.py` refuses to start this skill without it, and this group is the
+in-run proof of the same fact.
 
-⛔ **Without that flag, a missing half stops the run.** Never fall back to the internalised path on
-your own. Degrading silently ships something other than what was asked for, under the same name.
+⛔ **A missing half stops the run.** Never fall back to the internalised path on your own. Degrading
+silently ships something other than what was asked for, under the same name.
 
-**Exit 1 → STOP before STEP 0b.** Print what is missing and both ways forward, then wait:
+**Exit 1 → STOP before STEP 0b.** Print what is missing and how to fix it, then wait:
 
 ```
 ⛔ /ktkit:bug-fix-specs — stopped before STEP 0b
@@ -66,15 +65,15 @@ your own. Degrading silently ships something other than what was asked for, unde
   ✗ .specify/ is not in this repository
   ✗ no speckit-specify under .claude/skills, here or in your home
 
-  Pick one:
-    1. Install both halves                         → full speckit
-         python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
-         specify init --here --force --non-interactive --integration claude
-         rm -rf .claude/skills/speckit-*
-       The skills go to ~/.claude/skills once per machine; `specify init` writes
-       the per-repository .specify/ scaffolding, and a copy of the skills this
-       repository does not need -- hence the rm.
-    2. Re-run with --no-speckit                    → internalised path, the spec still comes out whole
+  spec-kit is a prerequisite of ktkit, not a mode. Install both halves:
+
+    python3 "${CLAUDE_PLUGIN_ROOT}/scripts/speckit_global.py"
+    specify init --here --force --non-interactive --integration claude
+    rm -rf .claude/skills/speckit-*
+
+  The skills go to ~/.claude/skills once per machine; `specify init` writes the
+  per-repository .specify/ scaffolding, and a copy of the skills this repository
+  does not need -- hence the rm.
 
   Nothing ran. No tokens spent on any step.
 ```
@@ -166,13 +165,15 @@ one this run is in — do not re-decide here, and do not fall back silently.
 
 | Mode | When | What runs |
 |---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit-specify`, per the guard below |
+| **speckit** | preflight found `.specify/` **and** the speckit skills | `/speckit-specify`, per the guard below |
 | **internalised** | anything else | the equivalent defined in this file, below |
 
-The internalised mode is a supported way to run, not a degraded one: `.specify/` is scaffolding that
-lives inside the repository being worked on, so no plugin can ship it on the user's behalf, and a
-skill that only worked in repositories someone had already initialised would be useless in most of
-them. Whichever mode ran, **name it at the HARD STOP.**
+⚠️ **This table is on its way out.** The lane contract `/ktkit:chain` publishes says the BUG
+lane does not touch spec-driven development at all: a bug is a disagreement with a specification that already
+exists, and a second specification describing the disagreement is a document that has to be kept
+true while the failing test cannot drift. When this skill moves to the superpowers path, the
+`speckit` row goes and the internalised one becomes the only one. Until then, **name the mode that
+ran at the HARD STOP.**
 
 #### Mode `speckit` — the guard
 

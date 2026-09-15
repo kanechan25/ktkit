@@ -35,7 +35,6 @@ phase never re-asks it, and a single place where the run stops.
     [--budget <token>]    stop cleanly at a step boundary. Asked for, never assumed
     [--budget-execute <n>] a separate ceiling for phase D. Default: what A-C cost
     [--ledger-scope run|dir]  `dir` reads sibling runs' ledgers, as leads only
-    [--no-speckit]        take the internalised path even where speckit is installed
     [--rounds N]          self-loop rounds per phase. Default 2
 ```
 
@@ -43,7 +42,6 @@ phase never re-asks it, and a single place where the run stops.
 | ---- | ---------------------- |
 | `--bug` / `--cr` / `--nr` / `--trivial` | **Names the lane outright**, and nothing overrides it — not the frontmatter, not the wording of the request. Use it whenever you already know, which is most of the time. Passing two of them is an error, not a preference. `--feature` is an alias for `--nr`. |
 | `--trivial` | The only lane with no analysis and no spec, so it is the only one where a wrong call produces a change nobody reviewed. It is **never** inferred — not from the frontmatter, not from the size of the diff — and its four entry conditions are all required, not weighed: see `references/lanes.md`. It also requires `--execute`: without it the lane has nothing to run, and the chain stops rather than writing an empty trace. |
-| `--no-speckit` | **Selects the internalised path**, it does not relax a check. Without it, a missing `.specify/` or missing speckit skills stops the run at step 00 and prints the install command — the chain never degrades on its own, because delivering something else under the same name is worse than stopping. |
 | `--budget` | ⭐ **Asked for, never assumed.** Without it, step 00 prints what a comparable run cost — from `cost.jsonl`, if one exists nearby — and **stops for your answer**. It does not pick a number: `ktkit:spec-recon` defaults to 4M because 453,571 tokens per agent was measured there, and this skill has a different shape and **no measurement yet**. Checked at every step boundary against `cost.jsonl`; reaching it writes `partial` into the manifest and stops **at a boundary** — never mid-step, which would leave a half-written artifact that reads as finished. |
 | `--budget-execute` | Phase D is the one phase whose cost tracks the size of a change rather than the number of questions, so it gets its own ceiling. Default: **what phases A–C actually cost**, measured. ⛔ Running out mid-implementation leaves a repository half-changed, which is worse than one not changed at all — so if the remainder is under that figure, phase D does not start. |
 | `--ledger-scope` | `run` (default) reads only this run's ledger. `dir` also reads sibling runs' `resolved.md` in the same `prompts/<rel>/`, and reports a match as **`FOREIGN` with exit 2** — a lead for a resolver, never a conclusion. A row settled last week may be stale, and a wrong `HIT` is worse than a `MISS` because the chain cites an answer to a question nobody asked now and stops looking. |
@@ -101,8 +99,9 @@ Full reference: `references/ledger.md`.
 Cheap, and before anything is spent. In order:
 
 1. **Preflight.** `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" --groups artifacts,speckit,mcp --repo <root>`.
-   Drop `speckit` from `--groups` only when `--no-speckit` was passed. Exit 1 ⇒ ⛔ **STOP**, print
-   what is missing and the command that fixes it. Nothing has been spent.
+   Exit 1 ⇒ ⛔ **STOP**, print what is missing and the command that fixes it. Nothing has been
+   spent. There is no flag that turns this into a warning: spec-kit is a prerequisite of the plugin,
+   and `hooks/prereq-gate.py` has already refused to start this skill without it.
 2. **Feature or bug?** Decided by the first of these that answers, and never by anything below it:
 
    | | Source | How |
@@ -470,7 +469,7 @@ the only evidence for whether `--threshold` sits where it should.
 - Re-run a step the manifest marks `complete`.
 - Open a gate for something a resolver was never asked.
 - Report a `self_resolve_ratio` that was asserted rather than recomputed.
-- Fall back to the internalised path because speckit is missing and nobody passed `--no-speckit`.
+- Continue past a speckit FAIL at step 00 by writing the artifacts some other way.
 - Run phase D without `--execute`.
 - Create a branch.
 

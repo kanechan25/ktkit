@@ -45,9 +45,6 @@ the spec reads the ledger instead of re-deriving. Implementation is **off** unle
 # start over; the old run directory is renamed, never deleted
 /ktkit:chain requirement.md --fresh
 
-# a repository with no speckit scaffolding, and you do not want to install it
-/ktkit:chain requirement.md --no-speckit
-
 # put a ceiling on the run; it stops at a step boundary, never mid-step
 /ktkit:chain requirement.md --budget 400000
 ```
@@ -67,7 +64,6 @@ the spec reads the ledger instead of re-deriving. Implementation is **off** unle
 | `--budget-execute <n>` | what A–C cost | A separate ceiling for phase D, whose cost tracks the size of a change rather than the number of questions. ⛔ If the remainder is under that figure, phase D does not start — a half-changed repository is worse than an unchanged one. |
 | `--contract` *(on `deviation.py`)* | — | Marks a divergence that changes what the spec **promises** — an acceptance criterion, an API shape, a dropped requirement. It becomes a gate at step 06 rather than syncing on its own. |
 | `--ledger-scope run\|dir` | `run` | `dir` also reads sibling runs' ledgers in the same `prompts/<rel>/` and reports a match as **`FOREIGN`, exit 2** — a lead for a resolver, never a conclusion. |
-| `--no-speckit` | — | Take the internalised path even where speckit is installed. It **selects a path, it does not relax a check**. |
 | `--rounds N` | `2` | Self-clarify rounds per phase. |
 
 ## ⭐ What it costs, and where it stops

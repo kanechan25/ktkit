@@ -62,24 +62,24 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" \
   --inputs "<the approved spec file>"
 ```
 
-Drop `speckit` from `--groups` when the user passed `--no-speckit` — that flag *is* the decision to
-take the internalised path, so probing for scaffolding the run will not use would block for nothing.
-The flag holds **even when speckit is installed and scaffolded**: it selects the path, it does not
-merely relax the check.
+There is no flag that drops `speckit` from `--groups`. spec-kit is a prerequisite of this plugin,
+not a mode: `hooks/prereq-gate.py` refuses to start this skill without it, and this group is the
+in-run proof of the same fact.
 
-⛔ **Without that flag, a missing half stops the run.** Never fall back to the internalised path on
-your own. Degrading silently ships something other than what was asked for, under the same name.
+⛔ **A missing half stops the run.** Never write the plan some other way on your own. Degrading
+silently ships something other than what was asked for, under the same name.
 
-**Exit 1 → STOP here.** Print what is missing and both ways forward, then wait:
+**Exit 1 → STOP here.** Print what is missing and how to fix it, then wait:
 
 ```
 ⛔ /ktkit:feat-req-execute — stopped before STEP 5.9
 
   ✗ .specify/ is not in this repository
 
-  Pick one:
-    1. Run `specify init` at the repository root   → full speckit (plan → tasks → analyze → implement)
-    2. Re-run with --no-speckit                    → internalised path, same artifacts, written here
+  spec-kit is a prerequisite of ktkit, not a mode:
+
+    specify init --here --force --non-interactive --integration claude
+    rm -rf .claude/skills/speckit-*
 
   Nothing ran. No code touched.
 ```
@@ -198,15 +198,10 @@ do not edit older directories.
 ### STEP 6 — PLAN (call skill `/speckit-plan`)
 > Goal: HOW to build it — architecture, stack, data flow
 
-**Two ways to produce the plan. Both write the same files into the same feature directory.** STEP
-5.85 already decided which one this run is in — do not re-decide here, and do not fall back silently.
+**`/speckit-plan` then `/speckit-tasks` produce it**, under the guard below. STEP 0a proved speckit
+is present -- it is a prerequisite of this plugin -- so there is no second path to choose between.
 
-| Mode | When | What runs |
-|---|---|---|
-| **speckit** | preflight found `.specify/` **and** the speckit skills, and `--no-speckit` was not passed | `/speckit-plan` then `/speckit-tasks`, per the guard below |
-| **internalised** | anything else | write `plan.md` and `tasks.md` directly, same contents, same paths |
-
-> ⚠️ **SPECKIT GUARD** *(mode `speckit` only)* — **is the pin from STEP 5.9 still on this feature?**
+> ⚠️ **SPECKIT GUARD** — **is the pin from STEP 5.9 still on this feature?**
 > Every skill in this branch is script-backed — `/speckit-plan` runs `setup-plan.sh`,
 > `/speckit-tasks` runs `setup-tasks.sh`, `/speckit-analyze` runs `check-prerequisites.sh` — and
 > they do not behave the same, so verify rather than assume:
@@ -234,14 +229,16 @@ do not edit older directories.
 > cp "<feature-dir>/plan.md" "<feature-dir>/plan.pre-speckit.md"
 > ```
 > Then decide deliberately: let speckit regenerate and merge back, or skip `/speckit-plan` for this
-> run and stay in mode `internalised`. Either is fine; losing the file is not.
+> run and write the plan yourself. Either is fine; losing the file is not.
 >
-> If a check still fails, do NOT fall back to a manual plan while still calling it a speckit run.
-> Switching to mode `internalised` is allowed; saying nothing about it is not.
+> If a check still fails, do NOT write the plan by hand while still calling it a speckit run. Writing
+> it by hand is allowed; saying nothing about it is not.
 
-In mode `internalised`, write `$SPECIFY_FEATURE_DIRECTORY/plan.md` and `.../tasks.md` yourself with
-the contents listed below — the same sections, the same headings — then continue to STEP 6.5, whose
-cross-artifact check is a comparison you can perform directly. Report the mode at the final summary.
+⛔ That hand-written path is an exception for one run whose `plan.md` must not be overwritten -- not
+a mode, and never a way past a missing speckit. When you take it, write
+`$SPECIFY_FEATURE_DIRECTORY/plan.md` and `.../tasks.md` yourself with the contents listed below --
+the same sections, the same headings -- then continue to STEP 6.5, whose cross-artifact check is a
+comparison you can perform directly, and say so at the final summary.
 
 - Read `$SPECIFY_FEATURE_DIRECTORY/spec.md` to understand feature scope, architecture decision, and integration points
 - Generate plan following the WHAT-WHY-HOW framework
@@ -437,7 +434,7 @@ Spec:  `$SPECIFY_FEATURE_DIRECTORY/spec.md`
 Plan:  `$SPECIFY_FEATURE_DIRECTORY/plan.md`
 Tasks: `$SPECIFY_FEATURE_DIRECTORY/tasks.md`
 Runbook: <path, if STEP 5.95 found one, else `—`>
-Mode: <generic | runbook-detected-but-user-chose-speckit> · <speckit | internalised>
+Mode: <generic | runbook-detected-but-user-chose-speckit> · <speckit | plan written by hand, and why>
 Test command: <the command the user gave at STEP 8, else `—`>
 Branch: <current branch>
 Date: <today>
