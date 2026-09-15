@@ -67,6 +67,70 @@ supersedes the earlier one, and the earlier one stays. Written by
 
 ID_RE = re.compile(r"\AQ\d{2,}\Z")
 
+# ---------------------------------------------------------------- task state
+#
+# A second append-only table, beside the ledger, holding what happened to each
+# task rather than to each question. It exists for one question the chain could
+# not answer without it: when a change request rewrites a requirement, WHICH
+# tasks does that kill, and were they already built?
+#
+#     pending -> ready -> running -> done -> invalidated
+#                                  \-> superseded
+#
+# The two end states are not synonyms and the difference is the whole point:
+#
+#   invalidated   the task was DONE, and it was done against a requirement that
+#                 no longer says that. Work exists in the tree and is now wrong.
+#   superseded    the task was NOT done, and its definition changed underneath
+#                 it. Nothing was built; the row is simply stale.
+#
+# Treating them as one state loses the only fact that decides what to do next:
+# one needs code unwound, the other needs a row rewritten.
+#
+# A `done` row must carry `spec_refs` and `touched`, written AT THE MOMENT it is
+# marked done. Deriving them afterwards means re-reading the diff and the spec
+# for every task -- the same argument `deviation.py` makes for recording a
+# divergence when it happens rather than at the end, and for the same reason:
+# the information is nearly free now and expensive later.
+TASK_STATE_FILE = "task-state.md"
+TASK_ID_RE = re.compile(r"\AT\d{2,}\Z")
+
+TASK_STATES = ("pending", "ready", "running", "done", "invalidated",
+               "superseded")
+TASK_DONE = "done"
+TASK_INVALIDATED = "invalidated"
+TASK_SUPERSEDED = "superseded"
+
+# Which transitions are legal. Absent entries are refused, so a typo produces a
+# stop rather than a state nothing else understands.
+TASK_NEXT = {
+    None: ("pending", "ready"),
+    "pending": ("ready", TASK_SUPERSEDED),
+    "ready": ("running", TASK_SUPERSEDED),
+    "running": (TASK_DONE, "ready", TASK_SUPERSEDED),
+    TASK_DONE: (TASK_INVALIDATED,),
+    TASK_INVALIDATED: (),
+    TASK_SUPERSEDED: (),
+}
+
+TASK_HEADER = [
+    "| Task | State | Spec refs | Touched | Why | At | Head |",
+    "| ---- | ----- | --------- | ------- | --- | -- | ---- |",
+]
+
+TASK_PREAMBLE = """\
+# Task state
+
+Append-only. One row per transition; the last row for a task is its current
+state. Written by `ktkit:chain`, read by `/ktkit:cr-delta` to answer which tasks
+a changed requirement kills without re-reading the repository.
+
+`invalidated` means the task was DONE against a requirement that has changed --
+there is work in the tree that is now wrong. `superseded` means it was NOT done
+and its definition changed -- nothing was built. They are different problems.
+
+"""
+
 # Words that carry no discriminating weight in a question. Kept short and
 # closed: a long stopword list starts deciding which questions are "the same",
 # which is not this file's job.
@@ -211,6 +275,179 @@ def do_add(path, rows, args):
     else:
         print("appended %s" % args.id)
     return 0
+
+
+def task_state_path(ledger_path):
+    return os.path.join(os.path.dirname(os.path.abspath(ledger_path)),
+                        TASK_STATE_FILE)
+
+
+def read_task_rows(path):
+    """Every transition in file order. A malformed row raises.
+
+    Same reasoning as `read_rows`: a row quietly skipped is a task whose state
+    silently reverts to whatever came before it, and nothing downstream can see
+    that happened.
+    """
+    if not os.path.exists(path):
+        return []
+    rows = []
+    with io.open(path, encoding="utf-8") as fh:
+        for n, line in enumerate(fh, 1):
+            line = line.rstrip("\n")
+            if not line.startswith("|"):
+                continue
+            parts = [p.strip() for p in line.strip().strip("|").split("|")]
+            if len(parts) != 7:
+                raise ValueError("line %d: expected 7 columns, found %d"
+                                 % (n, len(parts)))
+            if parts[0] in ("Task", "--") or set(parts[0]) <= set("- "):
+                continue
+            if not TASK_ID_RE.match(parts[0]):
+                raise ValueError("line %d: %r is not a task id like T01"
+                                 % (n, parts[0]))
+            rows.append({
+                "task": parts[0], "state": parts[1],
+                "spec_refs": split_refs(uncell(parts[2])),
+                "touched": split_refs(uncell(parts[3])),
+                "why": uncell(parts[4]), "at": parts[5], "head": parts[6],
+                "line": n,
+            })
+    return rows
+
+
+# What `cell()` writes for an empty value. Reading it back as data is a real
+# failure mode: a task with no spec_refs would come back citing a requirement
+# called "—", match nothing, and be filed as untouched -- which reads as
+# "checked and unaffected" when nothing was checked at all.
+EMPTY_CELL = "—"
+
+
+def split_refs(text):
+    return [t.strip() for t in text.split(",")
+            if t.strip() and t.strip() != EMPTY_CELL]
+
+
+def task_latest(rows):
+    out = {}
+    for r in rows:
+        out[r["task"]] = r
+    return out
+
+
+def do_task_state(ledger_path, args):
+    """Record one transition, refusing the ones that lose information."""
+    path = task_state_path(ledger_path)
+    if not TASK_ID_RE.match(args.id or ""):
+        print("FAIL bad-task-id: %r is not a task id like T01" % args.id)
+        return 2
+    state = args.set_state
+    if state not in TASK_STATES:
+        print("FAIL bad-state: %s not in %s" % (state, ", ".join(TASK_STATES)))
+        return 2
+
+    rows = read_task_rows(path)
+    current = task_latest(rows).get(args.id)
+    from_state = current["state"] if current else None
+    allowed = TASK_NEXT.get(from_state, ())
+    if state not in allowed:
+        print("FAIL bad-transition: %s -> %s is not allowed (from %s: %s)"
+              % (from_state or "(new)", state, from_state or "(new)",
+                 ", ".join(allowed) or "nothing -- it is a terminal state"))
+        return 2
+
+    spec_refs = split_refs(args.spec_refs or "")
+    touched = split_refs(args.touched or "")
+    if state == TASK_DONE:
+        # Recorded now or reconstructed later from a diff and a spec, for every
+        # task. The second one is what this column exists to avoid.
+        if not spec_refs:
+            print("FAIL missing-spec-refs: a done task must say which "
+                  "requirements it satisfies, recorded now rather than "
+                  "reconstructed from a diff later")
+            return 2
+        if not touched:
+            print("FAIL missing-touched: a done task must say what it changed, "
+                  "or a later change request has to re-read the repository to "
+                  "find out")
+            return 2
+
+    if not os.path.exists(path):
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with io.open(path, "w", encoding="utf-8") as fh:
+            fh.write(TASK_PREAMBLE + "\n".join(TASK_HEADER) + "\n")
+
+    row = "| %s | %s | %s | %s | %s | %s | %s |" % (
+        args.id, state, cell(", ".join(spec_refs)), cell(", ".join(touched)),
+        cell(args.why or ""),
+        args.at or time.strftime("%Y-%m-%dT%H:%M:%S"),
+        args.head if args.head is not None else git_head(path))
+    with io.open(path, "a", encoding="utf-8") as fh:
+        fh.write(row + "\n")
+    print("%s %s -> %s" % (args.id, from_state or "(new)", state))
+    return 0
+
+
+def do_task_cites(ledger_path, ref):
+    """Which tasks claim to satisfy this requirement, and in what state."""
+    rows = read_task_rows(task_state_path(ledger_path))
+    hits = [r for r in task_latest(rows).values() if ref in r["spec_refs"]]
+    if not hits:
+        print("no task cites %s" % ref)
+        return 0
+    for r in sorted(hits, key=lambda r: r["task"]):
+        print("%s  %-12s %s" % (r["task"], r["state"],
+                                ", ".join(r["touched"]) or "-"))
+    return 0
+
+
+def do_task_invalidate(ledger_path, ref, apply_it, why):
+    """What a change to this requirement kills, split by whether it was built.
+
+    Reports rather than guesses: `--invalidate --by FR-14` prints the two lists
+    and exits 2 when either is non-empty, so a caller that ignores the exit code
+    still cannot claim nothing happened. `--apply` writes the transitions.
+    """
+    path = task_state_path(ledger_path)
+    rows = read_task_rows(path)
+    current = task_latest(rows)
+    built, unbuilt = [], []
+    for r in sorted(current.values(), key=lambda r: r["task"]):
+        if ref not in r["spec_refs"]:
+            continue
+        if r["state"] == TASK_DONE:
+            built.append(r)
+        elif r["state"] in ("pending", "ready", "running"):
+            unbuilt.append(r)
+    if not built and not unbuilt:
+        print("nothing cites %s" % ref)
+        return 0
+
+    for r in built:
+        print("invalidated %s  (done against %s; touched %s)"
+              % (r["task"], ref, ", ".join(r["touched"]) or "-"))
+    for r in unbuilt:
+        print("superseded  %s  (%s, never built)" % (r["task"], r["state"]))
+
+    if apply_it:
+        class _A(object):
+            pass
+        for r in built + unbuilt:
+            a = _A()
+            a.id = r["task"]
+            a.set_state = (TASK_INVALIDATED if r["state"] == TASK_DONE
+                           else TASK_SUPERSEDED)
+            a.spec_refs = ", ".join(r["spec_refs"])
+            a.touched = ", ".join(r["touched"])
+            a.why = why or ("%s changed" % ref)
+            a.at = None
+            a.head = None
+            do_task_state(ledger_path, a)
+    else:
+        print("\n(nothing written -- pass --apply to record these transitions)")
+    return 2
 
 
 LOOKUP_LOG = "lookup.jsonl"
@@ -427,6 +664,25 @@ def main():
                     help="log this lookup to lookup.jsonl, so the saving is countable")
     ap.add_argument("--cache-metric", action="store_true", dest="cache_metric",
                     help="what the lookups saved, as a floor, plus the near-misses")
+    ap.add_argument("--task-state", action="store_true", dest="task_state",
+                    help="record one task transition (needs --id and --set)")
+    ap.add_argument("--set", dest="set_state",
+                    help="the state to move to: %s" % ", ".join(TASK_STATES))
+    ap.add_argument("--spec-refs", dest="spec_refs",
+                    help="comma-separated requirement ids this task satisfies; "
+                         "mandatory for --set done")
+    ap.add_argument("--touched",
+                    help="comma-separated paths this task changed; mandatory "
+                         "for --set done")
+    ap.add_argument("--why", help="one line: why this transition happened")
+    ap.add_argument("--invalidate", action="store_true",
+                    help="with --by: what a change to that requirement kills")
+    ap.add_argument("--by", help="the requirement id that changed")
+    ap.add_argument("--apply", action="store_true",
+                    help="with --invalidate: write the transitions, not just "
+                         "report them")
+    ap.add_argument("--cites", help="which tasks claim to satisfy this "
+                                    "requirement, and in what state")
     ap.add_argument("--ledger-scope", choices=("run", "dir"), default="run",
                     dest="ledger_scope",
                     help="`dir` also reads sibling runs' ledgers, as leads only "
@@ -435,6 +691,23 @@ def main():
 
     if args.init:
         return do_init(args.path)
+
+    # Task state lives in its own file beside the ledger, so a malformed ledger
+    # does not block a task transition and the two tables never share a parser.
+    try:
+        if args.task_state:
+            if not (args.id and args.set_state):
+                ap.error("--task-state needs --id and --set")
+            return do_task_state(args.path, args)
+        if args.invalidate:
+            if not args.by:
+                ap.error("--invalidate needs --by <requirement id>")
+            return do_task_invalidate(args.path, args.by, args.apply, args.why)
+        if args.cites:
+            return do_task_cites(args.path, args.cites)
+    except ValueError as exc:
+        print("FAIL malformed-task-state: %s" % exc)
+        return 2
 
     try:
         rows = read_rows(args.path)
@@ -458,7 +731,8 @@ def main():
         return do_metric(rows, args.min_ratio)
     if args.show_open:
         return do_open(rows)
-    ap.error("give one of --init, --next-id, --add, --lookup, --metric, --open")
+    ap.error("give one of --init, --next-id, --add, --lookup, --metric, "
+             "--open, --task-state, --invalidate, --cites")
 
 
 if __name__ == "__main__":

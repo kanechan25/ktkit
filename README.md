@@ -769,6 +769,47 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 5.2.0 — the CR lane knows what it undoes
+
+`/ktkit:cr-delta` is new, and the CR lane routes to it instead of to
+`analyze-feat`. A feature request starts from nothing. A change request starts
+from a spec somebody approved and tasks somebody may already have built, and the
+expensive question is not *what do we want now* but **what did we already do that
+this undoes**.
+
+Answering that by re-reading the repository costs a full pass over the code for a
+change that may touch two files. It does not. `ledger.py` now records task state:
+
+```
+pending → ready → running → done → invalidated
+                                 ↘ superseded
+```
+
+A `done` task must say which requirements it satisfies and which paths it
+changed, **at the moment it is marked done** — recorded then it is nearly free,
+reconstructed later it is a diff and a spec re-read per task. `cr-delta` reads
+that and never touches the tree.
+
+`invalidated` and `superseded` are not synonyms. Invalidated means the task was
+*done*, against a requirement that has changed: there is work in the tree that is
+now wrong. Superseded means it was never built. One needs code unwound, the other
+needs a row rewritten, and collapsing them loses the only fact that decides which.
+
+Three conditions stop the run rather than guessing past it — a contradiction
+(exit 1), an invalidation nothing can cite (exit 2), and a change reaching more
+than 60% of tasks, which is a new requirement wearing a change request's clothes
+(exit 3).
+
+`contract_freeze.py` covers the case where the CR arrives *during* implement:
+hashes of `spec.md`, `plan.md` and `tasks.md` are frozen before the first edit,
+drift is exit 3, and the run goes `EXECUTING → BLOCKED → EXECUTING` with only the
+affected tasks re-run. A resume that does not name them is refused, because it
+would discard exactly the progress the block was protecting.
+
+The idea of snapshotting the artifacts comes from `speckit-superpowers-bridge`;
+the implementation does not. An idea costs nothing to borrow, a dependency has to
+be maintained by whoever is on call.
+
 ### Upgrading to 4.7.0 — the prerequisites are enforced, and `--no-speckit` is gone
 
 **Breaking.** `--no-speckit` no longer exists, in any skill. Passing it is an unknown flag.

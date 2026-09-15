@@ -184,6 +184,107 @@ def test_a_malformed_ledger_is_reported_not_skipped():
         check("a short row exits 2", rc == 2 and "malformed" in out, out)
 
 
+def test_task_state_transitions_are_a_machine_not_a_free_text_field():
+    """pending -> ready -> running -> done, and the two ends are different.
+
+    `invalidated` means the task was DONE against a requirement that changed --
+    there is work in the tree that is now wrong. `superseded` means it was never
+    built. Collapsing them loses the only fact that decides what happens next,
+    so a transition that would blur them is refused rather than recorded.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "resolved.md")
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "ready")
+        check("a new task may start at ready", rc == 0, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "done",
+                      "--spec-refs", "FR-1", "--touched", "a.ts")
+        check("ready -> done is refused; running comes first",
+              rc == 2 and "bad-transition" in out, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "running")
+        check("ready -> running is allowed", rc == 0, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "done")
+        check("done without spec-refs is refused",
+              rc == 2 and "missing-spec-refs" in out, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "done",
+                      "--spec-refs", "FR-1")
+        check("done without touched is refused",
+              rc == 2 and "missing-touched" in out, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "done",
+                      "--spec-refs", "FR-1", "--touched", "src/a.ts:42")
+        check("done with both is recorded", rc == 0, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "superseded")
+        check("a done task cannot be superseded -- it was built",
+              rc == 2 and "bad-transition" in out, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "invalidated")
+        check("a done task can be invalidated", rc == 0, out)
+        rc, out = run(p, "--task-state", "--id", "T01", "--set", "ready")
+        check("invalidated is terminal",
+              rc == 2 and "terminal" in out, out)
+        rc, out = run(p, "--task-state", "--id", "nope", "--set", "ready")
+        check("a bad task id is refused", rc == 2 and "bad-task-id" in out, out)
+        rc, out = run(p, "--task-state", "--id", "T02", "--set", "finished")
+        check("a state nothing understands is refused",
+              rc == 2 and "bad-state" in out, out)
+
+
+def test_invalidate_by_only_kills_what_cites_that_requirement():
+    """The blast radius of a changed requirement is the tasks that cite it."""
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "resolved.md")
+        for tid, refs in (("T01", "FR-1"), ("T02", "FR-2"), ("T03", "FR-1")):
+            run(p, "--task-state", "--id", tid, "--set", "ready",
+                "--spec-refs", refs)
+        run(p, "--task-state", "--id", "T01", "--set", "running",
+            "--spec-refs", "FR-1")
+        run(p, "--task-state", "--id", "T01", "--set", "done",
+            "--spec-refs", "FR-1", "--touched", "src/a.ts")
+
+        rc, out = run(p, "--cites", "FR-1")
+        check("--cites lists only the tasks citing that requirement",
+              "T01" in out and "T03" in out and "T02" not in out, out)
+
+        rc, out = run(p, "--invalidate", "--by", "FR-1")
+        check("--invalidate exits 2 when something is reached", rc == 2, out)
+        check("the built task is reported as invalidated",
+              "invalidated T01" in out, out)
+        check("the unbuilt one as superseded", "superseded  T03" in out, out)
+        check("the unrelated one is not mentioned", "T02" not in out, out)
+        check("and nothing is written without --apply",
+              "nothing written" in out, out)
+
+        rows_before = io.open(os.path.join(d, "task-state.md"),
+                              encoding="utf-8").read()
+        rc, out = run(p, "--invalidate", "--by", "FR-1", "--apply")
+        rows_after = io.open(os.path.join(d, "task-state.md"),
+                             encoding="utf-8").read()
+        check("--apply writes the transitions", len(rows_after) > len(rows_before))
+        check("and it is append-only -- every earlier row is still there",
+              rows_after.startswith(rows_before), "")
+        rc, out = run(p, "--cites", "FR-1")
+        check("T01 is now invalidated", "T01  invalidated" in out, out)
+        check("T03 is now superseded", "T03  superseded" in out, out)
+
+        rc, out = run(p, "--invalidate", "--by", "FR-9")
+        check("a requirement nothing cites reaches nothing",
+              rc == 0 and "nothing cites" in out, out)
+
+
+def test_the_empty_cell_placeholder_is_not_read_back_as_data():
+    """`cell()` writes an em dash for an empty value.
+
+    Reading it back as a requirement id would give a task citing a requirement
+    called "—", which matches nothing and is filed as untouched -- and untouched
+    reads as "checked and unaffected" when nothing was checked at all.
+    """
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "resolved.md")
+        run(p, "--task-state", "--id", "T01", "--set", "ready")
+        body = io.open(os.path.join(d, "task-state.md"), encoding="utf-8").read()
+        check("the placeholder really is written", "—" in body, body)
+        rc, out = run(p, "--cites", "—")
+        check("and nothing cites it", "no task cites" in out, out)
+
+
 def main():
     for fn in sorted(
             (v for k, v in globals().items() if k.startswith("test_")),

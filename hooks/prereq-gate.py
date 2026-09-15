@@ -59,7 +59,10 @@ SPECKIT_PROBE = ("speckit-specify", "speckit.specify")
 # came off because it stopped preflighting the group -- not because anybody
 # remembered this line: P8 of test_prereq_gate.py compares the two and failed
 # until it was edited.
-SPECKIT_SKILLS = ("chain", "feat-req-specs", "feat-req-execute")
+# `cr-delta` joined it the same way, in the other direction: it reads a spec-kit
+# feature directory, so it preflights the group, so it belongs here. Neither
+# edit was remembered -- both were demanded.
+SPECKIT_SKILLS = ("chain", "cr-delta", "feat-req-specs", "feat-req-execute")
 
 # `help` prints the install commands. Gating it would hide the way out.
 EXEMPT = ("help",)

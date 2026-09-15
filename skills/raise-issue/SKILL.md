@@ -318,7 +318,7 @@ Print the file path, a three-line summary, and the suggested next skill. Then **
 |---|---|
 | BUG | `/ktkit:rca` or `/ktkit:bug-fix-specs` with the file path |
 | NR | `/ktkit:analyze-feat` → `/ktkit:feat-req-specs` |
-| CR | `/ktkit:analyze-feat` → `/ktkit:feat-req-specs` |
+| CR | `/ktkit:cr-delta` → `/ktkit:feat-req-specs` — the CR lane starts from the approved spec, not from nothing |
 | any | `/ktkit:chain <file>` — runs the whole column above in one loop. Step 00 routes on `type:`, so `--bug`/`--feature` is an override, not a requirement |
 
 The file is written where every one of those reads from, so the handoff is the path and nothing else.

@@ -180,14 +180,20 @@ chain guessed or was told. Then initialise `resolved.md` and `manifest.md`.
 | Lane | 01 | 03 | 05 (only with `--execute`) |
 | ---- | -- | -- | -- |
 | BUG | `/ktkit:rca` | `/ktkit:bug-fix-specs` | `/ktkit:bug-fix-execute` |
-| CR | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
+| CR | `/ktkit:cr-delta` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
 | NR | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
 | TRIVIAL | — | — | a test-driven change, no spec |
 
-**CR runs the NR column until a dedicated `cr-delta` skill exists (C3).** It is a separate lane from today, so the
-manifest and the ledger record which one ran, and the day `cr-delta` exists only this table changes.
-Routing CR into NR now and splitting the lane later is recoverable; routing it into BUG and
-discovering the mistake after phase 01 is not.
+**CR analyses differently from NR, and that is why it is a lane.** `/ktkit:analyze-feat` starts from
+nothing and asks what to build. A CR starts from a spec somebody approved and tasks somebody may
+already have built, so `/ktkit:cr-delta` asks the other question — *what did we already do that this
+undoes* — and answers it from this run's task-state ledger rather than by re-reading the repository.
+Phases 03 and 05 are shared with NR: once the delta is known, amending a spec and applying it are the
+same work.
+
+⛔ **A CR with no approved spec to change is not a CR.** `cr-delta` stops, and the request is routed
+as NR — there is nothing to subtract from, and reconstructing the old behaviour out of the code is
+the expensive pass this lane exists to avoid.
 
 **TRIVIAL has no 01 and no 03**, so `--execute` is not optional for it — see `references/lanes.md`
 for the four conditions that must all hold before the lane may be named at all.
@@ -265,6 +271,37 @@ one file, under the ceiling in `references/lanes.md`: a failing test first, then
 `superpowers:verification-before-completion`. There is no spec to diverge from, so the deviation
 record below does not apply to it — what applies instead is the ceiling, and crossing it escalates
 to CR rather than finishing.
+
+#### ⛔ Freeze the contract before the first edit
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/contract_freeze.py" \
+    --base <chain-dir> --dir <feature-dir> --freeze
+```
+
+This records a hash of `spec.md`, `plan.md` and `tasks.md` as they are now. A
+change request arriving mid-phase is the one case where two people edit the same
+contract at once, and nothing crashes when they do: the worker finishes something
+that satisfies a spec nobody approves any more, and the run reports success.
+
+Check before each step boundary, and before phase 06:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/contract_freeze.py" --base <chain-dir> --check
+```
+
+Exit 3 ⇒ the artifacts moved. ⛔ **Do not merge, and do not decide whether it
+matters:**
+
+```
+--block --reason "contract revision: <what arrived>"     the run is BLOCKED
+/ktkit:cr-delta <cr-file>                                what it reaches
+--resume --affected T03,T07                              only those re-run
+```
+
+⛔ **`--resume` demands the affected list.** A resume that re-runs everything has
+thrown away the progress blocking existed to protect, and the whole point of
+recording `touched` per task is that the affected set is already known.
 
 ⭐ **Pass the run directory and require a deviation record.** The execute skill records every
 divergence **at the moment it happens**, into `<chain-dir>/deviations.jsonl`:
