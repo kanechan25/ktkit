@@ -524,6 +524,24 @@ NOT list them all: report one row `N ambiguities of the same kind` with three re
 - `path/to/file.ts` (lines 1–120, Full Read) — [what was learned]
 - `path/to/other.ts` (Peek only) — [relevance confirmed/rejected]
 
+### Not read — and what that costs this report
+
+[⛔ **Mandatory, and never empty.** An analysis always stops somewhere; the only
+question is whether it says where. List what was in scope and not opened, and for
+each one, the claim in this report that would change if it turned out to say
+something unexpected.]
+
+- `path/to/unread.ts` — not opened; §6 assumes it holds no second write path
+- `dir/` (N files) — sampled M, not exhaustive; §8 blast radius is a lower bound
+
+⛔ **No claim in this report may reach past what was read.** A statement about a
+file nobody opened is a guess, and a guess in §5 or §6 is read downstream as a
+measurement. When a claim needs a file that was not read, it belongs in §10 as an
+unknown with that file named — not in the body with a hedge attached.
+
+⛔ **"Everything relevant was read" is not an entry.** It is the one sentence that
+cannot be checked, and it is what this section exists to replace.
+
 ## 12. Suggested Next Step
 → **`/ktkit:feat-req-specs`** — if open questions resolved and risk is LOW/MEDIUM: feed this file as input
 → **`/ktkit:feat-req-specs`** — if HIGH risk: include blast radius section prominently in the interview

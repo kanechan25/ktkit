@@ -357,6 +357,36 @@ command is worse than no gate, because it is believed.
 A failing gate sends the work back to the worker. It is not a finding, not a deviation, and not
 something to note and carry forward — it is unfinished work.
 
+#### The brief, the worker, and the guard
+
+A task is worked from a **brief**, written when the task becomes `ready` and not
+before — exact paths, interfaces, acceptance, the failing test, and the verify
+command. ⛔ Writing every brief up front and then having a change request kill a
+third of them pays twice for the same tasks. `references/execution.md` holds the
+five slots and why each one is load-bearing.
+
+⛔ **The worker receives the brief and nothing else.** Never the conversation: a
+transcript carries the decisions *and everything that lost*, and a worker that
+can see a rejected option will occasionally build it.
+
+Then, before any reviewer:
+
+```
+Agent(subagent_type: "ktkit:minimal-diff-guard")   ← brief + changed files only
+```
+
+It returns `UPHELD` or `VIOLATION` with a `path:line`, and it changes nothing.
+⛔ **A `VIOLATION` goes back to the worker, it is not a review finding.** Two
+things downstream need a diff to mean exactly one thing: `/ktkit:cr-delta` answers
+*what does this change request undo* from what each task recorded touching, and
+`deviation.py` anchors every divergence to a line number. A worker that tidied
+three neighbouring files has made the first a lie and moved the second's anchors.
+
+How much review a task earns is its **tier**, assigned at routing and recorded in
+`execution.yml`: R0 the free gate only, R1 adds the guard, R2 adds the reviewer
+below. Same ratchet as everywhere else — raised when something surfaces, never
+lowered, and never by the work being reviewed.
+
 #### Then, and only then, the reviewer
 
 ```bash
@@ -630,4 +660,5 @@ the only evidence for whether `--threshold` sits where it should.
 | `references/ledger.md` | The ledger's columns, the lookup threshold, and what closes a row |
 | `references/self-loop.md` | Step 02 in full, and the five places the tokens are saved |
 | `references/converge-loop.md` | Step 07 in full: what converge is, the two-round cap, and which lanes run it |
+| `references/execution.md` | `execution.yml`, the five brief slots, the tiers, and why the batch threshold is still unwritten |
 | `references/lanes.md` | the four lanes, TRIVIAL's entry conditions, and the BUG lane's boundary with SDD |

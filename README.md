@@ -769,6 +769,54 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 Old versions are kept beside the new one, and the one in use is recorded in
 `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 5.3.0 — the execution layer, and two agents nothing was checking
+
+`tasks.md` says **what**. `execution.yml`, beside it, says **how** — mode,
+executor, tier, parallel group, review. The canonical file stays canonical; this
+run's decisions live somewhere they can be rewritten. The split is `superspec`'s
+idea and not its dependency.
+
+**Briefs are written when a task turns `ready`, not up front.** Five slots —
+files, interfaces, acceptance, test, verify — from
+`superpowers:writing-plans`'s task template. What is deliberately not taken is
+its timing: that skill writes a plan for a person to read, while a brief is
+executed by a worker, and a change request can invalidate a third of the plan
+before the worker reaches it. Thirty briefs written and twelve killed is paying
+twice for the same tasks.
+
+**A worker gets the brief and nothing else.** Not the conversation — a transcript
+carries the decisions *and everything that lost*, and a worker that can see a
+rejected option will occasionally build it.
+
+**`ktkit:minimal-diff-guard`** is new: read-only, six rules, runs after the worker
+and before any reviewer, returns `UPHELD` or `VIOLATION` with a `path:line`. The
+discipline comes from agency-agents' minimal-change engineer; the 11 KB file and
+its persona do not. It exists because two things downstream need a diff to mean
+exactly one thing — `cr-delta` answers *what does this change undo* from what each
+task recorded touching, and `deviation.py` anchors divergences to line numbers. A
+worker that tidied three neighbouring files has made the first a lie and moved
+the second's anchors.
+
+Tiers **R0 / R1 / R2** decide how much review a task earns: the free gate, plus
+the guard, plus the reviewer. Same one-way ratchet as everywhere else.
+
+**`analyze-feat` now declares what it did not read**, and what each unread file
+would change if it said something unexpected. "Everything relevant was read" is
+the one sentence that cannot be checked, and it is what the section replaces.
+
+⚠️ **No batching threshold.** Handing several small tasks to one worker might
+save a great deal — a spawn was measured at ~6,619 base tokens for a three-tool
+agent and 23,375 for a large four-tool one, so three trivial tasks in three
+workers may well cost more than three inline. It is not written down, because it
+has not been measured, and `cost.jsonl` has been collecting what is needed since
+4.5.0. A number in a document looks decided whether or not anybody measured it.
+
+**Two agents had never been checked.** `check_agent_table.py` walked two globs and
+reported "19 agents checked" — and `escalation-resolver` matched neither, so its
+tool set, model, word budget and role row were verified by nothing. It looked
+covered because the summary printed a number, and nobody counted the files. The
+checker now fails on any agent no suite reaches.
+
 ### Upgrading to 5.2.0 — the CR lane knows what it undoes
 
 `/ktkit:cr-delta` is new, and the CR lane routes to it instead of to

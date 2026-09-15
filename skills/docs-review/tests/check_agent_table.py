@@ -65,6 +65,25 @@ SUITES = {
         "agents": os.path.join(ROOT, "agents", "spec-recon-*.md"),
         "prefix": "spec-recon-",
     },
+    # An agent belonging to no team. `minimal-diff-guard` is the first, and the
+    # reason this suite exists at all: until it was added, an agent whose name
+    # matched neither prefix was checked by nothing -- no tool set, no model, no
+    # word budget, no row anywhere saying what it is. It looked covered because
+    # the run said "19 agents checked" and nobody counted the files.
+    # The second standalone agent, found by the coverage check below rather than
+    # by anybody noticing: it predates both teams and had never been checked.
+    "escalation": {
+        "table": os.path.join(ROOT, "skills", "escalation-ladder", "references",
+                              "resolver-contract.md"),
+        "agents": os.path.join(ROOT, "agents", "escalation-resolver.md"),
+        "prefix": "",
+    },
+    "execution": {
+        "table": os.path.join(ROOT, "skills", "chain", "references",
+                              "execution.md"),
+        "agents": os.path.join(ROOT, "agents", "minimal-diff-guard.md"),
+        "prefix": "",
+    },
 }
 
 
@@ -127,6 +146,21 @@ def check_suite(name, spec, problems):
     return len(files)
 
 
+def uncovered():
+    """Agent files no suite's glob reaches.
+
+    The suites are globs, so adding an agent whose name matches none of them
+    adds a file nothing checks -- silently, and in the direction that reads as
+    success: the summary line still prints a number, just a smaller one than the
+    directory holds.
+    """
+    covered = set()
+    for spec in SUITES.values():
+        covered |= set(glob.glob(spec["agents"]))
+    everything = set(glob.glob(os.path.join(ROOT, "agents", "*.md")))
+    return sorted(os.path.basename(p) for p in everything - covered)
+
+
 def main(argv):
     wanted = argv[1:] or sorted(SUITES)
     unknown = [w for w in wanted if w not in SUITES]
@@ -139,6 +173,14 @@ def main(argv):
     total = 0
     for name in wanted:
         total += check_suite(name, SUITES[name], problems)
+
+    # Only meaningful for a full run: naming one suite deliberately narrows it.
+    if not argv[1:]:
+        for name in uncovered():
+            problems.append(
+                "agents/%s belongs to no suite in SUITES, so nothing checks its "
+                "tool set, model, word budget or role row -- add it to a suite, "
+                "or add a suite for it" % name)
 
     for line in problems:
         print("FAIL %s" % line)
