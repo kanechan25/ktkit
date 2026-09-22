@@ -19,7 +19,8 @@
         "spec",
         "root-cause-analysis",
         "chain",
-        "escalation"
+        "escalation",
+        "pull-request"
       ]
     }
   ]

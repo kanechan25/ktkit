@@ -2,7 +2,7 @@
 
 Claude Code skills for spec-driven development: from a feature request or a bug report, to a reviewed specification, to the change itself, to a record of what was done.
 
-Seventeen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on. `/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
+Eighteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on. `/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
 
 | | Skill | What it is for |
 | - | ----- | -------------- |
@@ -15,6 +15,7 @@ Seventeen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:d
 | | [`bug-fix-specs`](#the-four-lanes) | a finished diagnosis → a reviewed `fix.md`, then stop |
 | **Execute** *(lane phases)* | [`feat-req-execute`](#the-four-lanes) | an approved spec → plan, tasks, code, converge, report |
 | | [`bug-fix-execute`](#the-four-lanes) | an approved fix plan → red test, the fix, verified |
+| **Publish** | [`pr-writeup`](#supporting-skills) | an existing PR's commits → a write-up a reviewer can act on, never the diff |
 | **Audit** | [`docs-review`](#docs-review) | documents against a standard, against the repository, or against themselves |
 | | [`spec-recon`](#spec-recon) | measure what documents only claim: code, artifacts, version control |
 | **Survive** | [`ccompact`](#supporting-skills) | checkpoint in-flight state before `/compact` eats it |
@@ -26,7 +27,7 @@ Seventeen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:d
 
 Three of them carry the heavy machinery. `chain` is the one you type: it routes a requirement into one of four lanes and runs the whole path, carrying a ledger between phases so nothing is settled twice. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work. `spec-recon` adds the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all seventeen.** They are worth reading once, because they are what make the skills composable rather than merely co-located.
+**Three rules hold across all eighteen.** They are worth reading once, because they are what make the skills composable rather than merely co-located.
 
 - **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in `prompts/` · `analyze/` · `specs/` · `pipeline/` · `implemented/` · `compacts/`. A repository that does not have it gets one. No skill probes for an alternative layout, asks you where to write, or writes anywhere outside `<repo-root>/.claude/` — and creating a missing directory is the only filesystem change any of them makes on its own.
 - **A preflight before the first token.** Each skill probes exactly what it is about to use and stops, with the fix command, if something required is absent. A capability is proved with a real request, never with a tool's opinion of itself.
@@ -184,7 +185,7 @@ Installing as a plugin is what registers the twenty agents and the MCP server. V
                   # MCP tools:     mcp__plugin_ktkit_sequential-thinking__sequentialthinking
 ```
 
-**What installing costs you, before you run anything.** Two of the thirteen skills use sequential-thinking for their reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
+**What installing costs you, before you run anything.** One of the eighteen skills uses sequential-thinking for its reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
 
 ### Option B — Manual (copy a skill)
 
@@ -646,11 +647,12 @@ Until 3.4.0 it was not like that. `--out` defaulted to the bare string `spec-rec
 
 ## Supporting skills
 
-`chain`, `docs-review` and `spec-recon` above carry the heavy machinery, and the lane phases are documented with the lane they belong to. The four below are the rest: small, and used from inside a lane as often as directly.
+`chain`, `docs-review` and `spec-recon` above carry the heavy machinery, and the lane phases are documented with the lane they belong to. The five below are the rest: small, and used from inside a lane as often as directly.
 
 - **`ccompact` / `ccontinue`** — a long pipeline outlives its context window. `ccompact` writes the state that exists *only* in the conversation — decisions and the reasons for them, rejected options, half-finished work, traps already hit — to a durable file, then hard-stops and prints the exact `/compact` line to paste. `ccontinue` picks it up on the far side, compares the recorded branch and HEAD against reality, and reports every place the compaction summary and the file disagree. **The file always wins.** It never copies the spec into the checkpoint: intent is already on disk, and the whole point is to save what is not.
 - **`escalation-ladder`** — five tiers between "I do not know" and asking you. Search what is openable; challenge a disagreement once; look up an authoritative external fact; assume the better-evidenced reading **with a falsifier written down**; and only then ask, with a default already applied so that silence is a valid answer. A question that reaches you has failed four cheaper attempts first.
 - **`confirm-with-me`** — when the literal phrase `confirm with me` appears anywhere in the active context, this gate blocks that one step until you reply `confirm`, `abort` or `modify: <change>`. One marker, one gate: approval of a large task never implies approval of a step inside it. A description alone is a ranking hint, not an order, so the plugin ships a `SessionStart` hook that states the rule in every session where `ktkit` is installed. It writes nothing to your `CLAUDE.md` — uninstalling the plugin removes the rule, which a line appended to your own rule file would not. It costs about 190 tokens per session.
+- **`pr-writeup`** — rewrites the title and description of a pull request that **already exists**, so it reads like an engineering write-up rather than a list of commits. It reads the full body of every commit on the PR and the changed-file stat, and ⛔ never the diff — not to verify, not to enrich, not for one hunk. Commits are grouped into work items, each written as Impact → Cause → Fix with a heading that states the symptom; the changed-file stat is used to warn when a generated file makes the diff look larger than the work. **The ceiling is the commit bodies**, by design: thin commits produce a thin body, marked `<!-- TBD -->` and said out loud, and no flag turns on a tier that reads code to compensate. It creates nothing, commits nothing, pushes nothing, comments nowhere and touches no issue — the single write it makes is the PR's title and body, behind a confirm gate, and `--out` removes even that. Its prose is English in every repository, because the forge is read in English.
 - **`translate-file`** — translates a file's prose into Vietnamese and leaves everything else untouched: identifiers, code, paths, commands, URLs, JSON keys, brand names. Japanese proper nouns that stay untranslated get an English gloss. It confirms the source file before starting, writes `<stem>_vi.<ext>` beside the original, and never edits the original. It is the one skill here that writes outside the artifact root, because output beside the source is the point.
 
 ### A note on language
@@ -718,6 +720,20 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 ```
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.1.0 — the write-up at the far end
+
+**Additive.** One new skill, `/ktkit:pr-writeup`, and nothing else moved. It rewrites an existing pull request's title and description from the bodies of its own commits plus the changed-file stat — the far end of the path the other skills walk: `raise-issue` frames the problem, a lane specifies and executes it, and this narrates the finished work to the people who have to review it.
+
+It is the one skill here that reads a forge and writes to it, so it preflights the `forge` group and proves the token with a real request rather than with `gh auth status`. Two limits are worth knowing before you type it. **It never reads the diff** — file names and per-file line counts are metadata and allowed, diff content is not — so it narrates what the author already wrote and cannot review the code. And **the commit bodies are the ceiling**: a branch of `fix: update` subjects produces a thin body that says it is thin, and the fix for that lives upstream, in the commit you are about to write.
+
+`--out` writes the result to `.claude/claude/implemented/pr-<N>.writeup.md` and leaves the PR alone, which is the safe way to see what it would do.
+
+If you have a user-level `pr-writeup` in `~/.claude/skills/`, remove it — the same reasoning as the twelve duplicates in 6.0.0 below:
+
+```bash
+rm -rf ~/.claude/skills/pr-writeup
+```
 
 ### Upgrading to 6.0.0 — four lanes, one entry point
 
