@@ -7,13 +7,15 @@ This file holds what a lane *is* and, for TRIVIAL, what must be true before it m
 | Lane | The request is | 01 | 03 | 05 |
 | ---- | -------------- | -- | -- | -- |
 | BUG | something that exists and does **not** behave as designed | `/ktkit:rca` | `/ktkit:bug-fix-specs` | `/ktkit:bug-fix-execute` |
-| CR | something that exists, behaves **as designed**, and must behave differently | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
+| CR | something that exists, behaves **as designed**, and must behave differently | `/ktkit:cr-delta` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
 | NR | something that does not exist yet | `/ktkit:analyze-feat` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
 | TRIVIAL | a change small enough that a spec would cost more than the change | — | — | test-driven, directly |
 
-CR runs the NR column until a dedicated `cr-delta` skill exists (C3). The lane is recorded separately from the
-first day so that the manifest says which one ran, and so the split costs one table edit later
-instead of a migration.
+CR and NR share phases 03 and 05 and split at 01, because the question they ask there is not the
+same one: NR asks what to build, CR asks what already built work this undoes. `/ktkit:cr-delta`
+answers the second from the run's own ledger rather than from the repository, and writes the same
+`analyze/<rel>/<base>.analyze.md` every lane's phase 01 writes. The lane is recorded separately so
+the manifest says which one ran.
 
 ## BUG is not CR
 
