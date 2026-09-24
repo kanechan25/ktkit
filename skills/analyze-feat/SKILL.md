@@ -58,7 +58,6 @@ Search cross-session memory for prior decisions before asking the user anything:
 
 ```
 mcp__memory__search_nodes({query: "<feature keywords>"})
-mcp__plugin_claude-mem_mcp-search__smart_search({query: "<feature concept>"})
 ```
 
 **If prior analysis/decisions found** → surface them up front:
@@ -66,8 +65,8 @@ mcp__plugin_claude-mem_mcp-search__smart_search({query: "<feature concept>"})
 
 **If nothing found** → proceed silently.
 
-**Tools absent** → skip and proceed silently as well. This plugin ships neither memory server: they
-hold durable state, and a second copy would split the user's own. An empty search here means "not
+**Tools absent** → skip and proceed silently as well. This plugin ships no memory server: it holds
+durable state, and a second copy would split the user's own. An empty search here means "not
 looked up", never "nothing exists".
 
 This prevents asking the user to re-explain decisions already made.
@@ -444,7 +443,7 @@ A spike stops here — no spec follows.>
 
 ## 3. Prior Context Found
 [Decisions, patterns, or prior analysis from memory check. Omit if nothing found.]
-- [Source: memory/claude-mem] [Decision / pattern]
+- [Source: memory] [Decision / pattern]
 
 ## 4. Tech Stack Context (stack profile — Phase 1 Step 1a)
 [The rows below are DERIVED from the active repo's context file, not from a fixed list. Emit one row per layer this feature actually touches; drop layers it does not. Name the real components of THIS repo.]
@@ -641,7 +640,7 @@ Print to conversation (NOT the full report — just the handoff summary):
 
 | Phase | Tool | Cost | When |
 |---|---|---|---|
-| 0b — Memory | `mcp__memory__search_nodes` + `claude-mem smart_search` | ~300 | Always |
+| 0b — Memory | `mcp__memory__search_nodes` | ~300 | Always |
 | 2 — Graph | `gitnexus_query/context/process/clusters` | ~2,000 | Always |
 | 3a — Scan | `Grep` for exports | ~0 | Always |
 | 3b — Peek | `Grep` top-level, head_limit: 50 | ~350/file | Before Full Read |
@@ -668,8 +667,7 @@ Every `<…>` below is a placeholder to be replaced by whatever the **active rep
 ```
 Phase 0:
   Read requirement inline
-  mcp__memory__search_nodes({query: "<entity> export <format>"})   → prior work? 
-  claude-mem smart_search({query: "export download"})              → prior work?
+  mcp__memory__search_nodes({query: "<entity> export <format>"})   → prior work?
 
 Phase 1:
   Step 1a — read repo CLAUDE.md → build stack profile, list the forks
