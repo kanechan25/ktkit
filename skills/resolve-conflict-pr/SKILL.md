@@ -3,7 +3,6 @@ name: resolve-conflict-pr
 description: "Resolve the merge conflicts of an EXISTING pull request against its base branch and push the result back to the PR, without touching the branch you have checked out. Triggers '/ktkit:resolve-conflict-pr <#N|url>', 'PR này đang bị conflict, fix đi', 'merge dev vào PR này', 'resolve conflict cho PR', 'this PR has conflicts with its base'. Reads the PR's head and base from the forge, never from the local checkout. Works in a detached temporary worktree, merges the base into the head, explains why each hunk conflicts from the commits on both sides, and resolves it by taking one side, both, or a rewrite that keeps both intents. Proves with a script that no line either side added was lost, runs the repository's own verify command, then commits and pushes with a plain push. Stops to ask only when the two sides contradict each other's intent. Never rebases, never force-pushes, never creates a branch."
 argument-hint: "<#N | url> [--report [<file.md>]] [--dry-run]"
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Resolve a PR's conflicts — `/ktkit:resolve-conflict-pr $ARGUMENTS`
