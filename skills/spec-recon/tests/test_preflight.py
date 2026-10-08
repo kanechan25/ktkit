@@ -143,7 +143,7 @@ def test_artifacts_group_creates_the_layout_and_repeats_cleanly():
     check("artifacts group exits 0 on a bare repository", rc == 0, out)
     root = os.path.join(d, ".claude", "claude")
     missing = [s for s in ("prompts", "analyze", "specs", "pipeline",
-                           "implemented", "compacts")
+                           "implemented", "compacts", "resolve-conflict-pr")
                if not os.path.isdir(os.path.join(root, s))]
     check("artifacts group creates every artifact directory", not missing, missing)
     check("the first run says what it created", "created" in out, out)

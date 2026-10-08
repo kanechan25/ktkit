@@ -68,7 +68,7 @@ GROUPS = ("runtime", "write", "read", "vcs", "forge",
 # missing directory is the only filesystem change this gate is allowed to make.
 ARTIFACT_ROOT = os.path.join(".claude", "claude")
 ARTIFACT_DIRS = ("prompts", "analyze", "specs", "pipeline", "implemented",
-                 "compacts")
+                 "compacts", "resolve-conflict-pr")
 
 # speckit is a separate toolkit with its own lifecycle. This plugin never ships
 # it and never vendors it: `.specify/` is scaffolding that lives inside the

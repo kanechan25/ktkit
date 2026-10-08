@@ -16,6 +16,7 @@ Eighteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:do
 | **Execute** *(lane phases)* | [`feat-req-execute`](#the-four-lanes) | an approved spec → plan, tasks, code, converge, report |
 | | [`bug-fix-execute`](#the-four-lanes) | an approved fix plan → red test, the fix, verified |
 | **Publish** | [`pr-writeup`](#supporting-skills) | an existing PR's commits → a write-up a reviewer can act on, never the diff |
+| | [`resolve-conflict-pr`](#supporting-skills) | a conflicted PR → its base merged in and pushed back, nothing either side wrote lost |
 | **Audit** | [`docs-review`](#docs-review) | documents against a standard, against the repository, or against themselves |
 | | [`spec-recon`](#spec-recon) | measure what documents only claim: code, artifacts, version control |
 | **Survive** | [`ccompact`](#supporting-skills) | checkpoint in-flight state before `/compact` eats it |
@@ -27,9 +28,9 @@ Eighteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:do
 
 Three of them carry the heavy machinery. `chain` is the one you type: it routes a requirement into one of four lanes and runs the whole path, carrying a ledger between phases so nothing is settled twice. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work. `spec-recon` adds the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all eighteen.** They are worth reading once, because they are what make the skills composable rather than merely co-located.
+**Three rules hold across all nineteen.** They are worth reading once, because they are what make the skills composable rather than merely co-located.
 
-- **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in `prompts/` · `analyze/` · `specs/` · `pipeline/` · `implemented/` · `compacts/`. A repository that does not have it gets one. No skill probes for an alternative layout, asks you where to write, or writes anywhere outside `<repo-root>/.claude/` — and creating a missing directory is the only filesystem change any of them makes on its own.
+- **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in `prompts/` · `analyze/` · `specs/` · `pipeline/` · `implemented/` · `compacts/` · `resolve-conflict-pr/`. A repository that does not have it gets one. No skill probes for an alternative layout, asks you where to write, or writes anywhere outside `<repo-root>/.claude/` — and creating a missing directory is the only filesystem change any of them makes on its own.
 - **A preflight before the first token.** Each skill probes exactly what it is about to use and stops, with the fix command, if something required is absent. A capability is proved with a real request, never with a tool's opinion of itself.
 - **speckit and superpowers are required, and a missing one stops the skill before it starts.** A `PreToolUse` hook checks them when a ktkit skill is invoked and refuses with the install command; the per-skill preflight then proves the same thing in-run. There is no flag that turns either into a warning. Nothing ever degrades on its own — delivering something else under the same name is worse than stopping.
 
@@ -185,7 +186,7 @@ Installing as a plugin is what registers the twenty agents and the MCP server. V
                   # MCP tools:     mcp__plugin_ktkit_sequential-thinking__sequentialthinking
 ```
 
-**What installing costs you, before you run anything.** One of the eighteen skills uses sequential-thinking for its reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
+**What installing costs you, before you run anything.** One of the nineteen skills uses sequential-thinking for its reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
 
 ### Option B — Manual (copy a skill)
 
@@ -647,12 +648,13 @@ Until 3.4.0 it was not like that. `--out` defaulted to the bare string `spec-rec
 
 ## Supporting skills
 
-`chain`, `docs-review` and `spec-recon` above carry the heavy machinery, and the lane phases are documented with the lane they belong to. The five below are the rest: small, and used from inside a lane as often as directly.
+`chain`, `docs-review` and `spec-recon` above carry the heavy machinery, and the lane phases are documented with the lane they belong to. The six below are the rest: small, and used from inside a lane as often as directly.
 
 - **`ccompact` / `ccontinue`** — a long pipeline outlives its context window. `ccompact` writes the state that exists *only* in the conversation — decisions and the reasons for them, rejected options, half-finished work, traps already hit — to a durable file, then hard-stops and prints the exact `/compact` line to paste. `ccontinue` picks it up on the far side, compares the recorded branch and HEAD against reality, and reports every place the compaction summary and the file disagree. **The file always wins.** It never copies the spec into the checkpoint: intent is already on disk, and the whole point is to save what is not.
 - **`escalation-ladder`** — five tiers between "I do not know" and asking you. Search what is openable; challenge a disagreement once; look up an authoritative external fact; assume the better-evidenced reading **with a falsifier written down**; and only then ask, with a default already applied so that silence is a valid answer. A question that reaches you has failed four cheaper attempts first.
 - **`confirm-with-me`** — when the literal phrase `confirm with me` appears anywhere in the active context, this gate blocks that one step until you reply `confirm`, `abort` or `modify: <change>`. One marker, one gate: approval of a large task never implies approval of a step inside it. A description alone is a ranking hint, not an order, so the plugin ships a `SessionStart` hook that states the rule in every session where `ktkit` is installed. It writes nothing to your `CLAUDE.md` — uninstalling the plugin removes the rule, which a line appended to your own rule file would not. It costs about 190 tokens per session.
 - **`pr-writeup`** — rewrites the title and description of a pull request that **already exists**, so it reads like an engineering write-up rather than a list of commits. It reads the full body of every commit on the PR and the changed-file stat, and ⛔ never the diff — not to verify, not to enrich, not for one hunk. Commits are grouped into work items, each written as Impact → Cause → Fix with a heading that states the symptom; the changed-file stat is used to warn when a generated file makes the diff look larger than the work. **The ceiling is the commit bodies**, by design: thin commits produce a thin body, marked `<!-- TBD -->` and said out loud, and no flag turns on a tier that reads code to compensate. It creates nothing, commits nothing, pushes nothing, comments nowhere and touches no issue — the single write it makes is the PR's title and body, behind a confirm gate, and `--out` removes even that. Its prose is English in every repository, because the forge is read in English.
+- **`resolve-conflict-pr`** — merges the base branch of a conflicted pull request into its head and pushes the merge back, reading which branch goes into which from the PR itself. ⛔ It never touches the branch you have checked out: the work happens in a detached worktree under `$TMPDIR`, so it runs from any branch, with uncommitted work in place. Every hunk is classed — one-sided, additive, convergent, generated, or an intent conflict — and explained from the commits on both sides before it is edited. Before anything is committed, `line_survival.py` proves that every line either side added since the merge base is still there, and the repository's verify command (asked once, kept in `.claude/claude/resolve-conflict-pr/verify.cmd`) is green. It stops to ask only for an intent conflict; that answer is also the approval to push. It merges and never rebases, and a rejected push is answered by starting over from the fetch — never with `--force`.
 - **`translate-file`** — translates a file's prose into Vietnamese and leaves everything else untouched: identifiers, code, paths, commands, URLs, JSON keys, brand names. Japanese proper nouns that stay untranslated get an English gloss. It confirms the source file before starting, writes `<stem>_vi.<ext>` beside the original, and never edits the original. It is the one skill here that writes outside the artifact root, because output beside the source is the point.
 
 ### A note on language
@@ -720,6 +722,12 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 ```
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.3.0 — a conflicted PR, resolved where your checkout cannot see it
+
+**Additive.** One new skill, `/ktkit:resolve-conflict-pr <#N|url>`. It reads the PR's head and base from the forge, merges the base into the head in a detached worktree of its own, resolves each conflict by class, and pushes a plain merge commit back to the PR. Your current branch, working tree and stash are never touched, and no branch is created anywhere.
+
+Two things are new to the plugin. `preflight.py`'s `artifacts` group now also creates `.claude/claude/resolve-conflict-pr/`, which holds the per-repository `verify.cmd` and, only with `--report`, the resolution record. And `skills/resolve-conflict-pr/scripts/line_survival.py` turns "do not lose code" into a measurement: it exits 1 for any line one side added that the result no longer has, and for any conflict marker left behind.
 
 ### Upgrading to 6.2.0 — the CR lane finally delivers its artifact
 
