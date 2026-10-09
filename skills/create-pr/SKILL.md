@@ -1,9 +1,8 @@
 ---
 name: create-pr
-description: "Open a pull request from a branch into its target and write its title and body from the full bodies of the commits it carries — never from the code diff. Triggers '/ktkit:create-pr', 'tạo PR', 'tạo PR từ nhánh này vào dev', 'create a PR for this branch', 'open a PR from dev to main'. Source is the current branch or --from; target is --to, else `dev`, else `develop`. Also reads the issue the PR is for, related issues, free-form text in the arguments and what the current session already established. Writes English by default, Japanese with --lang ja, never Vietnamese. Pushes an unpushed source branch with a plain push. After the PR exists, always hands it to /ktkit:resolve-conflict-pr so a conflict with the target is resolved at once. Works in any repository; nothing about one repository is assumed."
-argument-hint: "[free-form context, issue #N or URL] [--from <branch>] [--to <branch>] [--mode simple|full] [--lang en|ja] [--issue <#N|url>] [--related <#N|url>] [--closes] [--draft]"
+description: "Open a pull request from a branch into its target and write its title and body from the full bodies of the commits it carries — never from the code diff. Triggers '/ktkit:create-pr', 'tạo PR', 'tạo PR từ nhánh này vào dev', 'create a PR for this branch', 'open a PR from dev to main'. Source is the current branch or --from; target is --to, else `dev`, else `develop`. Also reads the issue the PR is for, related issues, free-form text in the arguments and what the current session already established. Writes English by default, Japanese with --lang ja, never Vietnamese. Pushes an unpushed source branch with a plain push. After the PR exists, always hands it to /ktkit:resolve-conflict-pr so a conflict with the target is resolved at once. Called by /ktkit:chain --full with the run's context file. Works in any repository; nothing about one repository is assumed."
+argument-hint: "[free-form context, issue #N or URL] [--from <branch>] [--to <branch>] [--mode simple|full] [--lang en|ja] [--issue <#N|url>] [--related <#N|url>] [--closes] [--draft] [--context <file>]"
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Open a PR from its commits — `/ktkit:create-pr $ARGUMENTS`
@@ -33,7 +32,7 @@ and makes sure it does not sit there conflicting with its target.
    message, an issue, the user's arguments, or something this session actually established. Missing
    → `<!-- TBD -->`, never a guess.
 3. **Never invent an issue link.** Links come only from `--issue`, `--related`, the arguments, the
-   session, or the commit messages.
+   session, the `--context` file, or the commit messages.
 4. **Never create or switch a local branch**, never check anything out. Pushing an existing local
    branch to the remote is the only ref this skill makes.
 5. **Plain push only.** Never `--force`, never `--force-with-lease`. Diverged → STOP.
@@ -54,6 +53,7 @@ and makes sure it does not sit there conflicting with its target.
     [--related <#N|url>]    a related issue, linked only; repeatable
     [--closes]              link --issue as `Closes #N` instead of `Part of #N`
     [--draft]               open the PR as a draft
+    [--context <file>]      a run's hand-off file, e.g. from /ktkit:chain --full
 ```
 
 | Flag | What it actually means |
@@ -66,6 +66,7 @@ and makes sure it does not sit there conflicting with its target.
 | `--related` | Body read for context, linked under a related line, never as closing. |
 | `--closes` | Applies to every `--issue`. A forge closes the issue only when the PR merges into the default branch. |
 | `--draft` | The way to look at the result before reviewers are notified. |
+| `--context` | A file another skill wrote for this one — `/ktkit:chain --full` passes its `pr-context.md`. Read in full, a source of equal standing to a commit body. It must exist; a missing file is a STOP, not a silent skip. |
 
 **Free-form text** is everything that is not a flag: a ticket, notes, an instruction. It is a source
 of equal standing to a commit body. An issue URL or `#N` inside it is an `--issue`, unless the
@@ -152,6 +153,7 @@ out of the body. `stats.message_bytes` decides how to read:
 | `--related` | body | a related line |
 | `issue_refs` from the commits | not read | linked under related, unless already linked above |
 | free-form text | as written | equal to a commit body |
+| `--context` file | in full | equal to a commit body. Its user decisions are the record of a rejected option the style guide allows; its deviations and open rows go to `Risks & follow-ups`; an issue it names is linked like `--issue`. Its prose may be in any language — the PR is still written in `--lang` |
 | this session | decisions, reasons, measurements, runs actually done here | equal to a commit body — only what was really said or run, never what was planned |
 
 Issues are read with the GitHub MCP `issue_read`, `gh issue view` as fallback (retry outside the
@@ -209,7 +211,7 @@ trial merge is the real test. It stops by itself when there is nothing to resolv
 ```text
 PR #<N>  <from> → <to>   <url>   [draft]
 title: <title>
-sources: <k> commits (<m> entries, <s> sync merges left out) · issues <list> · free-form · session
+sources: <k> commits (<m> entries, <s> sync merges left out) · issues <list> · context · free-form · session
 pushed: <nothing | -u <from> | <from> ahead by <n>>
 TBD: <items, or none>
 conflict: <none | resolved and pushed <sha> | stopped: <reason>>

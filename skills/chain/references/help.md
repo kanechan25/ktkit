@@ -11,7 +11,8 @@ agree perfectly with each other while the code does something else. Step 07 runs
 the only step that opens the delivered code and asks whether it satisfies the spec — capped at two
 rounds, because work still missing after two is a spec problem, not a code one.
 
-Implementation is **off** unless you ask for it.
+Implementation is **off** unless you ask for it. `--full` goes all the way: implement, commit each
+task with a body built from the run's own files, and open the PR through `/ktkit:create-pr`.
 
 ```
 /ktkit:chain <requirement.md | "described request"> [flags]
@@ -47,6 +48,12 @@ Implementation is **off** unless you ask for it.
 # go all the way and apply the change
 /ktkit:chain requirement.md --execute
 
+# further still: commit each task, then open the PR (from the branch you are on — check it out first)
+/ktkit:chain requirement.md --nr --full
+
+# the same, into a named target, as a Japanese draft
+/ktkit:chain requirement.md --full --pr-to release/2.4 --draft --lang ja
+
 # pick up a run that was interrupted, without re-minting IDs
 /ktkit:chain requirement.md --resume
 
@@ -65,7 +72,11 @@ Implementation is **off** unless you ask for it.
 | `--trivial` | — | The only lane with no analysis and no spec. All four conditions in `references/lanes.md` must hold, and it requires `--execute`. Crossing its 50,000-token ceiling escalates to CR with the reason recorded — it never extends the ceiling. |
 | `--to A\|B\|C` | `C` | Stop after analysis (`A`), spec (`B`) or plan (`C`). |
 | `--plan yes\|no` | asked at step 00 | Answers the plan question up front instead of being asked. |
-| `--execute` | **off** | Runs phase D — the change itself. Off by default on purpose. |
+| `--execute` | **off** | Runs phase D — the change itself. Off by default on purpose. Nothing is committed. |
+| `--full` | **off** | `--execute`, then one commit per task the moment it passes review, then `/ktkit:create-pr` with the run's context. Checked at step 00 before anything is spent: on `dev`/`develop`/the default branch, a dirty tree or a detached HEAD is a stop — ⛔ the chain never creates a branch for you. |
+| `--pr-to <branch>` | `dev`, else `develop` | With `--full`: the PR's target. Not `--to`, which names the phase to stop after. |
+| `--draft` | — | With `--full`: open the PR as a draft. |
+| `--lang en\|ja` | `en` | With `--full`: the PR's language. Commits are always English. |
 | `--resume` | — | Restart at the first step marked `missing` or `partial`. Rows marked `complete` are never re-run: their ID allocations are cited downstream. |
 | `--fresh` | — | Start at step 00. Deletes nothing — the old run directory is renamed `<base>.<timestamp>/`. |
 | `--budget <token>` | **asked, never assumed** | ⭐ Ceiling for the run, checked at every phase boundary against `cost.jsonl` — what agents actually reported. Omit it and step 00 stops for your answer: nothing has measured this skill yet, so it will not pick a number for you. |
@@ -176,6 +187,10 @@ Artifacts stay exactly where each skill already put them. The chain adds only a 
 .claude/claude/implemented/<rel>/<base>.implt.md       D  (only with --execute)
 ```
 
+With `--full`, also: one commit per task on the branch you are on (`Why:` · `What:` · deviations ·
+`Verified:` · `Part of #N`, plus `Chain-Run` / `Chain-Task` trailers so a resume never commits twice),
+`pr-context.md` in the run directory, and the PR. ⛔ Nothing under `.claude/claude/` is committed.
+
 `<rel>` and `<base>` mirror the input's sub-path under `prompts/`. Read `manifest.md` first if a run
 stopped — it is the index, and `--resume` reads the same file.
 
@@ -193,9 +208,11 @@ stops, the manifest says at which step and why.
 | Start `--execute` on the last of the budget | Phase D costs by the size of the change. Out of budget mid-implementation leaves the repository half-changed. |
 | Delete the run directory to "start clean" | IDs are re-minted from 001 and every citation in the old artifacts silently repoints. Use `--fresh`. |
 | Pass `--execute` on the first run of an unfamiliar requirement | Read the spec first. The flag is off by default for that reason. |
+| Run `--full` from `dev` or `main` and expect a branch to appear | Step 00 stops. Check out the feature branch first — the chain never creates one. |
+| Run `--full` over uncommitted work of your own | Step 00 stops: a per-task commit would sweep it in. |
 | Re-run without `--resume` after an interruption | Completed steps are re-run and their IDs re-minted. |
 
 ## See also
 
-`/ktkit:help spec-recon` — when the requirement needs measuring, not just reading, before a spec is
+`/ktkit:help create-pr` — what `--full` hands the PR to. `/ktkit:help spec-recon` — when the requirement needs measuring, not just reading, before a spec is
 worth writing. `/ktkit:help docs-review` — when the question is about documents rather than a change.

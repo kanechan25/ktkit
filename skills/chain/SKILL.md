@@ -1,6 +1,6 @@
 ---
 name: chain
-description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to one of four lanes -- BUG, CR, NR or TRIVIAL -- runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
+description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to one of four lanes -- BUG, CR, NR or TRIVIAL -- runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. --full goes further: implementation, one commit per task with a body built from the run's own files, then a pull request through /ktkit:create-pr with the run's context handed over. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
 ---
 
 # chain — one requirement in, a reviewed spec out
@@ -16,8 +16,9 @@ phase never re-asks it, and a single place where the run stops.
    for at every step after it. The lead reads step files and gate blocks, nothing else.
 2. **Every phase hands off through a file, never through this conversation.** A phase receives
    paths. It does not receive the lead's reasoning about what the previous phase found.
-3. **Implementation is off** unless the user passes `--execute`. Without it the chain stops after
-   the plan, with the artifacts written and nothing applied to the repository.
+3. **Implementation is off** unless the user passes `--execute` or `--full`. Without either the
+   chain stops after the plan, with the artifacts written and nothing applied to the repository.
+   Without `--full` nothing is committed and nothing is pushed.
 4. **Never create or switch a branch.** Whatever is checked out stays checked out.
 5. **This skill invents no policy.** Tiers, budgets and gate format come from
    `/ktkit:escalation-ladder`. Where this file and that one disagree, that one wins.
@@ -31,6 +32,10 @@ phase never re-asks it, and a single place where the run stops.
     [--to A|B|C]          stop after this phase. Default C.
     [--plan yes|no]       skip the question at step 00
     [--execute]           run phase D as well. Default OFF.
+    [--full]              --execute, then a commit per task and a PR. Default OFF.
+    [--pr-to <branch>]    with --full: the PR's target. Default dev, else develop
+    [--draft]             with --full: open the PR as a draft
+    [--lang en|ja]        with --full: the PR's language. Default en
     [--resume | --fresh]  what to do when a previous run exists
     [--budget <token>]    stop cleanly at a step boundary. Asked for, never assumed
     [--budget-execute <n>] a separate ceiling for phase D. Default: what A-C cost
@@ -42,6 +47,8 @@ phase never re-asks it, and a single place where the run stops.
 | ---- | ---------------------- |
 | `--bug` / `--cr` / `--nr` / `--trivial` | **Names the lane outright**, and nothing overrides it — not the frontmatter, not the wording of the request. Use it whenever you already know, which is most of the time. Passing two of them is an error, not a preference. `--feature` is an alias for `--nr`. |
 | `--trivial` | The only lane with no analysis and no spec, so it is the only one where a wrong call produces a change nobody reviewed. It is **never** inferred — not from the frontmatter, not from the size of the diff — and its four entry conditions are all required, not weighed: see `references/lanes.md`. It also requires `--execute`: without it the lane has nothing to run, and the chain stops rather than writing an empty trace. |
+| `--full` | Everything `--execute` does, then step 05 **commits each task** the moment it passes its review, and steps 08–09 hand the run to `/ktkit:create-pr`. ⛔ Refuses a run that stops early (`--to A` or `--to B`): there is nothing to commit. Checked at step 00 before anything is spent — see item 5 there. |
+| `--pr-to` / `--draft` / `--lang` | Passed through to `/ktkit:create-pr` as `--to`, `--draft` and `--lang`. `--pr-to` is not `--to`: that one names the phase the chain stops after. |
 | `--budget` | ⭐ **Asked for, never assumed.** Without it, step 00 prints what a comparable run cost — from `cost.jsonl`, if one exists nearby — and **stops for your answer**. It does not pick a number: `ktkit:spec-recon` defaults to 4M because 453,571 tokens per agent was measured there, and this skill has a different shape and **no measurement yet**. Checked at every step boundary against `cost.jsonl`; reaching it writes `partial` into the manifest and stops **at a boundary** — never mid-step, which would leave a half-written artifact that reads as finished. |
 | `--budget-execute` | Phase D is the one phase whose cost tracks the size of a change rather than the number of questions, so it gets its own ceiling. Default: **what phases A–C actually cost**, measured. ⛔ Running out mid-implementation leaves a repository half-changed, which is worse than one not changed at all — so if the remainder is under that figure, phase D does not start. |
 | `--ledger-scope` | `run` (default) reads only this run's ledger. `dir` also reads sibling runs' `resolved.md` in the same `prompts/<rel>/`, and reports a match as **`FOREIGN` with exit 2** — a lead for a resolver, never a conclusion. A row settled last week may be stale, and a wrong `HIT` is worse than a `MISS` because the chain cites an answer to a question nobody asked now and stops looking. |
@@ -64,6 +71,8 @@ Artifacts stay exactly where the skills already put them. The chain adds only a 
           07-converge.md
                         ^^^^^^^^^ 04 and 07 are CR · NR only — the BUG lane has
                                   no plan phase and no tasks.md to converge
+          08-handoff.md 09-pr.md                       --full only
+    pr-context.md                                  --full only: what create-pr is handed
 
 .claude/claude/analyze/<rel>/<base>.analyze.md              A
 .claude/claude/specs/<rel>/<base>/spec.md                   B   CR · NR
@@ -169,7 +178,32 @@ Cheap, and before anything is spent. In order:
 4. **Does the repository have its own runbook?** `cat <feature-dir>/runbook.ref`. Present ⇒ default
    `--plan no`; absent ⇒ default `--plan yes`.
 
-Ask whatever of 2–4 is still open as **one block**, once, with the defaults filled in — not three
+5. **`--full` only: may this run end in a PR?** Decided now, because finding out at step 09 means
+   phases A–D were paid for a PR that cannot be opened.
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.py" --groups vcs,forge --repo <root>
+   git ls-remote --heads <remote> | sed 's#.*refs/heads/##' > "$TMPDIR/heads"
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/ship.py" gate --repo <root> \
+     --default "$(gh repo view --json defaultBranchRef -q .defaultBranchRef.name)" \
+     [--to <pr-to>] --heads $(cat "$TMPDIR/heads")
+   ```
+
+   `<remote>` is the one whose URL names `owner/repo`, not necessarily `origin`. `ls-remote` over SSH
+   is retried outside the sandbox, which denies the SSH agent socket.
+
+   | Exit | Meaning | What happens |
+   | ---- | ------- | ------------ |
+   | 0 | prints `target` and `source` | record both in `steps/00-route.md` |
+   | 3 | both `dev` and `develop` exist | ask, in the block below |
+   | 4 | no target, or `--pr-to` names a branch the remote lacks | ⛔ STOP, ask for `--pr-to` |
+   | 5 | standing on the target or the default branch | ⛔ STOP: check out the feature branch yourself. ⛔ **The chain never creates one** — not even here, where it would be convenient |
+   | 6 | dirty tree, or detached HEAD | ⛔ STOP: a per-task commit would sweep unrelated changes in. The chain's own artifacts under `.claude/claude/` do not count |
+
+   Also read `gh_issue:` from the input's frontmatter. It is the issue every commit and the PR are
+   `Part of`. Absent → no issue is linked; ⛔ never one guessed from a branch name.
+
+Ask whatever of 2–5 is still open as **one block**, once, with the defaults filled in — not three
 separate questions. A run that passed a lane flag, `--resume`/`--fresh` and `--plan` asks nothing at
 all and goes straight to 01.
 
@@ -177,7 +211,7 @@ Record the lane **and how it was decided** in `steps/00-route.md` — `flag`, `f
 `asked`. When the artifacts later turn out to be the wrong kind, that one word says whether the
 chain guessed or was told. Then initialise `resolved.md` and `manifest.md`.
 
-| Lane | 01 | 03 | 05 (only with `--execute`) |
+| Lane | 01 | 03 | 05 (only with `--execute` / `--full`) |
 | ---- | -- | -- | -- |
 | BUG | `/ktkit:rca` | `/ktkit:bug-fix-specs` | `/ktkit:bug-fix-execute` |
 | CR | `/ktkit:cr-delta` | `/ktkit:feat-req-specs` | `/ktkit:feat-req-execute` |
@@ -262,7 +296,7 @@ Anything the plan reveals that contradicts the spec is **synced back** — see b
 
 ### 05 — implement
 
-Only with `--execute`. Runs the lane's execute skill. Its own STOP conditions stand unchanged: a
+Only with `--execute` (which `--full` implies). Runs the lane's execute skill. Its own STOP conditions stand unchanged: a
 `/speckit-analyze` CRITICAL finding and a HIGH/CRITICAL blast radius are gates, always. They are
 "expensive if wrong", which is the definition of T4.
 
@@ -403,6 +437,51 @@ about a file that was never going to ship in that state.
 Findings come back as ordinary work for the worker, and the free gate runs again afterwards: a change
 made in response to a review is a change, and it can break the build like any other.
 
+#### `--full`: commit the task the moment it passes
+
+A task is committed when the last check its tier requires has passed and it is marked `done` in
+`task-state.md` — not at the end of the phase. The brief, its deviations and the gate result are on
+disk at that moment; by the end of the phase the reason a task was built the way it was has left
+context, and the commit body is the main source `/ktkit:create-pr` writes the PR from. It never opens
+the diff, so a commit that says less than the run knew is a PR that says less.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/ship.py" done --repo <root> --run <rel>/<base> --task T03
+#  exit 0 ⇒ already committed (a --resume) — skip to the next task
+git add -- <the task's touched paths>              # ⛔ never -A, never .
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/ship.py" staged --repo <root> --base <chain-dir> --task T03
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/ship.py" compose --base <chain-dir> \
+  --run <rel>/<base> --task T03 --type <type> --scope <scope> --subject "<outcome>" \
+  --why "<…>" --what "<…>" --verify-cmd "<the free-gate command>" [--issue <gh_issue>] \
+  > <chain-dir>/steps/commits/T03.txt          # mkdir -p it first
+git commit -F <chain-dir>/steps/commits/T03.txt
+```
+
+| Part | Where it comes from |
+| ---- | ------------------- |
+| subject | `<type>(<scope>): <outcome>`, ≤ 72 characters, English, the outcome a user would notice |
+| `Why:` | the requirement the task serves, quoted from `spec.md` (or `fix.md`) and the issue. ⛔ Never written from the code |
+| `What:` | the brief's **acceptance** slot, said as what now happens |
+| deviations | `compose` adds every row of `deviations.jsonl` anchored in a touched file, contract-level ones marked — or says none were recorded |
+| `Verified:` | the free-gate command that actually passed. ⛔ Never a command that was not run |
+| `Files:` · `Spec refs:` | from the task's `done` row |
+| `Part of #N` | the input's `gh_issue`, when it has one |
+| `Chain-Run:` · `Chain-Task:` | the trailers `done` finds, so a resume never commits a task twice |
+
+`compose` lints what it prints and refuses a message `create-pr` could not use: a long or
+non-conventional subject, a missing section or trailer, Vietnamese prose. `staged` refuses a path the
+task never touched and anything under `.claude/claude/` — **chain artifacts are never committed**.
+Either refusal sends the step back; neither is overridden.
+
+| Lane | Commits |
+| ---- | ------- |
+| CR · NR | one per task, `--task T03` |
+| BUG | one: the fix and its regression test, `--task fix --touched <paths>`, `Why:` from `fix.md`'s root cause |
+| TRIVIAL | one, `--task trivial --touched <the one file and its test>` |
+
+Converge rounds append tasks; each is committed the same way. ⛔ Never `--amend`, never squash,
+never rewrite a commit already made — a per-task history is what lets one task be reverted alone.
+
 ### 06 — sync back
 
 ⛔ **A specification that disagrees with the code is worse than no specification**: it reads as
@@ -462,7 +541,7 @@ Conflicts found in step 04 go into the same block, by the same route.
 
 ### 07 — converge
 
-Only with `--execute`, and only on the CR and NR lanes. **This is the step that closes the loop.**
+Only with `--execute` or `--full`, and only on the CR and NR lanes. **This is the step that closes the loop.**
 
 Every step before it compares one document with another: analysis against request, spec against
 analysis, plan against spec, deviations against spec. Not one of them opens the delivered code and
@@ -506,6 +585,36 @@ At the cap:
 Record the round count in the manifest as it goes. A run that shows `converge round 1 clean` cost one
 call; one that reaches the cap silently, with nothing saying it did, is how a loop becomes a spiral.
 
+### 08 — hand-off (`--full` only)
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/ship.py" context --base <chain-dir> \
+  --lane <lane> --input <input> [--issue <gh_issue>] > <chain-dir>/pr-context.md
+```
+
+Built from the run's files, never from this conversation: the tasks delivered, every question the
+user settled at a gate (with what they chose — the only record of a rejected option the PR may cite),
+what is still open, T3.5 assumptions with their falsifiers, every deviation, and the manifest's
+status column, which carries the converge result. Record the path in `steps/08-handoff.md`.
+
+Runs after 06 and 07, so a deviation lint STOP or a converge cap stops the run **before** a PR exists.
+
+### 09 — pull request (`--full` only)
+
+Invoke **`/ktkit:create-pr`**:
+
+```
+/ktkit:create-pr --from <source> --to <target> --context <chain-dir>/pr-context.md
+                 [--issue <gh_issue>] [--draft] [--lang en|ja]
+```
+
+`<source>` and `<target>` are what step 00's gate printed. create-pr pushes the branch with a plain
+push, writes the body from the commit bodies plus the context file, opens the PR and hands it to
+`/ktkit:resolve-conflict-pr`. Its own stops stand: a diverged branch, a PR already open for the same
+branches — that one is recorded in `steps/09-pr.md` with its URL and the step counts as done.
+
+Record the PR URL, its number and the conflict result in `steps/09-pr.md` and the manifest.
+
 ## The gate
 
 At most **two questions** in a whole run, and a clean run has none:
@@ -518,6 +627,9 @@ At most **two questions** in a whole run, and a clean run has none:
 ⭐ **A contract-level deviation is a third stop and is not counted here**, because it is not a
 question: the change has already happened, and what is being asked is whether the specification may
 be rewritten to say so. Only `--execute` runs can reach it.
+
+⭐ **An intent conflict `/ktkit:resolve-conflict-pr` stops on at step 09 is not counted either**, for
+the same reason: the work is finished, and what is asked is which side of a merge to keep.
 
 Format is `/ktkit:escalation-ladder`'s three tables: ⛔ CẦN CHỐT (≤3 rows, each with a default that
 is **already applied** and a recommendation), ✅ ĐÃ TỰ CHỐT, 🟡 GIẢ ĐỊNH CÓ BẰNG CHỨNG.
@@ -648,8 +760,11 @@ the only evidence for whether `--threshold` sits where it should.
 - Open a gate for something a resolver was never asked.
 - Report a `self_resolve_ratio` that was asserted rather than recomputed.
 - Continue past a speckit FAIL at step 00 by writing the artifacts some other way.
-- Run phase D without `--execute`.
-- Create a branch.
+- Run phase D without `--execute` or `--full`.
+- Create a branch — including to get off `dev` or `main` so that `--full` can open a PR.
+- Commit with `git add -A`, commit a file under `.claude/claude/`, or amend a commit already made.
+- Write a commit's `Why:` from the code instead of from the spec, or a `Verified:` command nobody ran.
+- Open the PR by any route other than `/ktkit:create-pr`, or before steps 06 and 07 finished.
 
 ## References
 

@@ -245,6 +245,9 @@ A crashed run resumes: `manifest.md` records every step and its status, and `--r
 
 # apply the change as well
 /ktkit:chain <prompt.md> --execute
+
+# apply it, commit each task, open the PR
+/ktkit:chain <prompt.md> --full
 ```
 
 The filename carries through the whole run: a requirement at `prompts/<group>/<name>.md` produces `analyze/<group>/<name>.analyze.md`, then `specs/<group>/<name>/spec.md`, then `plan.md` beside it. Nothing is re-slugified, so the trees mirror each other and anything is findable at the matching path.
@@ -253,7 +256,7 @@ The filename carries through the whole run: a requirement at `prompts/<group>/<n
 
 ⛔ **TRIVIAL is not in that table and never will be.** No `type:` value selects it, because no producer can know whether its four entry conditions hold — that takes reading the repository, not reading the request. `--trivial` reaches it and nothing else does.
 
-**Where it stops.** A bare `/ktkit:chain <file>` runs analysis, spec and plan, then stops — `--to` already defaults to `C` and `--execute` already defaults to off, so neither needs typing. `--to B` and `--to A` stop earlier; `--execute` is the only thing that writes code.
+**Where it stops.** A bare `/ktkit:chain <file>` runs analysis, spec and plan, then stops — `--to` already defaults to `C` and `--execute` already defaults to off, so neither needs typing. `--to B` and `--to A` stop earlier; `--execute` is the only thing that writes code, and `--full` the only thing that commits it: one commit per task, its body built from the spec, the brief and the deviation record, then a PR through `/ktkit:create-pr`. `--full` checks at step 00 that you are on a feature branch with a clean tree, and stops otherwise — it never creates a branch.
 
 **Answering a gate.** The gate is answer-by-exception: every row already has its default applied, so saying nothing accepts them and the run continues. Answer by row number — `1: allow reads, no writes` — when you disagree. A reply that addresses no row ("ok, go on") is not an answer, and the gate is re-posted.
 
@@ -724,6 +727,12 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 ```
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.5.0 — a chain run that ends in a PR
+
+**Additive.** `/ktkit:chain --full` runs everything `--execute` does, commits each task the moment it passes review, and opens the PR through `/ktkit:create-pr` with the run's context handed over in `pr-context.md`. Without `--full` nothing changes: `--execute` still commits nothing. New flags `--pr-to`, `--draft` and `--lang` pass through to create-pr. `skills/chain/scripts/ship.py` holds the parts with one right answer: the step-00 branch gate, the commit message and its lint, the staged-path check, the resume check by trailer, and the context file.
+
+Two changes to `/ktkit:create-pr`: a new `--context <file>` flag, and it no longer sets `disable-model-invocation`, so the chain can call it. It may now also be chosen when you only describe opening a PR.
 
 ### Upgrading to 6.4.0 — opening the PR, not only fixing it
 

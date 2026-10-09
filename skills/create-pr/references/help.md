@@ -33,6 +33,9 @@ present is asked once, neither is a stop, and the default branch is never picked
 
 # a Japanese PR, opened as a draft to look at first
 /ktkit:create-pr --lang ja --draft
+
+# what /ktkit:chain --full runs at its last step
+/ktkit:create-pr --from feature/x --to dev --issue 123 --context .claude/claude/chain/<rel>/<base>/pr-context.md
 ```
 
 ## Flags
@@ -47,6 +50,7 @@ present is asked once, neither is a stop, and the default branch is never picked
 | `--related <#N\|url>` | A related issue: read for context, linked, never closed. Repeatable. |
 | `--closes` | Links every `--issue` as `Closes #N` instead. |
 | `--draft` | Opens the PR as a draft. The conflict step still runs. |
+| `--context <file>` | A hand-off file another skill wrote — `/ktkit:chain --full` passes its run's `pr-context.md`. Read in full; a missing file is a stop. |
 
 ## Where the body comes from
 
@@ -55,6 +59,7 @@ present is asked once, neither is a stop, and the default branch is never picked
 | full commit bodies | the main source |
 | the `--issue` body, labels, comments | the problem and its acceptance criteria |
 | free-form text you pass | equal to a commit body |
+| the `--context` file | equal to a commit body: the user's gate decisions, open rows, deviations |
 | this session | equal to a commit body — only what was actually said or run here |
 | changed-file names and line counts | to warn when generated files make the diff look bigger than the work |
 
