@@ -728,6 +728,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 6.5.1 — the slash menu shows how to call each skill
+
+**Additive.** Every skill now declares an `argument-hint`, so typing `/ktkit:<name>` shows its flags, or the input it expects, instead of only its description. `skills/spec-recon/tests/test_argument_hint.py` keeps each hint in step with the skill's `## Arguments` in both directions. No behaviour changes.
+
 ### Upgrading to 6.5.0 — a chain run that ends in a PR
 
 **Additive.** `/ktkit:chain --full` runs everything `--execute` does, commits each task the moment it passes review, and opens the PR through `/ktkit:create-pr` with the run's context handed over in `pr-context.md`. Without `--full` nothing changes: `--execute` still commits nothing. New flags `--pr-to`, `--draft` and `--lang` pass through to create-pr. `skills/chain/scripts/ship.py` holds the parts with one right answer: the step-00 branch gate, the commit message and its lint, the staged-path check, the resume check by trailer, and the context file.
