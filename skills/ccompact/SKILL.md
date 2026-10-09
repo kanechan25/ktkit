@@ -1,6 +1,7 @@
 ---
 name: ccompact
 description: "Use BEFORE running the built-in /compact, to checkpoint in-flight execution state to a durable file so it survives compaction. Writes <compact-root>/<rel-dir>/<base>.compact.md mirroring the input file's sub-path (always under the plugin's fixed `.claude/claude/compacts` root, created when missing), captures what ACTUALLY happened in this conversation (decisions + reasons, rejected options, in-progress work, traps) — never a summary of the spec — then HARD STOPS and prints the exact /compact line to paste. Also handles cleanup modes `--clear all` and `--clear --older Nd`. Trigger on `/ktkit:ccompact <file>`, or when the user wants to compact without losing pipeline state. Does NOT run /compact (a CLI built-in) and does NOT continue the work — that is /ktkit:ccontinue."
+argument-hint: "<input-file> [--tag <name>] [--out <dir>] | --clear all | --clear --older <N>d"
 ---
 
 # ccompact — durable checkpoint before compaction

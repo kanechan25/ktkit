@@ -8,6 +8,7 @@ description: >
   understand this PR requirement". Also trigger when the user pastes a requirement or links a prompt
   file without explicitly asking for analysis — if it looks like an unanalyzed feature description,
   use this skill. This is the ANALYSIS phase only — no spec, no code, no tasks produced.
+argument-hint: "<requirement.md | GitHub issue or PR URL | described request>"
 ---
 
 # Feature Analysis Skill (`/ktkit:analyze-feat`)

@@ -2,6 +2,7 @@
 name: docs-review
 description: Use when the user asks to review or audit documentation, check whether docs cover a spec, build a requirements traceability matrix, find gaps, stale sections or contradictions between a spec and its documents, investigate a question across a document set, or fix and update documents to match a spec (--fix).
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, Agent
+argument-hint: "[N] <path>... [--rounds N|auto] [--team off] [--max-questions N] [--ask-only] [--fix] [--evidence <dir>] [--out <path>] [--silent] [--keep-scratch]"
 ---
 
 # Documentation Investigation & Gap Review

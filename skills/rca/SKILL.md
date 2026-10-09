@@ -1,6 +1,7 @@
 ---
 name: rca
 description: Root Cause Analysis — The Investigator. Evidence-first forensic debugging using 5 Whys + AgentRx. Use when a bug report is submitted and before invoking /ktkit:bug-fix-specs for fix implementation.
+argument-hint: "<bug report: text, file or issue URL>"
 ---
 
 ## User Input

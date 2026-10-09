@@ -1,6 +1,7 @@
 ---
 name: chain
 description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to one of four lanes -- BUG, CR, NR or TRIVIAL -- runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. --full goes further: implementation, one commit per task with a body built from the run's own files, then a pull request through /ktkit:create-pr with the run's context handed over. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
+argument-hint: "<requirement.md | described request> [--bug|--cr|--nr|--trivial] [--feature] [--to A|B|C] [--plan yes|no] [--execute] [--full] [--pr-to <branch>] [--draft] [--lang en|ja] [--resume | --fresh] [--budget <token>] [--budget-execute <n>] [--ledger-scope run|dir] [--rounds N]"
 ---
 
 # chain — one requirement in, a reviewed spec out

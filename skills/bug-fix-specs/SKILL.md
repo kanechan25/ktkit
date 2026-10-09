@@ -1,6 +1,7 @@
 ---
 name: bug-fix-specs
 description: "Use when a bug has been through /ktkit:rca and the fix plan needs reviewing BEFORE any code changes. Reads the .analyze.md that skill wrote — it does not investigate again — and writes fix.md under .claude/claude/specs/<rel-dir>/<base>/, with a quality checklist it grades itself against. No speckit: the BUG lane runs on superpowers:systematic-debugging, and a bug is a disagreement with a specification that already exists rather than a reason to write another. STOPS and waits for user approval. Hand off to /ktkit:bug-fix-execute."
+argument-hint: "<.analyze.md written by /ktkit:rca> — usually run by /ktkit:chain --bug"
 ---
 
 # Bug-Fix Specs Workflow

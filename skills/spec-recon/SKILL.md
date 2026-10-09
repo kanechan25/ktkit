@@ -1,6 +1,7 @@
 ---
 name: spec-recon
 description: Use when a question about a specification cannot be settled by reading documents alone — whether the code implements what a spec describes, whether a shipped template matches the published form, what state issues and milestones are actually in, or how a plan compares to what is measurably true. Reconnaissance across documents, source, binary artifacts and version control, turning each measurement into evidence a documentation review can read. Also use to check whether an existing analysis is still based on the current revision of its inputs.
+argument-hint: "<path>... [--scope <text>] [--baseline <path>...] [--probe code,artifact,vcs,runtime] [--rounds N|auto] [--incremental] [--resume <dir>] [--out <path>] [--handoff on|off] [--max-questions N] [--lang <code>] [--patterns <file>] [--budget <tokens>] [--relevance <n>] [--relevance-add <term>] [--quota-gate <pct>] [--keep-scratch]"
 ---
 
 # spec-recon

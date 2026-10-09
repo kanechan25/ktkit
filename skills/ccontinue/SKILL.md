@@ -1,6 +1,7 @@
 ---
 name: ccontinue
 description: "Use AFTER running the built-in /compact to resume work from a checkpoint written by /ktkit:ccompact. Reads <base>.compact.md (schema + newest round), reconstructs the binding decisions, conventions, in-progress work and traps, compares the recorded git branch/HEAD against the current one, reports any conflict between the compaction summary and the file — the FILE always wins — then prints a self-audit and waits for the user to confirm before touching anything. Trigger on `/ktkit:ccontinue <compact-file>`, or when the user wants to resume a pipeline after compaction. Pair skill of /ktkit:ccompact."
+argument-hint: "<.compact.md written by /ktkit:ccompact>"
 ---
 
 # ccontinue — resume from a checkpoint

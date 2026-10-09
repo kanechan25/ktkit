@@ -1,6 +1,7 @@
 ---
 name: feat-req-specs
 description: "Use when the user provides a feature request and wants to review specs BEFORE implementing. Runs STEP 0→5 (memory check, understand, blast radius, interview, design, spec) and writes the spec under .claude/claude/specs/<rel-dir>/<base>/ — through /speckit-specify, which this plugin requires. Then STOPS and waits for user approval before any code or plan is written. Hand off to /ktkit:feat-req-execute."
+argument-hint: "<.analyze.md written by /ktkit:analyze-feat or /ktkit:cr-delta> — usually run by /ktkit:chain --nr"
 ---
 
 # Feat-Req Specs Workflow

@@ -2,6 +2,7 @@
 name: escalation-ladder
 description: Use the moment anything in a task is unknown — a term that cannot be found, two sources disagreeing, a sentence with two readings, a fact about a library — to decide whether to search, challenge, look it up, assume with a falsifier, or ask the user. Classifies every unknown into one of five tiers before acting, and forbids asking the user until the tiers below are provably exhausted. Also use when a document or plan already carries a list of open questions and you want them triaged and resolved instead of handed back.
 allowed-tools: Read, Grep, Glob, Bash, Agent
+argument-hint: "[<an unknown, or a file carrying open questions>]"
 ---
 
 # Escalation Ladder

@@ -83,7 +83,10 @@ def test_no_docs_review_instruction_was_reworded_around_the_flag():
     """
     skill = read("SKILL.md")
     stray = [(i, l) for i, l in enumerate(skill.split("\n"), 1)
-             if "--evidence" in l and not l.startswith("| `--evidence")]
+             if "--evidence" in l and not l.startswith("| `--evidence")
+             # the frontmatter hint lists the flags, as the table row does;
+             # it instructs nothing, and test_argument_hint.py requires it there
+             and not l.startswith("argument-hint:")]
     check("SKILL.md names --evidence only in the flag table row",
           not stray, stray[:3])
 

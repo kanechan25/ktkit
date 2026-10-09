@@ -1,6 +1,7 @@
 ---
 name: bug-fix-execute
 description: "Use after /ktkit:bug-fix-specs has been reviewed and approved. Runs the failing test red first (superpowers:test-driven-development), applies the fix from fix.md, and verifies with GitNexus and superpowers:verification-before-completion. Stops outright after a third failed attempt rather than trying a fourth. Does NOT re-investigate — the analysis and the plan are already written."
+argument-hint: "[<approved fix.md>] — usually run by /ktkit:chain --bug --execute"
 ---
 
 # Bug-Fix Execute Workflow (STEP 5→7 only)

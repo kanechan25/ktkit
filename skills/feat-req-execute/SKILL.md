@@ -1,6 +1,7 @@
 ---
 name: feat-req-execute
 description: "Use after /ktkit:feat-req-specs has been reviewed and approved. Executes STEP 6→9 only: plan, implement, verify, document. Does NOT re-investigate or re-design — assumes spec is already written and approved."
+argument-hint: "[<approved spec.md>] — usually run by /ktkit:chain --nr --execute"
 ---
 
 # Feat-Req Execute Workflow (STEP 6→9 only)
