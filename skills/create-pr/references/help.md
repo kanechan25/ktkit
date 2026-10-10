@@ -28,6 +28,9 @@ present is asked once, neither is a stop, and the default branch is never picked
 # the PR is for an issue: its body is read too, linked as Part of
 /ktkit:create-pr this resolves https://github.com/<owner>/<repo>/issues/123
 
+# the PR already exists: its title and body are rewritten by /ktkit:pr-writeup
+/ktkit:create-pr https://github.com/<owner>/<repo>/pull/456
+
 # the same, closing the issue on merge, plus a related one
 /ktkit:create-pr --issue 123 --closes --related 98
 
@@ -65,16 +68,22 @@ present is asked once, neither is a stop, and the default branch is never picked
 
 What no source states is marked `<!-- TBD -->` and listed in the output. Nothing is invented.
 
+## When the PR already exists
+
+A pull request URL in the arguments, or an open PR for the same branches, sends the run to
+`/ktkit:pr-writeup --apply`: it rewrites that PR's title and body from its commits, plus your free-form
+text and the `--context` file. No second PR, no push, no conflict step. pr-writeup writes English and
+keeps the PR's existing `Closes` / `Part of` lines, so `--lang ja` and `--closes` do not apply there.
+
 ## Do not
 
 | Anti-pattern | Why |
 | ------------ | --- |
 | Expect it to read the code to fill a thin commit | It never opens the diff. The fix is a commit body that says why. |
-| Run it when a PR for the same branches is already open | It prints that PR's URL and stops; `/ktkit:pr-writeup` rewrites a body. |
 | Rely on it to aim at `main` when there is no `dev` | It stops instead. Pass `--to`. |
 | Expect `--mode full` to do something | Not built yet. |
 
 ## See also
 
-`/ktkit:resolve-conflict-pr` runs at the end of every run. `/ktkit:pr-writeup` rewrites the body of a
-PR that already exists.
+`/ktkit:resolve-conflict-pr` runs at the end of every run that opens a PR. `/ktkit:pr-writeup` rewrites
+the body of a PR that already exists — this skill calls it for you.

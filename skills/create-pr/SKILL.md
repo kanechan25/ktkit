@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: "Open a pull request from a branch into its target and write its title and body from the full bodies of the commits it carries — never from the code diff. Triggers '/ktkit:create-pr', 'tạo PR', 'tạo PR từ nhánh này vào dev', 'create a PR for this branch', 'open a PR from dev to main'. Source is the current branch or --from; target is --to, else `dev`, else `develop`. Also reads the issue the PR is for, related issues, free-form text in the arguments and what the current session already established. Writes English by default, Japanese with --lang ja, never Vietnamese. Pushes an unpushed source branch with a plain push. After the PR exists, always hands it to /ktkit:resolve-conflict-pr so a conflict with the target is resolved at once. Called by /ktkit:chain --full with the run's context file. Works in any repository; nothing about one repository is assumed."
+description: "Open a pull request from a branch into its target and write its title and body from the full bodies of the commits it carries — never from the code diff. Triggers '/ktkit:create-pr', 'tạo PR', 'tạo PR từ nhánh này vào dev', 'create a PR for this branch', 'open a PR from dev to main'. Source is the current branch or --from; target is --to, else `dev`, else `develop`. Also reads the issue the PR is for, related issues, free-form text in the arguments and what the current session already established. Writes English by default, Japanese with --lang ja, never Vietnamese. Pushes an unpushed source branch with a plain push. After the PR exists, always hands it to /ktkit:resolve-conflict-pr so a conflict with the target is resolved at once. Given a pull request URL, or when a PR for the same branches is already open, it hands that PR to /ktkit:pr-writeup to rewrite its title and body instead of opening a second one. Called by /ktkit:chain --full with the run's context file. Works in any repository; nothing about one repository is assumed."
 argument-hint: "[free-form context, issue #N or URL] [--from <branch>] [--to <branch>] [--mode simple|full] [--lang en|ja] [--issue <#N|url>] [--related <#N|url>] [--closes] [--draft] [--context <file>]"
 user-invocable: true
 ---
@@ -21,7 +21,7 @@ and makes sure it does not sit there conflicting with its target.
 |---|---|
 | Opening the PR, composing its title and body | **this skill** |
 | Resolving a conflict with the target | `/ktkit:resolve-conflict-pr`, called by this skill |
-| Rewriting the body of a PR that already exists | `/ktkit:pr-writeup` |
+| Rewriting the body of a PR that already exists | `/ktkit:pr-writeup`, called by this skill — see Step 1b |
 | Judging the code | a code review — not this skill |
 
 ## ⛔ Hard guardrails (NEVER break)
@@ -72,6 +72,9 @@ and makes sure it does not sit there conflicting with its target.
 of equal standing to a commit body. An issue URL or `#N` inside it is an `--issue`, unless the
 sentence presents it as related ("related to", "see also", "liên quan") — then it is `--related`.
 
+⭐ **A pull request URL** (`…/pull/<N>`) in the arguments is not an issue: the PR already exists, and
+the run takes the route in Step 1b. A bare `#N` stays an issue — only a URL says which kind it is.
+
 ## Step 00 — Preflight
 
 ```bash
@@ -86,6 +89,27 @@ outside the sandbox, which denies the SSH agent socket.
 
 `owner/repo` from `gh repo view --json nameWithOwner -q .nameWithOwner`. The remote `R` is the one
 whose URL names it (`git remote -v`) — not necessarily `origin`. None → STOP.
+
+## Step 1b — The PR already exists: hand it to `/ktkit:pr-writeup`
+
+Taken when the arguments carry a pull request URL, and from Step 4 when a PR for the same branches
+is already open. Never a second PR for the same branches.
+
+```
+/ktkit:pr-writeup <PR url> --apply [free-form text] [the --context file's content, as free-form text]
+```
+
+| What this run had | What pr-writeup gets |
+|---|---|
+| free-form text, `--issue` / `--related` bodies already read | passed on as free-form context |
+| `--context <file>` | its content, as free-form context — pr-writeup takes no file flag |
+| `--apply` | always: this skill has no confirm gate either, so the rewrite is applied as the user asked |
+| `--lang ja` | not passed. pr-writeup writes English; say so in one line |
+| `--draft`, `--from`, `--to`, `--closes` | not applicable to an existing PR; say which were ignored |
+
+pr-writeup's own guardrails stand: it preserves the PR's existing `Closes` / `Part of` lines and
+adds none. Its result **is** this run's result — print its output and the PR URL, then STOP. No
+further push (from Step 4, Step 2 already pushed the branch), no Step 5–10: the PR already exists.
 
 ## Step 2 — The source branch, on the remote
 
@@ -126,8 +150,8 @@ which of `dev` / `develop`. Exit 4 → STOP and ask for `--to`. `TO_SHA=$(git re
 gh pr list -R <owner>/<repo> --head <from> --base <to> --state open --json number,url
 ```
 
-One exists → print its URL, point at `/ktkit:pr-writeup` for rewriting its body, and STOP. Never
-open a second one.
+One exists → take **Step 1b** with its URL: `/ktkit:pr-writeup` rewrites that PR's title and body.
+Never open a second one.
 
 ## Step 5 — The commits, measured before read
 
@@ -226,4 +250,6 @@ conflict: <none | resolved and pushed <sha> | stopped: <reason>>
 | "No dev or develop — main is obviously the target" | Exit 4 is a STOP. A PR into `main` by accident is the expensive mistake. |
 | "The local branch diverged, a force push fixes it" | Guardrail 5. STOP and say so. |
 | "The session is in Vietnamese, write the PR the same way" | Guardrail 6. English, or Japanese with `--lang ja`. |
-| "The forge says mergeable is UNKNOWN, skip the conflict step" | Step 10 runs every time. |
+| "The forge says mergeable is UNKNOWN, skip the conflict step" | Step 10 runs every time a PR is opened. |
+| "A PR exists already — tell the user to run pr-writeup" | Step 1b calls it. That is this skill's job. |
+| "A PR exists already — resolve its conflicts before the rewrite" | Step 1b ends at pr-writeup. Steps 5–10 belong to a PR this run opened. |

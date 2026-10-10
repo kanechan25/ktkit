@@ -1,9 +1,8 @@
 ---
 name: pr-writeup
-description: "Rewrite the title and description of an EXISTING pull request so it reads like an engineering write-up instead of a list of commits. Triggers '/ktkit:pr-writeup <#N|url>', 'viết lại description cho PR', 'sửa title + mô tả PR', 'rewrite this PR description'. Reads the full body of every commit on the PR plus the changed-file stat — NEVER the code diff. Free-form text passed as an argument (a ticket, a bug report, notes) is a first-class source alongside the commit bodies. Detects the repository's own PR template and commit conventions, so it works on any repository. Writes English prose and keeps business-domain nouns verbatim in their original script when the sources use them. NEVER creates a PR, commits, pushes, merges, comments, labels or touches an issue — the only write it makes is the PR's title and body. Not a PR creator, and not a code review."
+description: "Rewrite the title and description of an EXISTING pull request so it reads like an engineering write-up instead of a list of commits. Triggers '/ktkit:pr-writeup <#N|url>', 'viết lại description cho PR', 'sửa title + mô tả PR', 'rewrite this PR description'. Reads the full body of every commit on the PR plus the changed-file stat — NEVER the code diff. Free-form text passed as an argument (a ticket, a bug report, notes) is a first-class source alongside the commit bodies. Detects the repository's own PR template and commit conventions, so it works on any repository. Writes English prose and keeps business-domain nouns verbatim in their original script when the sources use them. NEVER creates a PR, commits, pushes, merges, comments, labels or touches an issue — the only write it makes is the PR's title and body. Not a PR creator, and not a code review. /ktkit:create-pr calls it when the PR it was asked for already exists."
 argument-hint: "[<#N> | <url> | empty = the current branch] [--out [<file.md>]] [--apply] [--follow-refs] [--no-emoji] [free-form context: ticket, notes]"
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Rewrite a PR's title and description — `/ktkit:pr-writeup $ARGUMENTS`

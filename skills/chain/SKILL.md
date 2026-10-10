@@ -611,8 +611,9 @@ Invoke **`/ktkit:create-pr`**:
 
 `<source>` and `<target>` are what step 00's gate printed. create-pr pushes the branch with a plain
 push, writes the body from the commit bodies plus the context file, opens the PR and hands it to
-`/ktkit:resolve-conflict-pr`. Its own stops stand: a diverged branch, a PR already open for the same
-branches — that one is recorded in `steps/09-pr.md` with its URL and the step counts as done.
+`/ktkit:resolve-conflict-pr`. Its own stops stand: a diverged branch is a stop. A PR already open for
+the same branches is rewritten through `/ktkit:pr-writeup` instead — recorded in `steps/09-pr.md` with
+its URL, and the step counts as done.
 
 Record the PR URL, its number and the conflict result in `steps/09-pr.md` and the manifest.
 
