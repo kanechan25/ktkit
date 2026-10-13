@@ -3,7 +3,6 @@ name: raise-issue
 description: "Turn a messy problem description into a well-formed, AI-ready issue statement BEFORE any analysis. Triggers '/ktkit:raise-issue <description>', 'raise issue này lên', 'viết issue cho vấn đề này', 'frame lại cái bug này trước khi phân tích'. Handles bug reports, new requirements (NR) and change requirements (CR). Extracts the facts, verifies the code hints, locates the entry point from an anchor, asks only what it cannot resolve itself, confirms with the user that it understood the right problem, then writes one Vietnamese issue file. RAISES ONLY — never diagnoses root cause, never proposes a fix, never writes spec or code."
 argument-hint: "[free-text description | --file <path>] [--issue <#N|url>] [--type bug|nr|cr] [--slug <n-desc>] [--out <dir>] [--no-ask]"
 user-invocable: true
-disable-model-invocation: true
 ---
 
 # Raise an issue — `/ktkit:raise-issue $ARGUMENTS`
@@ -323,7 +322,7 @@ Print the file path, a three-line summary, and the suggested next skill. Then **
 
 The file is written where every one of those reads from, so the handoff is the path and nothing else.
 
-Chaining is manual in both directions: this skill never runs the next one, and nothing can auto-invoke this skill (`disable-model-invocation: true`).
+Chaining is manual: this skill never runs the next one. It may itself be chosen when you only describe a problem to frame, as its description says.
 
 ## Red flags — you are doing it wrong
 

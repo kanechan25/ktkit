@@ -114,6 +114,40 @@ def test_no_unquoted_value_contains_a_colon_space():
           not bad, "\n       " + "\n       ".join(bad))
 
 
+def spoken_triggers(description):
+    """The quoted trigger phrases a description offers that are not slash commands."""
+    import re
+    quoted = re.findall(r"'([^']+)'|\"([^\"]+)\"", description)
+    return [a or b for a, b in quoted if not (a or b).startswith("/")]
+
+
+def test_a_skill_the_model_cannot_invoke_offers_no_spoken_trigger():
+    """`disable-model-invocation: true` leaves the slash command as the only way in.
+
+    A sentence such as 'raise issue này lên' reaches a skill only through the
+    Skill tool, which that flag blocks. A description advertising one promises a
+    call that always fails with "cannot be used with Skill tool due to
+    disable-model-invocation". raise-issue and translate-file shipped exactly
+    that. Either drop the flag or drop the spoken trigger.
+    """
+    bad = []
+    for name, path in skill_files():
+        lines = frontmatter(path)
+        if lines is None:
+            continue
+        keys = dict(top_level_values(lines))
+        if keys.get("disable-model-invocation", "").lower() != "true":
+            continue
+        desc = keys.get("description", "")
+        if is_quoted(desc):
+            desc = desc[1:-1]
+        spoken = spoken_triggers(desc)
+        if spoken:
+            bad.append("%s: %s" % (name, spoken))
+    check("no skill blocked from the Skill tool advertises a spoken trigger",
+          not bad, "\n       " + "\n       ".join(bad))
+
+
 def test_the_scan_actually_reads_every_shipped_skill():
     """A scan over nothing passes trivially."""
     found = [n for n, _ in skill_files()]

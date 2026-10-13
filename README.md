@@ -728,6 +728,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 6.5.3 — raise-issue and translate-file answer a plain request
+
+**Behaviour change.** `/ktkit:raise-issue` and `/ktkit:translate-file` no longer set `disable-model-invocation`. Their descriptions offered spoken triggers ("raise issue này lên", "dịch file này sang tiếng Việt"), but with that flag set those sentences failed with "cannot be used with Skill tool due to disable-model-invocation", and so did a slash command typed anywhere but at the start of a message. Both skills still stop for your confirmation before writing anything. `skills/spec-recon/tests/test_skill_frontmatter.py` now rejects a skill that sets the flag while its description offers a spoken trigger.
+
 ### Upgrading to 6.5.2 — create-pr on a PR that already exists
 
 **Behaviour change.** `/ktkit:create-pr` given a pull request URL, or finding a PR already open for the same branches, now hands it to `/ktkit:pr-writeup --apply` to rewrite its title and body, where it used to stop and point at that skill. For that, `pr-writeup` no longer sets `disable-model-invocation` — it may now also be chosen when you only describe rewriting a PR. `/ktkit:chain --full` gets the same: a PR already open is rewritten rather than left as it was.

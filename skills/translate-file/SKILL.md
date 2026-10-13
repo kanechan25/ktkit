@@ -1,7 +1,6 @@
 ---
 name: translate-file
 description: Use when the user wants to translate a file's textual content from English or Japanese into Vietnamese while preserving structure/formatting. Triggers "/ktkit:translate-file <path>", "dịch file này sang tiếng Việt". Translates ONLY prose/presentation; keeps every vie-non-trans token unchanged (technical terms, identifiers, proper nouns, module/function/component names, code, file paths, CLI commands, URLs, JSON keys, brand names) in its original language. Japanese proper nouns that stay untranslated get an English gloss in parentheses, e.g. 編集中 (Editing). ALWAYS confirms the exact source file first and BLOCKS until the user confirms before translating; if the source file cannot be determined it STOPS and asks for it. Writes <stem>_vi.<ext> next to the source; never edits the original.
-disable-model-invocation: true
 argument-hint: "<path/to/source-file> — English/Japanese file; output written as <stem>_vi.<ext> beside it"
 user-invocable: true
 ---
