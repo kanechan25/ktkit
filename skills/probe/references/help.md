@@ -13,7 +13,7 @@ repository, `<repo>/.claude/claude/docs/probe-live/info.md`; **what** comes from
 
 | Argument | Meaning |
 | -------- | ------- |
-| `--mode <name>` | the `## mode:` to use; never defaulted — named in the session, or asked |
+| `--mode <name>` | the `# mode:` to use; never defaulted — named in the session, or asked |
 | `--cleanup` | the default: ask once at the end, then close, kill and stop what this run started |
 | `--no-cleanup` | leave everything running; print a hand-over table with the stop commands |
 | `init` | scaffold the info file for this repository |

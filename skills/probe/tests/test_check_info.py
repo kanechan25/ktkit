@@ -10,6 +10,7 @@
   C7  no secret value is ever printed
   C8  an account named in the session that matches nothing lists the known ones
   C9  --default-path is <repo>/.claude/claude/docs/probe-live/info.md
+  C10 a mode or account heading at the wrong level fails, never folds in
 
 Run:  python3 skills/probe/tests/test_check_info.py
 """
@@ -26,7 +27,7 @@ SECRET = "s3cr3t-Pa55 #word"
 CONN = "Host=db.example.test;Password=conn-secret"
 
 GOOD = """# notes before any mode are prose
-## mode: local
+# mode: local
 - kind: host-local
 - env_class: dev
 - risk: free
@@ -36,14 +37,14 @@ GOOD = """# notes before any mode are prose
 - db_connection: %s
 - default_account: owner
 
-### account: owner
-- role: admin
+#### account: owner
+- role: admin          # a note after a non-secret key
 - login_method: password
 - user: 100
 - password: %s
 - can_write: yes
 
-### account: member
+#### account: member
 - role: member
 - login_method: password
 - email: m@example.test
@@ -52,13 +53,13 @@ GOOD = """# notes before any mode are prose
 - can_write: no
 - login_recipe: fill Email = {email}; fill Org = {tenant}; fill Password = {password}
 
-## mode: uat
+# mode: uat
 - kind: remote
 - env_class: uat
 - risk: read-only
 - fe_url: https://uat.example.test
 
-### account: viewer
+#### account: viewer
 - role: viewer
 - login_method: sso
 - sso_note: operator logs in
@@ -178,6 +179,18 @@ def test_c9_default_path():
                       os.path.dirname(out)))))) == os.path.realpath(d), out)
     finally:
         shutil.rmtree(d)
+
+
+def test_c10_wrong_heading_level():
+    old = GOOD.replace("#### account:", "### account:")
+    rc, out = run(old, "--mode", "local", "--needs", "account:owner")
+    check("C10 an H3 account fails", rc == 1 and "wrong level" in out, out)
+    check("C10 the failure prints no secret", "s3cr3t" not in out, out)
+    old = GOOD.replace("# mode:", "## mode:")
+    rc, out = run(old, "--mode", "local")
+    check("C10 an H2 mode fails", rc == 1 and "wrong level" in out, out)
+    rc, out = run("# Title\n\n" + GOOD, "--mode", "local", "--needs", "account:owner")
+    check("C10 an H1 title before the modes is prose", rc == 0, out)
 
 
 def main():

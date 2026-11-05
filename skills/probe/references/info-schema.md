@@ -1,9 +1,10 @@
 # The probe info file
 
-One file per repository, at `<repo>/.claude/claude/docs/probe-live/info.md`. Every environment is a
-`## mode: <name>` section in that one file; every account of a mode is a `### account: <label>`
-section under it. Each setting is one `- key: value` line. Any other heading ends the mode, and
-fenced code blocks are ignored, so the file can carry its own notes.
+One file per repository, at `<repo>/.claude/claude/docs/probe-live/info.md`. Every environment is an H1
+`# mode: <name>` section in that one file; every account of a mode is an H4 `#### account: <label>`
+section under it. Each setting is one `- key: value` line. Any other H1 ends the mode, and fenced
+code blocks are ignored, so the file can carry its own notes. A `mode:` or `account:` heading at any
+other level (the old `## mode:` / `### account:` layout) fails the check rather than being skipped.
 
 A value containing `<...>` is a placeholder: unfilled. `check_info.py` treats it as missing.
 
@@ -56,7 +57,7 @@ never a stop.
 Values are made up to show the shape, not facts about any system.
 
 ```markdown
-## mode: local
+# mode: local
 - kind: host-local
 - env_class: dev
 - risk: free
@@ -66,7 +67,7 @@ Values are made up to show the shape, not facts about any system.
 - db_type: none
 - default_account: member
 
-### account: member
+#### account: member
 - role: member
 - login_method: password
 - email: member@example.test
@@ -75,14 +76,14 @@ Values are made up to show the shape, not facts about any system.
 - can_write: yes
 - login_recipe: open /signin; fill Email = {email}; fill Workspace = {tenant}; fill Password = {password}; click Sign in
 
-## mode: staging
+# mode: staging
 - kind: remote
 - env_class: staging
 - risk: read-only
 - fe_url: https://staging.example.test
 - default_account: auditor
 
-### account: auditor
+#### account: auditor
 - role: viewer
 - login_method: sso
 - sso_note: the operator logs in by hand

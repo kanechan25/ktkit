@@ -22,7 +22,7 @@ between repositories lives in that repository's info file.
 
 | Argument | Meaning |
 | -------- | ------- |
-| `--mode <name>` | the `## mode:` section to use. Absent ⇒ the mode the session just named; none named ⇒ ask. Never default to any mode. |
+| `--mode <name>` | the `# mode:` section to use. Absent ⇒ the mode the session just named; none named ⇒ ask. Never default to any mode. |
 | `--cleanup` | the default, never needs typing: at the end, ask once, then close, kill and stop what this run started |
 | `--no-cleanup` | for this run only: close, kill and stop **nothing**; print a hand-over table instead (`--cleanup=off` is the same) |
 | `<info-file>` | another info file, for a draft. Default `<repo>/.claude/claude/docs/probe-live/info.md`, `<repo>` = `git rev-parse --show-toplevel` of the cwd |

@@ -41,8 +41,9 @@ import sys
 
 REL_PATH = os.path.join(".claude", "claude", "docs", "probe-live", "info.md")
 
-MODE_RE = re.compile(r"^##\s+mode:\s*(\S+)")
-ACCOUNT_RE = re.compile(r"^###\s+account:\s*(\S+)")
+MODE_RE = re.compile(r"^#\s+mode:\s*(\S+)")
+ACCOUNT_RE = re.compile(r"^####\s+account:\s*(\S+)")
+ANY_LEVEL_RE = re.compile(r"^#{1,6}\s+(mode|account):")
 KEY_RE = re.compile(r"^\s*-\s+([A-Za-z_][A-Za-z0-9_]*)\s*:\s?(.*)$")
 PLACEHOLDER_RE = re.compile(r"<[^>]*>")
 RECIPE_KEY_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -52,11 +53,13 @@ RISKS = ("free", "read-only")
 LOGIN_METHODS = ("password", "sso", "none")
 YES_NO = ("yes", "no")
 
-# Keys whose value is an enum or a URL. Only these may be echoed, and only these
-# may carry a trailing `# comment` -- a password can legitimately contain " #".
+# Keys whose value is one of a fixed set. Only these and SHOWABLE may be echoed.
 ENUM_KEYS = ("kind", "env_class", "risk", "login_method", "can_write",
              "db_type", "db_access")
 SHOWABLE = ENUM_KEYS + ("fe_url", "swagger_url", "role", "default_account")
+# Non-secret keys whose trailing `  # note` is a comment, not part of the value.
+# Never a secret key: a password can legitimately contain " #".
+COMMENTABLE = ENUM_KEYS + ("role", "default_account", "ports")
 
 ALWAYS = ("fe_url", "kind", "env_class", "risk")
 ACCOUNT_REQUIRED = ("role", "login_method", "can_write")
@@ -99,8 +102,13 @@ def default_path(cwd=None):
 
 
 def parse(text):
-    """Modes, each with its keys and its accounts. Lines outside a mode are prose."""
-    modes = []
+    """(modes, misplaced). Each mode carries its keys and its accounts.
+
+    A mode is an H1 `# mode: <name>`, an account an H4 `#### account: <label>`
+    under it. Any other H1 ends the mode; lines outside a mode are prose.
+    `misplaced` lists the lines of a mode or account heading at any other level.
+    """
+    modes, misplaced = [], []
     mode = target = None
     fence = False
     for n, raw in enumerate(text.split("\n"), 1):
@@ -119,18 +127,23 @@ def parse(text):
             target = Section(m.group(1), n)
             mode.accounts.append(target)
             continue
-        if raw.startswith("## "):            # any other H2 ends the mode
+        if ANY_LEVEL_RE.match(raw):
+            # `## mode:` or `### account:` from the old layout. Ignoring it would
+            # fold that account's password into the mode above it.
+            misplaced.append(n)
+            continue
+        if raw.startswith("# "):             # any other H1 ends the mode
             mode = target = None
             continue
         m = KEY_RE.match(raw)
         if m and target is not None:
             key, value = m.group(1), m.group(2).strip()
-            if key in ENUM_KEYS:
+            if key in COMMENTABLE:
                 value = re.sub(r"\s+#.*$", "", value).strip()
             if key in target.keys:
                 target.duplicates.append((key, n))
             target.keys[key] = Entry(value, n)
-    return modes
+    return modes, misplaced
 
 
 def find_account(mode, wanted):
@@ -315,14 +328,21 @@ def main(argv):
         print(path)
         return 0
 
-    modes = load(path)
-    if modes is None:
+    loaded = load(path)
+    if loaded is None:
         print("B1 info file ....... FAIL  not found: %s" % path)
         print("Run `/ktkit:probe init` to scaffold it, or pass another file. "
               "Nothing was started.")
         return 1
+    modes, misplaced = loaded
+    if misplaced:
+        print("B1 info file ....... FAIL  mode/account heading at the wrong level "
+              "on line(s) %s: a mode is `# mode: <name>` (H1), an account "
+              "`#### account: <label>` (H4) under a mode"
+              % ", ".join(str(n) for n in misplaced))
+        return 1
     if not modes:
-        print("B1 info file ....... FAIL  %s declares no `## mode: <name>` section"
+        print("B1 info file ....... FAIL  %s declares no `# mode: <name>` (H1) section"
               % path)
         return 1
     if args.list_modes:

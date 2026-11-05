@@ -708,7 +708,7 @@ A complete file for an invented shop application:
 ```markdown
 # Probe info — shop
 
-## mode: local
+# mode: local
 - kind: host-local
 - env_class: dev
 - risk: free
@@ -720,7 +720,7 @@ A complete file for an invented shop application:
 - db_connection: Host=localhost;Port=5432;Database=shop_dev;Username=dev;Password=...
 - default_account: owner
 
-### account: owner
+#### account: owner
 - role: admin
 - login_method: password
 - email: owner@shop.example.test
@@ -728,7 +728,7 @@ A complete file for an invented shop application:
 - can_write: yes
 - login_recipe: open /login; fill Email = {email}; fill Password = {password}; click Sign in
 
-### account: clerk
+#### account: clerk
 - role: staff
 - login_method: password
 - email: clerk@shop.example.test
@@ -737,14 +737,14 @@ A complete file for an invented shop application:
 - can_write: yes
 - login_recipe: open /login; fill Email = {email}; select Store = {store}; fill Password = {password}; click Sign in
 
-## mode: uat
+# mode: uat
 - kind: remote
 - env_class: uat
 - risk: read-only
 - fe_url: https://uat.shop.example.test
 - default_account: auditor
 
-### account: auditor
+#### account: auditor
 - role: viewer
 - login_method: sso
 - sso_note: the operator signs in with their own SSO account
@@ -753,7 +753,7 @@ A complete file for an invented shop application:
 
 The rules worth knowing before you write one:
 
-- **One `## mode:` per environment, all in this one file.** `local`, `dev-1`, `uat`, `prod` — any names you like. `--mode` picks one, and it is never defaulted: a probe that silently landed on production would be the worst possible default.
+- **One `# mode:` per environment, all in this one file.** `local`, `dev-1`, `uat`, `prod` — any names you like. `--mode` picks one, and it is never defaulted: a probe that silently landed on production would be the worst possible default.
 - **`env_class` decides write access, not the mode name.** Only the exact value `dev` may write. `uat`, `prod`, `staging`, `Dev`, `prd` — all read-only, and `risk` must then say `read-only` or the check fails. Every account of such a mode must say `can_write: no`.
 - **Accounts are free-form.** Declare whatever keys your login needs — `email`, `tenant`, `store`, an employee ID — and describe the login in words in `login_recipe`, naming those keys as `{key}`. Without a recipe the skill assumes `user` + `password` and reads the form itself. `sso` accounts stop the probe until a human signs in.
 - **The database is needed per probe, not per mode.** `db_type`/`db_connection` may stay blank in a mode where you only ever look at screens; they are demanded only when a probe compares with stored data. Access is always read-only (`postgres` sessions are opened with `default_transaction_read_only=on`; other engines are limited to `SELECT`/`SHOW`/`DESCRIBE`/`EXPLAIN`).

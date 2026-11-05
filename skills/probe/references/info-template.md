@@ -8,10 +8,10 @@ mode per environment the operator names. Never a guessed port, URL or database n
 # Probe info — <repository name>
 
 > Holds passwords and connection strings inline. Keep this file out of git (or in .gitignore).
-> One `## mode:` per environment. Values in `<...>` are unfilled; the probe stops on the ones it needs.
+> One `# mode:` per environment. Values in `<...>` are unfilled; the probe stops on the ones it needs.
 > Keys: references/info-schema.md of /ktkit:probe.
 
-## mode: local
+# mode: local
 - kind: <host-local | docker-local>          # how this mode runs
 - env_class: dev                              # only `dev` may write
 - risk: free                                  # free only with env_class dev
@@ -25,7 +25,7 @@ mode per environment the operator names. Never a guessed port, URL or database n
 - db_access: read-only
 - default_account: <label>
 
-### account: <label>
+#### account: <label>
 - role: <business role>
 - login_method: <password | sso | none>
 - user: <ops điền>
@@ -33,14 +33,14 @@ mode per environment the operator names. Never a guessed port, URL or database n
 - can_write: <yes | no>
 - login_recipe: <optional: fill X = {user}; fill Y = {password}; click Z>
 
-## mode: <remote environment>
+# mode: <remote environment>
 - kind: remote
 - env_class: <uat | prod | ...>               # anything but dev is read-only
 - risk: read-only
 - fe_url: <ops điền>
 - default_account: <label>
 
-### account: <label>
+#### account: <label>
 - role: viewer
 - login_method: <password | sso>
 - user: <ops điền>
