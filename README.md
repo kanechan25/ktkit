@@ -2,7 +2,7 @@
 
 Claude Code skills for spec-driven development: from a feature request or a bug report, to a reviewed specification, to the change itself, to a record of what was done.
 
-Eighteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on. `/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
+Twenty-one skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:docs-review`, and so on. `/ktkit:help` lists them; `/ktkit:<skill> --help` explains one:
 
 | | Skill | What it is for |
 | - | ----- | -------------- |
@@ -24,14 +24,15 @@ Eighteen skills, called with the plugin's namespace — `/ktkit:rca`, `/ktkit:do
 | | [`ccontinue`](#supporting-skills) | resume from that checkpoint, with the file outranking the summary |
 | **Decide** | [`escalation-ladder`](#supporting-skills) | resolve an unknown from the repository before asking a human |
 | | [`confirm-with-me`](#supporting-skills) | gate one irreversible step on an explicit yes |
+| **Verify** | [`probe`](#probe) | a live check in an isolated Chrome, evidence per step, then cleanup |
 | **Translate** | [`translate-file`](#supporting-skills) | a file into Vietnamese, without touching one identifier |
 | **Help** | [`help`](#getting-help) | the index, and one page per skill |
 
 Three of them carry the heavy machinery. `chain` is the one you type: it routes a requirement into one of four lanes and runs the whole path, carrying a ledger between phases so nothing is settled twice. `docs-review` audits a document set with a team of agents that run concurrently and challenge each other's findings — every run ends with a review pass carried out in agents with their own context, not in the session that produced the work. `spec-recon` adds the axis a document reviewer cannot reach: it measures code, binary artifacts and version-control state, and hands each measurement back as a document the reviewers can read.
 
-**Three rules hold across all twenty.** They are worth reading once, because they are what make the skills composable rather than merely co-located.
+**Three rules hold across all twenty-one.** They are worth reading once, because they are what make the skills composable rather than merely co-located.
 
-- **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in `prompts/` · `analyze/` · `specs/` · `pipeline/` · `implemented/` · `compacts/` · `resolve-conflict-pr/`. A repository that does not have it gets one. No skill probes for an alternative layout, asks you where to write, or writes anywhere outside `<repo-root>/.claude/` — and creating a missing directory is the only filesystem change any of them makes on its own.
+- **One artifact root.** Everything is written under `<repo-root>/.claude/claude/`, in `prompts/` · `analyze/` · `specs/` · `pipeline/` · `implemented/` · `compacts/` · `resolve-conflict-pr/`. A repository that does not have it gets one. No skill probes for an alternative layout, asks you where to write, or writes anywhere outside `<repo-root>/.claude/` — `probe` is the one exception, because evidence of a live system belongs where you say — and creating a missing directory is the only filesystem change any of them makes on its own.
 - **A preflight before the first token.** Each skill probes exactly what it is about to use and stops, with the fix command, if something required is absent. A capability is proved with a real request, never with a tool's opinion of itself.
 - **speckit and superpowers are required, and a missing one stops the skill before it starts.** A `PreToolUse` hook checks them when a ktkit skill is invoked and refuses with the install command; the per-skill preflight then proves the same thing in-run. There is no flag that turns either into a warning. Nothing ever degrades on its own — delivering something else under the same name is worse than stopping.
 
@@ -187,7 +188,7 @@ Installing as a plugin is what registers the twenty agents and the MCP server. V
                   # MCP tools:     mcp__plugin_ktkit_sequential-thinking__sequentialthinking
 ```
 
-**What installing costs you, before you run anything.** One of the twenty skills uses sequential-thinking for its reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
+**What installing costs you, before you run anything.** One of the twenty-one skills uses sequential-thinking for its reasoning step, so the plugin ships that server itself in `.mcp.json` rather than asking you to install it — a hand-installed copy registers under a different tool name and the skills would not find it. The price is that its schema sits in **every** session that has `ktkit` installed, used or not: **~1.3k tokens**, measured with `/context`. For scale, all eighteen role prompts together are also ~1.3k. Worth knowing; not worth avoiding.
 
 ### Option B — Manual (copy a skill)
 
@@ -650,9 +651,301 @@ A reconnaissance run produces a **directory** — a report, a `recon.json`, seve
 
 Until 3.4.0 it was not like that. `--out` defaulted to the bare string `spec-recon.md`, which resolves against the working directory, so a run put its report and its whole directory at the repository root — outside `.claude/`, against the rule every skill here follows. Nothing failed and no check fired; the files simply appeared in the wrong place. `skills/spec-recon/tests/test_out_path.py` is that defect turned into sixteen assertions.
 
+## probe
+
+`/ktkit:probe` checks how a **running** system behaves, in a real browser, through the Chrome DevTools MCP — and leaves a screenshot and an API response behind for every step it draws a conclusion from. It is the skill you reach for after the code is written and the tests are green, when the question is no longer "does the function return the right value" but "does the screen actually show it, for this account, on this environment".
+
+It splits a probe into two halves that change at different speeds:
+
+| Half | Where it lives | Changes |
+| ---- | -------------- | ------- |
+| **Where and with what** — URLs, ports, accounts, the database, how to start things | one file per repository, `<repo>/.claude/claude/docs/probe-live/info.md` | rarely; written once, edited when an environment moves |
+| **What** — the screen, the flow, the number to compare, the bug to reproduce | the conversation you call it from | every probe |
+
+The requirement never goes in the file, and the file never goes in the conversation. That is what lets one skill work in any repository: nothing in `SKILL.md` knows your ports, your login form or your database.
+
+### What it promises
+
+- **Nothing starts until the info file covers this probe.** The model reads the request, works out what this probe needs — which accounts, whether it compares with the database or an API — and `check_info.py` checks the file against exactly that. Every gap comes back in **one** table with the line to fix. A blank connection string stops a probe that compares with the database before a single service is up; it does not stop a probe that never touches it.
+- **Only `env_class: dev` may change state.** UAT, production, integration, staging, a typo — all read-only, with no flag, no confirm gate and no "but I asked you to" that unlocks a write. Write buttons are not clicked; the network log is checked at the end for any write request that slipped through.
+- **A fresh isolated Chrome context per account.** Admin and viewer never share a cookie. The MCP server itself must run with `--isolated`, or the probe does not start.
+- **It always asks where evidence goes**, before anything starts, with a proposed folder you can accept with `yes`.
+- **It only stops what it started.** Everything it starts is written to a ledger first. Your `pnpm dev` that was already running is reused and never killed.
+- **It asks before cleaning up**, and with `--no-cleanup` it leaves everything running and hands you the stop commands instead.
+- **No secret leaves the info file** — not into the chat, the ledger, the report or a screenshot.
+
+### Set up once per machine
+
+**1. The Chrome DevTools MCP, isolated.**
+
+```bash
+claude mcp add chrome-devtools --scope user -- npx -y chrome-devtools-mcp@latest --isolated
+claude mcp get chrome-devtools          # must show:  Args: -y chrome-devtools-mcp@latest --isolated
+```
+
+`--isolated` is not optional. Without it the server launches Chrome on one fixed profile directory that every session shares, so two probes running at once see each other's cookies. The skill reads these args before it opens anything and refuses `--browserUrl`, `--wsEndpoint`, `--autoConnect`, `--userDataDir` and a server with no flags at all.
+
+Keep **one** Chrome DevTools server. The `chrome-devtools-mcp` plugin from the official marketplace registers a second one with no `--isolated`; if both are installed the skill picks the isolated one, but it is simpler to remove the other:
+
+```bash
+claude plugin uninstall chrome-devtools-mcp@claude-plugins-official --scope user
+```
+
+**2. Node and Chrome.** `npx` runs the server; Chrome must be installed normally. The skill checks both and tells you which is missing.
+
+### Set up once per repository
+
+```text
+/ktkit:probe init
+```
+
+`init` scans the repository for facts it can point at — published ports in compose files, `dev`/`start` scripts in `package.json`, `make start`/`make stop` targets, local URLs in `launchSettings.json`, key **names** in `.env.example` — and writes a skeleton to `.claude/claude/docs/probe-live/info.md`. Every suggestion carries the `file:line` it came from. Anything it could not prove stays `<ops điền>`. It never reads a real `.env`, and it never overwrites an existing info file.
+
+Then fill in the file. It holds passwords inline on purpose — it stays on your machine — so it must stay out of git: add it to `.gitignore`, or keep `.claude/claude/` outside the repository. `check_info.py` prints a red line if git tracks it.
+
+A complete file for an invented shop application:
+
+```markdown
+# Probe info — shop
+
+## mode: local
+- kind: host-local
+- env_class: dev
+- risk: free
+- fe_url: http://localhost:5173
+- api_urls: orders=http://localhost:8080, catalog=http://localhost:8081
+- ports: 5173, 8080, 8081
+- start_cmds: pnpm dev (opens 5173); ./gradlew bootRun (opens 8080, 8081)
+- db_type: postgres
+- db_connection: Host=localhost;Port=5432;Database=shop_dev;Username=dev;Password=...
+- default_account: owner
+
+### account: owner
+- role: admin
+- login_method: password
+- email: owner@shop.example.test
+- password: ...
+- can_write: yes
+- login_recipe: open /login; fill Email = {email}; fill Password = {password}; click Sign in
+
+### account: clerk
+- role: staff
+- login_method: password
+- email: clerk@shop.example.test
+- store: Downtown
+- password: ...
+- can_write: yes
+- login_recipe: open /login; fill Email = {email}; select Store = {store}; fill Password = {password}; click Sign in
+
+## mode: uat
+- kind: remote
+- env_class: uat
+- risk: read-only
+- fe_url: https://uat.shop.example.test
+- default_account: auditor
+
+### account: auditor
+- role: viewer
+- login_method: sso
+- sso_note: the operator signs in with their own SSO account
+- can_write: no
+```
+
+The rules worth knowing before you write one:
+
+- **One `## mode:` per environment, all in this one file.** `local`, `dev-1`, `uat`, `prod` — any names you like. `--mode` picks one, and it is never defaulted: a probe that silently landed on production would be the worst possible default.
+- **`env_class` decides write access, not the mode name.** Only the exact value `dev` may write. `uat`, `prod`, `staging`, `Dev`, `prd` — all read-only, and `risk` must then say `read-only` or the check fails. Every account of such a mode must say `can_write: no`.
+- **Accounts are free-form.** Declare whatever keys your login needs — `email`, `tenant`, `store`, an employee ID — and describe the login in words in `login_recipe`, naming those keys as `{key}`. Without a recipe the skill assumes `user` + `password` and reads the form itself. `sso` accounts stop the probe until a human signs in.
+- **The database is needed per probe, not per mode.** `db_type`/`db_connection` may stay blank in a mode where you only ever look at screens; they are demanded only when a probe compares with stored data. Access is always read-only (`postgres` sessions are opened with `default_transaction_read_only=on`; other engines are limited to `SELECT`/`SHOW`/`DESCRIBE`/`EXPLAIN`).
+
+Every key, required when, and why: `skills/probe/references/info-schema.md`.
+
+Check the file without starting a probe — the skill runs the same command:
+
+```bash
+python3 skills/probe/scripts/check_info.py --list-modes
+python3 skills/probe/scripts/check_info.py --mode local --needs db,account:clerk
+python3 skills/probe/scripts/check_info.py --list-accounts --mode local
+```
+
+(Run from the plugin's directory, or with the full path to the installed copy under `~/.claude/plugins/cache/ktkit/ktkit/<version>/`.)
+
+### Using it day to day
+
+You describe the probe in the conversation the way you would to a colleague, then call the skill. A few patterns cover nearly everything.
+
+**After a fix — "does the screen show it now".**
+
+```text
+Mình vừa sửa tổng tiền trên trang /orders/1042 (thiếu phí ship).
+Verify trên local bằng owner: tổng phải = subtotal + shipping.
+/ktkit:probe --mode local
+```
+
+Needs: `account:owner`. The database is not needed, so a blank `db_connection` is a yellow warning, not a stop. If `pnpm dev` is already running on 5173 it is recorded as `PRE-EXISTING` and reused; the Spring services on 8080/8081 are started from `start_cmds` only if their ports are free.
+
+**Compare the screen with the database.**
+
+```text
+Màn /reports/daily đang hiện 37 đơn hôm nay. Đối chiếu với DB xem đúng không.
+/ktkit:probe --mode local
+```
+
+Needs: `account:owner`, `db`. If the connection string is still a placeholder, the run ends right there:
+
+```text
+Tier 1 -- info file (mode: local)   file: /work/shop/.claude/claude/docs/probe-live/info.md
+B1 file + mode ....... PASS
+access ............... free (env_class dev)
+FAIL  3 gap(s):
+  what                           · why this probe needs it                            · fix at
+  account[clerk].store           · login_recipe uses {store}                          · info.md:28 (still a placeholder)
+  db_connection                  · the probe compares against the database            · info.md:13 (still a placeholder)
+  api_urls.payments              · the probe compares against this API                · info.md:8 (service not listed)
+=> STOP at tier 1. No MCP call, no Chrome, nothing started.
+```
+
+(That table comes from a probe that also asked for the `clerk` account and the payments API — every gap is listed at once, so you fix the file once.) When it passes, the database is opened read-only and checked with `select 1` *before* Chrome opens.
+
+**Two or three accounts — permissions.**
+
+```text
+Check quyền nút "Refund" trên /orders/1042: owner thấy và bấm được, clerk không thấy nút.
+/ktkit:probe --mode local
+```
+
+Each account gets its own context, `probe-<timestamp>-owner` and `probe-<timestamp>-clerk`, and logs in once inside it. Switching account means a new context, never logging out and back in. An account the request names that is not in the file — say "manager" — stops the run with the list of what is:
+
+```text
+  account[manager]               · the probe needs it; known: owner (admin), clerk (staff) · info.md:3 (no matching label or role)
+```
+
+**Look, don't touch — UAT and production.**
+
+```text
+Trên UAT, xem trang /settings/billing hiển thị đúng plan "Pro" chưa. Thử bấm Save luôn xem có lỗi không.
+/ktkit:probe --mode uat
+```
+
+The page is opened, read and captured. **Save is not clicked**: the report says it was skipped because the environment is read-only and that a write has to be done by hand, outside the skill. Before every click it reads the target's label; anything that looks like a write (save, delete, submit, approve, upload… in English, Japanese and Vietnamese, plus your repository's own `write_action_hints`) is skipped, and anything ambiguous counts as a write. At the end every non-GET request outside the login endpoints is listed in red at the top of the report. The `auditor` account is SSO, so the skill opens the login page and waits for you to sign in.
+
+**Keep it open to look at by hand.**
+
+```text
+/ktkit:probe --mode local --no-cleanup
+```
+
+Nothing is closed, killed or stopped, and you are not asked. Instead you get a table measured at that moment:
+
+```text
+| kind           | id                          | port / URL                    | how to stop                                        |
+| chrome-context | probe-20260312101500-owner  | http://localhost:5173/orders  | close the window, or /ktkit:probe cleanup <ledger> |
+| process        | 48211                       | 8080                          | kill 48211                                         |
+Đã giữ lại theo `--no-cleanup`; còn chạy: 1 process, 0 container, 1 context Chrome.
+```
+
+The Chrome window belongs to this session's MCP server: when the session ends the server shuts down and closes the browser it launched. Services you started keep running until stopped. Later, from any session:
+
+```text
+/ktkit:probe cleanup /work/shop/.claude/claude/probe-live/20260312/probe-orders-1042/evidence/ledger.md
+```
+
+**Evidence somewhere specific.** Answer the evidence question with a folder, or say it up front — the folder you name always wins over the default:
+
+```text
+Lưu evidence vào docs/issues/1042/evidence nhé.
+/ktkit:probe --mode local
+```
+
+### What a run looks like
+
+```text
+P1  tier 1   info file vs this probe's needs      check_info.py — gaps in one table, or stop
+P2  tier 2   node, npx, Chrome, MCP tools, MCP alive (list_pages), MCP args contain --isolated
+P3  tier 3   remote URL answers · which ports are already taken (PRE-EXISTING) · DB select 1
+             → "will probe" table: mode · URL · accounts · free/READ-ONLY · DB needed (why) · what starts
+P4  evidence "Evidence lưu ở đâu? Đề xuất: <path> — yes, hoặc gửi folder khác."
+P5  start    only what tier 3 found missing, ledger row first
+P6  login    one isolated context per account
+P7  probe    screenshot before, screenshot after, API JSON — per step
+P8  report   numbers and evidence paths first; red line for any write request on a read-only mode
+P9  cleanup  one question → close · stop · docker stop → measure with list_pages / lsof / docker ps
+```
+
+Nothing in P5 onwards happens until P1–P3 all pass and P4 has an answer. Tiers run cheapest first: a tier that fails reports all of its own gaps and the later tiers do not run.
+
+### The evidence folder
+
+Default, when neither you nor the mode's `evidence_base` names one:
+
+```text
+<repo>/.claude/claude/probe-live/<yyyymmdd>/probe-<slug>/evidence/
+  ledger.md                          what this run touched, and in what state
+  01-owner-order-1042-input.png      the state before the action
+  02-owner-order-1042-result.png     the state after
+  02-owner-GET-orders-1042.json      the API response the conclusion relies on
+  03-clerk-order-1042-result.png
+```
+
+`<slug>` is the issue number or screen name from the request, or the time when there is neither. Files are numbered by step and never overwritten. Saved JSON has `Authorization`, cookies and tokens stripped. Every row of the report points at a file here — a conclusion without one is not a conclusion.
+
+The ledger is what makes cleanup safe:
+
+```markdown
+evidence: /work/shop/.claude/claude/probe-live/20260312/probe-orders-1042/evidence
+| time | kind | id | port | command | state |
+| ---- | ---- | -- | ---- | ------- | ----- |
+| 2026-03-12T10:14:02 | process | 30117 | 5173 | (found running) | PRE-EXISTING |
+| 2026-03-12T10:14:05 | process | 48211 | 8080 | ./gradlew bootRun | STARTED |
+| 2026-03-12T10:15:00 | chrome-context | probe-20260312101500-owner | - | new_page | STARTED |
+```
+
+`STARTED` rows are what cleanup may stop. `PRE-EXISTING` rows are yours and are never touched. `KEPT` rows were left running by `--no-cleanup` (or by answering `giữ lại`); a later run treats them like `PRE-EXISTING` until you run `cleanup`. `CLEANED` rows were stopped and then measured gone.
+
+### Cleanup
+
+By default the last thing a probe does is ask:
+
+```text
+Probe xong, evidence ở <path>. Tôi sẽ đóng context probe-…-owner, probe-…-clerk, kill 48211 (port 8080),
+stop container probe-db. Dọn hết chứ? (`giữ lại` để để nguyên và nhận lệnh dọn)
+```
+
+| You answer | It does |
+| ---------- | ------- |
+| `confirm`, `xong`, `dọn đi` | closes its pages, runs `stop_cmds` or sends `SIGTERM` to its PIDs, `docker stop`s its containers — then measures and prints what is gone and what is still running |
+| `giữ lại` | the `--no-cleanup` hand-over, for this run |
+| `ok rồi, cảm ơn`, anything else | nothing; asks again next turn |
+
+Containers are only ever stopped, by the exact name in the ledger — never `rm`, `down`, or anything that touches a volume. A probe that fails or is aborted half-way still goes through this gate.
+
+### When something goes wrong
+
+| You see | Meaning | Do |
+| ------- | ------- | --- |
+| `not found: …/.claude/claude/docs/probe-live/info.md` | no info file in this repository (or this is a git worktree, which does not carry it) | `/ktkit:probe init`, or pass the file's absolute path |
+| a tier-1 gap table | the file lacks something this probe needs | fill the listed lines, run again |
+| `env_class 'staging' is not dev, so risk must be read-only` | a protected mode declared `risk: free` | set `risk: read-only` — there is no way to make it writable |
+| A6 FAIL, args shown | the MCP server is not `--isolated`, or attaches to a shared Chrome | re-add it as in *Set up once per machine*, restart the session |
+| A4 FAIL with an error | the MCP server is registered but not answering | restart the session; check `npx` can download the package |
+| a port held by an unknown process | something else is on a port `start_cmds` needs | it is reported and left alone; free the port yourself |
+| a red line at the top of the report | a write request went out on a read-only mode | read it — it is never hidden, and it is the most important line in the report |
+| tools not found under `mcp__chrome-devtools__` | the server is registered under another name | the skill looks under both known prefixes; register it as `chrome-devtools` |
+
+### What it will not do
+
+- Write to any environment whose `env_class` is not `dev` — not with a flag, not with a confirm, not when asked.
+- Look for credentials anywhere but the info file.
+- Kill, restart or rebuild something that was running before it started.
+- Start Docker for a mode that is not `kind: docker-local`.
+- Choose an evidence folder without asking, or choose a mode, or an account, on its own.
+- Promise that a kept Chrome window outlives the session.
+
+`/ktkit:probe --help` prints the short page; `skills/probe/SKILL.md` is the full procedure.
+
 ## Supporting skills
 
-`chain`, `docs-review` and `spec-recon` above carry the heavy machinery, and the lane phases are documented with the lane they belong to. The seven below are the rest: small, and used from inside a lane as often as directly.
+`chain`, `docs-review` and `spec-recon` above carry the heavy machinery, `probe` has its own section, and the lane phases are documented with the lane they belong to. The seven below are the rest: small, and used from inside a lane as often as directly.
 
 - **`ccompact` / `ccontinue`** — a long pipeline outlives its context window. `ccompact` writes the state that exists *only* in the conversation — decisions and the reasons for them, rejected options, half-finished work, traps already hit — to a durable file, then hard-stops and prints the exact `/compact` line to paste. `ccontinue` picks it up on the far side, compares the recorded branch and HEAD against reality, and reports every place the compaction summary and the file disagree. **The file always wins.** It never copies the spec into the checkpoint: intent is already on disk, and the whole point is to save what is not.
 - **`escalation-ladder`** — five tiers between "I do not know" and asking you. Search what is openable; challenge a disagreement once; look up an authoritative external fact; assume the better-evidenced reading **with a falsifier written down**; and only then ask, with a default already applied so that silence is a valid answer. A question that reaches you has failed four cheaper attempts first.
