@@ -1021,6 +1021,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 6.6.1 — probe info files use H1 modes and H4 accounts
+
+**Breaking for probe info files.** A mode is now `# mode: <name>` (H1) and an account `#### account: <label>` (H4) under it. A file still written as `## mode:` / `### account:` fails the tier-1 check with the line numbers to change — it is never read half-way. A trailing `  # note` after `role`, `default_account` or `ports` is now treated as a comment.
+
 ### Upgrading to 6.6.0 — probe, a live check that cleans up after itself
 
 **New skill.** `/ktkit:probe` checks a running system in a real browser through the Chrome DevTools MCP, with a screenshot and an API response for every step. It needs one file per repository, `.claude/claude/docs/probe-live/info.md` — run `/ktkit:probe init` once to scaffold it. The MCP server must be registered with `--isolated` (`claude mcp get chrome-devtools` shows its args); a server without it is refused. Nothing else changes for existing skills. See [probe](#probe).
