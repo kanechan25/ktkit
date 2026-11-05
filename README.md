@@ -1021,6 +1021,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 6.6.0 — probe, a live check that cleans up after itself
+
+**New skill.** `/ktkit:probe` checks a running system in a real browser through the Chrome DevTools MCP, with a screenshot and an API response for every step. It needs one file per repository, `.claude/claude/docs/probe-live/info.md` — run `/ktkit:probe init` once to scaffold it. The MCP server must be registered with `--isolated` (`claude mcp get chrome-devtools` shows its args); a server without it is refused. Nothing else changes for existing skills. See [probe](#probe).
+
 ### Upgrading to 6.5.3 — raise-issue and translate-file answer a plain request
 
 **Behaviour change.** `/ktkit:raise-issue` and `/ktkit:translate-file` no longer set `disable-model-invocation`. Their descriptions offered spoken triggers ("raise issue này lên", "dịch file này sang tiếng Việt"), but with that flag set those sentences failed with "cannot be used with Skill tool due to disable-model-invocation", and so did a slash command typed anywhere but at the start of a message. Both skills still stop for your confirmation before writing anything. `skills/spec-recon/tests/test_skill_frontmatter.py` now rejects a skill that sets the flag while its description offers a spoken trigger.
