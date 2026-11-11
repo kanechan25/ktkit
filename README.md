@@ -281,7 +281,7 @@ Now every divergence is recorded **at the moment it happens** — while the reas
 
 A run is checked at every **phase** boundary against `cost.jsonl` — what agents actually reported — and stops on a boundary rather than mid-phase. That matters more here than in a reconnaissance run, because each phase ends on a *complete artifact*: stopping after phase B leaves a finished spec, not half an evidence set.
 
-⛔ **It stops on a window it measured, never on a cost it forecast.** `window_watch.py` reads every session and weekly window every 100 seconds; when any one reaches `--wind-down` (default 96%), the run starts nothing new, lets each agent finish the sub-step it is in, commits what passed under `--full`, and pauses. Every milestone is written as it happens into one `checkpoint.md` per run — a section per agent, a line per sub-step, stamped to the minute — so `--resume` continues each task from where it stopped. `--budget` is an optional hard ceiling on measured spend, reached rather than forecast.
+⛔ **It stops on a window it measured, never on a cost it forecast.** `window_watch.py` reads every session and weekly window every 100 seconds; when any one reaches `--wind-down` (default 96%), the run starts nothing new, lets each agent finish the sub-step it is in, commits what passed under `--full`, and pauses — then resumes on its own once every window reads under the threshold again after the reset. Every milestone is written as it happens into one `checkpoint.md` per run — a section per agent, a line per sub-step, stamped to the minute — so `--resume` continues each task from where it stopped. `--budget` is an optional hard ceiling on measured spend, reached rather than forecast.
 
 Five files land beside the ledger: `cost.jsonl`/`cost.md`, `budget.jsonl`, `checkpoint.md`, `dispatch.jsonl`/ `dispatch.md`, and `lookup.jsonl`.
 
@@ -1020,6 +1020,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 ```
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.7.1 — a paused chain run resumes by itself
+
+A `/ktkit:chain` run paused at wind-down now starts `window_watch.py --await-reset` in the background. It sleeps until the full window resets, reads again, and once every session and weekly window is under `--wind-down`, sets the checkpoint back to `running` and wakes the lead, which continues from each task's last milestone without asking. The session has to stay open; a closed one resumes with the `Resume:` line `checkpoint.py latest` prints.
 
 ### Upgrading to 6.7.0 — chain winds down at 96% instead of refusing on a forecast
 
