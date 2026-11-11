@@ -39,8 +39,8 @@ Usage
                          --state <started|done|stopped> [--next <text>] [--files <a,b>]
     checkpoint.py status --base <chain-dir>
     checkpoint.py trip   --base <chain-dir> --reason <text>
-    checkpoint.py pause  --base <chain-dir> --reason <text>
-    checkpoint.py resume --base <chain-dir>
+    checkpoint.py pause  --base <chain-dir> --reason <text> [--command <resume line>]
+    checkpoint.py resume --base <chain-dir> [--reason <text>]
     checkpoint.py finish --base <chain-dir>
     checkpoint.py latest --base <chain-dir>
 
@@ -185,10 +185,13 @@ def main(argv=None):
     m.add_argument("--state", required=True, choices=MARKS)
     m.add_argument("--next", default="")
     m.add_argument("--files", default="")
-    for name in ("status", "resume", "finish", "latest"):
+    for name in ("status", "finish", "latest"):
         sub.add_parser(name)
     for name in ("trip", "pause"):
         sub.add_parser(name).add_argument("--reason", required=True)
+    sub.choices["pause"].add_argument(
+        "--command", default="", help="the line that resumes this run, kept in the file")
+    sub.add_parser("resume").add_argument("--reason", default="")
     for p in sub.choices.values():
         p.add_argument("--base", required=True, help="the chain run directory")
     a = ap.parse_args(argv)
@@ -229,11 +232,13 @@ def main(argv=None):
 
     if a.cmd == "pause":
         run_event(a.base, "paused", "paused", a.reason)
+        if a.command:
+            run_event(a.base, None, "resume-command", a.command)
         print("paused  %s" % a.reason)
         return 0
 
     if a.cmd == "resume":
-        run_event(a.base, "running", "resumed")
+        run_event(a.base, "running", "resumed", a.reason)
         print("running")
         return 0
 
@@ -245,6 +250,11 @@ def main(argv=None):
     # latest: the last milestone of every task, which is where a resume starts
     head, sections = load(a.base)
     print("Status: %s" % head["status"])
+    for name, lines in sections:
+        if name == RUN_SECTION:
+            cmds = [l for l in lines if " | resume-command | " in l]
+            if cmds:
+                print("Resume: %s" % cmds[-1].split(" | resume-command | ", 1)[1])
     last = {}
     for name, lines in sections:
         if name == RUN_SECTION:

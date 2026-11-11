@@ -720,17 +720,33 @@ Every phase, and every brief a worker receives, carries two rules (`references/e
 3. With `--full`: commit every task that has passed its gate, through `ship.py` as usual. A task
    still `running` is **not** committed; its last milestone and touched files are in the checkpoint
    and the working tree is left as it is — never stashed, never reverted.
-4. `checkpoint.py pause --base <chain-dir> --reason "<window> at <pct>%, resets <time>"`, write
-   `partial: paused at wind-down` into `manifest.md`, print `checkpoint.py latest` and the resume
-   line, and stop.
+4. `checkpoint.py pause --base <chain-dir> --reason "<window> at <pct>%, resets <time>"
+   --command "/ktkit:chain <input> --resume <the flags this run was given>"`, write
+   `partial: paused at wind-down` into `manifest.md`, and print `checkpoint.py latest`.
+5. Start the auto-resume in the background, and end the turn:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/window_watch.py" \
+       --base <chain-dir> --await-reset --wind-down 96 --interval 100     # run_in_background
+   ```
+
+   It sleeps until the full window resets, reads again, and once **every** session and weekly
+   window is back under the threshold it sets the checkpoint to `running` and exits. That exit
+   wakes the lead. A window still full after its reset — a weekly one while the session refilled —
+   is waited for in turn. ⛔ It resumes on a reading, never on the clock alone.
 
 The trip and the pause each record the window percentage, so how much of the last 4% a wind-down
 actually used is measured, not assumed.
 
-### Resume
+### Resume — automatic
 
-`--resume` runs `checkpoint.py resume`, restarts the watch, and continues each task from its last
-milestone in `checkpoint.py latest` — the `next:` field names the sub-step. A task left `running`
+When the `--await-reset` watch exits and `checkpoint.py status` says `running`, the lead continues
+**without asking**: it runs the `Resume:` line `checkpoint.py latest` prints, restarts the window
+watch, and continues each task from its last milestone — the `next:` field names the sub-step. A
+`--resume` typed by hand does the same, and runs `checkpoint.py resume` first.
+
+⚠️ This needs the Claude Code session to still be open: the wake-up is a background command
+exiting in it. A closed session resumes when you type the `Resume:` line. A task left `running`
 is re-briefed from its brief plus that milestone, never restarted from scratch.
 
 ### After every phase
@@ -808,6 +824,7 @@ the only evidence for whether `--threshold` sits where it should.
   measured at the threshold, or a ceiling that measured spend reached, stops anything
 - Write a checkpoint anywhere but the run's one `checkpoint.md`, or only at the end of a step
 - Invent a `--budget`; absent means no token ceiling
+- Pause without starting the `--await-reset` watch, or ask before continuing once it has resumed
 - Treat a `FOREIGN` row as an answer, or let one close a row in this run's ledger
 - Read a source file in the lead because it would be quicker than dispatching.
 - Carry a phase's findings forward in conversation instead of in its step file.

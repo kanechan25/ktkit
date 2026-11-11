@@ -21,6 +21,11 @@ run finishes what is in flight, records it in one checkpoint file, and pauses.
   W10 without the flag budget.py still stops on the forecast (spec-recon unchanged)
   W11 chain no longer carries the A-C rule or --budget-execute, and documents
       --wind-down and the checkpoint
+  W12 --await-reset on a paused run whose windows refilled resumes it, and says why
+  W13 a window still full is waited for: the run stays paused
+  W14 an unreadable quota never resumes a paused run blind
+  W15 the resume command kept at pause comes back from latest, and the docs say
+      the lead continues without asking
 
 The window is seeded through `KTKIT_QUOTA_CACHE`, never read live: a verdict
 that depends on how much quota the machine has spent today is not a test.
@@ -209,9 +214,39 @@ def test_docs():
           "do not start it" not in skill and "Before phase D" not in skill)
 
 
+def await_once(session, weekly, rows=True):
+    base, cache = tempfile.mkdtemp(), tempfile.mktemp()
+    seed(cache, session, weekly, rows)
+    run(CHECKPOINT, "pause", "--base", base, "--reason", "session at 96.4%",
+        "--command", "/ktkit:chain req.md --resume --execute")
+    rc, out = run(WATCH, "--base", base, "--await-reset", "--once", env=env(cache))
+    st = status(base)
+    _, latest = run(CHECKPOINT, "latest", "--base", base)
+    text = io.open(os.path.join(base, "checkpoint.md"), encoding="utf-8").read()
+    shutil.rmtree(base)
+    os.remove(cache)
+    return rc, out, st, latest, text
+
+
+def test_await_reset():
+    rc, out, st, latest, text = await_once(3.0, 40.0)
+    check("W12 refilled windows resume the run", rc == 0 and st == 0, out)
+    check("W12 the resume records the readings", "resumed | every window under 96%" in text, text)
+    rc, out, st, _, _ = await_once(10.0, 97.0)
+    check("W13 a full weekly window keeps it paused", st == 4 and "next reading" not in out, out)
+    rc, out, st, _, _ = await_once(None, None, rows=False)
+    check("W14 unreadable never resumes blind", st == 4 and "SKIP" in out, out)
+    rc, out, st, latest, _ = await_once(97.0, 10.0)
+    check("W15 latest prints the kept resume command",
+          "Resume: /ktkit:chain req.md --resume --execute" in latest, latest)
+    skill = io.open(os.path.join(SKILL, "SKILL.md"), encoding="utf-8").read()
+    check("W15 the skill starts --await-reset and continues without asking",
+          "--await-reset" in skill and "without asking" in skill)
+
+
 if __name__ == "__main__":
     for fn in (test_one_file_for_every_agent, test_status_codes, test_watch,
-               test_latest, test_budget_modes, test_docs):
+               test_latest, test_budget_modes, test_docs, test_await_reset):
         fn()
     print()
     if failures:

@@ -126,7 +126,10 @@ reach it trips the run into **wind-down**:
 2. each agent in flight finishes the sub-step it is in, marks it in `checkpoint.md`, and returns;
 3. with `--full`, every task that passed its gate is committed; a task still running is not, and its
    last milestone and touched files are in the checkpoint;
-4. the run writes `paused` into the checkpoint and the manifest, and prints the resume line.
+4. the run writes `paused` into the checkpoint and the manifest, with the resume line;
+5. a background watch sleeps until the full window resets, and once every window reads under the
+   threshold again, the run **resumes on its own** from each task's last milestone. The session has
+   to stay open for that; a closed one resumes when you type the `Resume:` line.
 
 `checkpoint.md` is **one file per run** — a section per agent, a line per sub-step, each stamped
 `YYYY-MM-DD HH:MM` — and it is written as each sub-step finishes, not at the end. A window that runs
