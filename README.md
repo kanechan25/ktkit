@@ -281,9 +281,9 @@ Now every divergence is recorded **at the moment it happens** — while the reas
 
 A run is checked at every **phase** boundary against `cost.jsonl` — what agents actually reported — and stops on a boundary rather than mid-phase. That matters more here than in a reconnaissance run, because each phase ends on a *complete artifact*: stopping after phase B leaves a finished spec, not half an evidence set.
 
-⛔ **It will not choose a ceiling for you.** `--budget` is asked for, never assumed: `spec-recon` defaults to 4,000,000 because it measured 453,571 tokens per agent, and nothing has measured this skill. Step 00 prints what a comparable run cost and waits. `--budget-execute` gives phase D its own ceiling, because its cost tracks the size of a change rather than the number of questions — and if the remainder is under what phases A–C cost, phase D does not start, since a half-changed repository is worse than an unchanged one.
+⛔ **It stops on a window it measured, never on a cost it forecast.** `window_watch.py` reads every session and weekly window every 100 seconds; when any one reaches `--wind-down` (default 96%), the run starts nothing new, lets each agent finish the sub-step it is in, commits what passed under `--full`, and pauses. Every milestone is written as it happens into one `checkpoint.md` per run — a section per agent, a line per sub-step, stamped to the minute — so `--resume` continues each task from where it stopped. `--budget` is an optional hard ceiling on measured spend, reached rather than forecast.
 
-Four files land beside the ledger: `cost.jsonl`/`cost.md`, `budget.jsonl`, `dispatch.jsonl`/ `dispatch.md`, and `lookup.jsonl`.
+Five files land beside the ledger: `cost.jsonl`/`cost.md`, `budget.jsonl`, `checkpoint.md`, `dispatch.jsonl`/ `dispatch.md`, and `lookup.jsonl`.
 
 **The ledger lookup is now counted rather than claimed.** It had always been listed as one of five places the tokens are saved, with the arithmetic — 6,619 per spawn against one grep — but nothing counted the hits. `ledger.py --cache-metric` reports them as a **floor** on tokens not spent, labelled as one, plus the near-misses between 0.45 and 0.60 that are the only evidence for where `--threshold` belongs.
 
@@ -1020,6 +1020,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 ```
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.7.0 — chain winds down at 96% instead of refusing on a forecast
+
+**Behaviour change for `/ktkit:chain`.** The rule that refused to start phase D when the window left was smaller than what phases A–C cost is gone, and so is `--budget-execute`. A background watch reads every session and weekly window every 100 s; at `--wind-down` (default 96) the run finishes the sub-step each agent is in, commits what passed under `--full`, writes `checkpoint.md` and pauses. `--budget` is no longer asked for: passed, it is a hard ceiling on measured spend; absent, there is none. A run paused by the old gate resumes with `--resume`. `spec-recon` is unchanged.
 
 ### Upgrading to 6.6.1 — probe info files use H1 modes and H4 accounts
 
