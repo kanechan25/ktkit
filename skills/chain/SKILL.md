@@ -1,7 +1,7 @@
 ---
 name: chain
 description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to one of four lanes -- BUG, CR, NR or TRIVIAL -- runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. --full goes further: implementation, one commit per task with a body built from the run's own files, then a pull request through /ktkit:create-pr with the run's context handed over. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
-argument-hint: "<requirement.md | described request> [--bug|--cr|--nr|--trivial] [--feature] [--to A|B|C] [--plan yes|no] [--execute] [--full] [--pr-to <branch>] [--draft] [--lang en|ja] [--resume | --fresh] [--budget <token>] [--budget-execute <n>] [--ledger-scope run|dir] [--rounds N]"
+argument-hint: "<requirement.md | described request> [--bug|--cr|--nr|--trivial] [--feature] [--to A|B|C] [--plan yes|no] [--execute] [--full] [--pr-to <branch>] [--draft] [--lang en|ja] [--resume | --fresh] [--budget <token>] [--wind-down <pct>] [--ledger-scope run|dir] [--rounds N]"
 ---
 
 # chain — one requirement in, a reviewed spec out
@@ -38,8 +38,9 @@ phase never re-asks it, and a single place where the run stops.
     [--draft]             with --full: open the PR as a draft
     [--lang en|ja]        with --full: the PR's language. Default en
     [--resume | --fresh]  what to do when a previous run exists
-    [--budget <token>]    stop cleanly at a step boundary. Asked for, never assumed
-    [--budget-execute <n>] a separate ceiling for phase D. Default: what A-C cost
+    [--budget <token>]    optional hard ceiling on measured spend. Default: none
+    [--wind-down <pct>]   wind down and pause when any session or weekly window
+                          reaches this. Default 96
     [--ledger-scope run|dir]  `dir` reads sibling runs' ledgers, as leads only
     [--rounds N]          self-loop rounds per phase. Default 2
 ```
@@ -50,8 +51,8 @@ phase never re-asks it, and a single place where the run stops.
 | `--trivial` | The only lane with no analysis and no spec, so it is the only one where a wrong call produces a change nobody reviewed. It is **never** inferred — not from the frontmatter, not from the size of the diff — and its four entry conditions are all required, not weighed: see `references/lanes.md`. It also requires `--execute`: without it the lane has nothing to run, and the chain stops rather than writing an empty trace. |
 | `--full` | Everything `--execute` does, then step 05 **commits each task** the moment it passes its review, and steps 08–09 hand the run to `/ktkit:create-pr`. ⛔ Refuses a run that stops early (`--to A` or `--to B`): there is nothing to commit. Checked at step 00 before anything is spent — see item 5 there. |
 | `--pr-to` / `--draft` / `--lang` | Passed through to `/ktkit:create-pr` as `--to`, `--draft` and `--lang`. `--pr-to` is not `--to`: that one names the phase the chain stops after. |
-| `--budget` | ⭐ **Asked for, never assumed.** Without it, step 00 prints what a comparable run cost — from `cost.jsonl`, if one exists nearby — and **stops for your answer**. It does not pick a number: `ktkit:spec-recon` defaults to 4M because 453,571 tokens per agent was measured there, and this skill has a different shape and **no measurement yet**. Checked at every step boundary against `cost.jsonl`; reaching it writes `partial` into the manifest and stops **at a boundary** — never mid-step, which would leave a half-written artifact that reads as finished. |
-| `--budget-execute` | Phase D is the one phase whose cost tracks the size of a change rather than the number of questions, so it gets its own ceiling. Default: **what phases A–C actually cost**, measured. ⛔ Running out mid-implementation leaves a repository half-changed, which is worse than one not changed at all — so if the remainder is under that figure, phase D does not start. |
+| `--budget` | **Optional hard ceiling**, in tokens, on what agents actually reported in `cost.jsonl`. Not asked for and not invented: without it there is no token ceiling and the window watch alone guards the run. With it, the run winds down once measured spend **reaches** the ceiling — never because a step like the last one *might* pass it. |
+| `--wind-down` | The window percentage at which the run stops starting work, finishes what is in flight, writes its checkpoint and pauses. Default **96**: the last 4% are the room for that. Watched every 100 s across the session window and every weekly window — whichever reaches it first. See *Cost* below. |
 | `--ledger-scope` | `run` (default) reads only this run's ledger. `dir` also reads sibling runs' `resolved.md` in the same `prompts/<rel>/`, and reports a match as **`FOREIGN` with exit 2** — a lead for a resolver, never a conclusion. A row settled last week may be stale, and a wrong `HIT` is worse than a `MISS` because the chain cites an answer to a question nobody asked now and stops looking. |
 | `--resume` | Read `manifest.md`, restart at the first row marked `missing` or `partial`. Rows marked `complete` are never re-run: their ID allocations are cited by every later row, and re-minting them repoints those citations at something else, silently. |
 | `--fresh` | Start at step 00. ⛔ Deletes nothing — the previous run directory is renamed `<base>.<timestamp>/`, and the artifacts under `analyze/`, `specs/` and `pipeline/` are left alone. |
@@ -663,16 +664,74 @@ finished cannot be told from a finished one, by a human or by the next phase.
 ### Step 00 — before anything is spent
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/quota.py" --gate 80
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/quota.py" --gate <wind-down> --all-windows
 ```
 
-Under 20% of a subscription window left is too little to begin something with this many phases.
-`SKIP` is **not** a stop: failing to read the quota is not the same as being out of it, so the run
-continues and writes `quota not-checked: <reason>` into the manifest.
+A window already at the wind-down threshold — session or any weekly one — is the only reason not
+to start. `SKIP` is **not** a stop: failing to read the quota is not the same as being out of it, so
+the run continues and writes `quota not-checked: <reason>` into the manifest.
 
-⛔ **Then settle `--budget`.** Without it, print what a comparable run cost and **stop for an
-answer**. Do not choose a number — `spec-recon` defaults to 4M because it measured 453,571 tokens
-per agent, and nothing has measured this skill.
+`--budget` is not asked for. Passed, it is a hard ceiling; absent, there is none.
+
+### The window watch — started at step 00, alive for the whole run
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/window_watch.py" \
+    --base <chain-dir> --wind-down 96 --interval 100        # run_in_background
+```
+
+Every 100 seconds it reads every session and weekly window. Below the threshold it does nothing.
+The first reading at or above it trips `checkpoint.md` into `wind-down` and **exits** — and a
+background command that exits wakes the lead. Restart it after a `--resume`.
+
+⛔ **Nothing forecasts any more.** An earlier version refused to start phase D because the window
+left, converted into tokens at the run's own rate, was smaller than what phases A–C had cost — with
+44% of the session unspent. That rule guessed phase D's cost and stopped a run with room in it. A
+half-changed repository is still worse than an unchanged one; the answer is the checkpoint below,
+which makes a stop at any sub-step resumable, not a refusal to begin.
+
+### `checkpoint.md` — one file, written as the work happens
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/checkpoint.py" mark --base <chain-dir> \
+    --agent worker-T03 --task T03 --step "2/5 write the failing test" --state done \
+    --next "implement the handler" --files src/a.py,tests/test_a.py
+```
+
+**One file per run**, however many agents: a section per agent, a line per milestone, every line
+stamped `YYYY-MM-DD HH:MM`, the run's status in the header. Six workers with five sub-steps each
+write thirty lines into one file, never six files. Writes are serialised by a lock on the run
+directory.
+
+⭐ A milestone is written **when it is reached**, not at the wind-down. If the window runs out before
+the wind-down finishes, everything up to the sub-step in flight is already on disk.
+
+Every phase, and every brief a worker receives, carries two rules (`references/execution.md`):
+
+1. Mark each sub-step `done` the moment it is done, with what comes next.
+2. ⛔ Before starting a sub-step, run `checkpoint.py status --base <chain-dir>`. Exit `3` means
+   wind-down: **finish nothing new** — complete the sub-step already in hand, mark it, and return.
+   Exit `4` means paused: start nothing.
+
+### Wind-down — when the watch trips, or `--budget` is reached
+
+1. Dispatch nothing new. Start no task, no phase, no review.
+2. Wait for the agents in flight. Each finishes the sub-step it is in, marks it and returns.
+3. With `--full`: commit every task that has passed its gate, through `ship.py` as usual. A task
+   still `running` is **not** committed; its last milestone and touched files are in the checkpoint
+   and the working tree is left as it is — never stashed, never reverted.
+4. `checkpoint.py pause --base <chain-dir> --reason "<window> at <pct>%, resets <time>"`, write
+   `partial: paused at wind-down` into `manifest.md`, print `checkpoint.py latest` and the resume
+   line, and stop.
+
+The trip and the pause each record the window percentage, so how much of the last 4% a wind-down
+actually used is measured, not assumed.
+
+### Resume
+
+`--resume` runs `checkpoint.py resume`, restarts the watch, and continues each task from its last
+milestone in `checkpoint.py latest` — the `next:` field names the sub-step. A task left `running`
+is re-briefed from its brief plus that milestone, never restarted from scratch.
 
 ### After every phase
 
@@ -682,7 +741,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cost_log.py" wave \
     --row 'resolver-1,A,148200,3100,14,96' --row 'resolver-2,A,…'
 
 python3 "${CLAUDE_PLUGIN_ROOT}/scripts/budget.py" \
-    --base <chain-dir> --budget <n> --quota-gate 85 --step 02-clarify
+    --base <chain-dir> --budget <n> --window-advisory --step 02-clarify     # only with --budget
 ```
 
 One call per phase, not one per agent: measured on a 43-agent wave, batching is ~521 tokens against
@@ -694,28 +753,19 @@ loading its whole body. `cost-model.md` measures that a long body is a tax on **
 four-tool agent with a long body came to 23,375 tokens against 6,619 for a short one — and nobody has
 ever measured what these six cost. They are the largest unmeasured term in this skill.
 
-`budget.py` returns `GO` (continue) or `STOP`. On `STOP`: write `partial` into `manifest.md` naming
-what was not reached, and print the `--resume` line it gives you. ⛔ Dispatch nothing further.
+With `--window-advisory`, `budget.py` returns `STOP` only when measured spend has reached `--budget`;
+the lookahead, the window rate and `BUDGET-UNREACHABLE` are printed as notes. On `STOP`: run the
+wind-down above.
 
 ⭐ **A boundary here is worth more than in `spec-recon`**, because each phase ends on a *complete
 artifact*. Stopping after phase B leaves a finished spec, not half an evidence set.
-
-### Before phase D
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/scripts/budget.py" \
-    --base <chain-dir> --budget <budget-execute> --step 05-implement-precheck
-```
-
-Phase D costs by the size of the change, not the number of questions. If what remains is less than
-phases A–C actually cost, ⛔ **do not start it**: say so, and say that a half-changed repository is
-worse than an unchanged one.
 
 ### What lands on disk
 
 ```
 <chain-dir>/cost.jsonl · cost.md         what each phase and each agent cost
 <chain-dir>/budget.jsonl                 the gate's verdict at every boundary
+<chain-dir>/checkpoint.md                every milestone, every agent, the run's status
 <chain-dir>/dispatch.jsonl · dispatch.md what each agent was sent, against what it spent
 <chain-dir>/lookup.jsonl                 every ledger lookup, and what it saved
 ```
@@ -752,9 +802,12 @@ the only evidence for whether `--threshold` sits where it should.
 
 ## Stop if you are about to
 
-- Dispatch a further phase after `budget.py` returned `STOP`, or start phase D with less than
-  phases A–C cost
-- Choose a `--budget` yourself instead of asking; no measurement of this skill exists yet
+- Dispatch anything after `checkpoint.py status` says `wind-down` or `paused`, or after `budget.py`
+  returned `STOP`
+- Refuse to start a phase, or stop a run, on a forecast of what it will cost — only a window that
+  measured at the threshold, or a ceiling that measured spend reached, stops anything
+- Write a checkpoint anywhere but the run's one `checkpoint.md`, or only at the end of a step
+- Invent a `--budget`; absent means no token ceiling
 - Treat a `FOREIGN` row as an answer, or let one close a row in this run's ledger
 - Read a source file in the lead because it would be quicker than dispatching.
 - Carry a phase's findings forward in conversation instead of in its step file.

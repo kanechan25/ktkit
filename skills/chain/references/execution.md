@@ -84,6 +84,29 @@ Two reasons, and the second is the one people forget:
 This is `superpowers:subagent-driven-development`'s discipline, applied to the
 briefs this file defines.
 
+## Every brief carries the checkpoint rules
+
+The run has one `checkpoint.md`, and a worker writes its milestones there itself
+— the lead cannot, because by the time the worker returns the sub-step it was in
+is already over. Every brief ends with these two rules, verbatim but for the
+names:
+
+```
+Before each sub-step:
+  python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/checkpoint.py" status --base <chain-dir>
+  exit 3 (wind-down): do not start it. Return now, saying which sub-step is next.
+  exit 4 (paused):    do not start it. Return now.
+After each sub-step:
+  python3 "${CLAUDE_PLUGIN_ROOT}/skills/chain/scripts/checkpoint.py" mark --base <chain-dir> \
+      --agent <your name> --task <id> --step "<i>/<n> <what>" --state done \
+      --next "<the next sub-step>" --files <paths touched so far>
+```
+
+A sub-step is the smallest unit that leaves the work resumable: a test written,
+a function made to pass, a gate run. A worker never marks one it has not
+finished, and never batches marks at the end — a milestone written late is one
+the window can take with it.
+
 ## Tiers — how much review a task earns
 
 Assigned at routing, written into `execution.yml`, and never raised by the worker

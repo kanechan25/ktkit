@@ -20,6 +20,8 @@ into has room, and when it would refill if not.
     quota.py                 human-readable, one line per window
     quota.py --json          the parsed limits, for a gate to branch on
     quota.py --gate <pct>    exit 1 when the session window is at or above <pct>
+    quota.py --gate <pct> --all-windows
+                             ... or when any weekly window is (`/ktkit:chain`)
 
 Credentials, in order: `CLAUDE_CODE_OAUTH_TOKEN`, then the macOS keychain entry
 `Claude Code-credentials`, then `~/.claude/.credentials.json`. The token is read,
@@ -293,6 +295,8 @@ def main(argv=None):
                     help="machine-readable, for a gate to branch on")
     ap.add_argument("--gate", type=float, default=None, metavar="PCT",
                     help="exit 1 when the session window is at or above PCT")
+    ap.add_argument("--all-windows", action="store_true",
+                    help="with --gate: also gate on every weekly window")
     ap.add_argument("--fresh", action="store_true",
                     help="bypass the cache; the endpoint rate-limits, so use sparingly")
     a = ap.parse_args(argv)
@@ -347,6 +351,17 @@ def main(argv=None):
             msg += " · resets in %.0f min" % sess["minutes"]
         print(msg)
         return 1
+    if a.gate is not None and a.all_windows:
+        over = [r for r in rows if r is not sess and r["percent"] >= a.gate
+                and str(r["kind"]).startswith(("weekly", "seven_day"))]
+        if over:
+            r = max(over, key=lambda x: x["percent"])
+            msg = ("QUOTA-GATE  %s window at %.1f%% (>= %.1f%%)"
+                   % (r["kind"], r["percent"], a.gate))
+            if r["minutes"] is not None:
+                msg += " · resets in %.0f min" % r["minutes"]
+            print(msg)
+            return 1
     return 0
 
 

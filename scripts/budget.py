@@ -65,6 +65,14 @@ is spent. That rate is **never stored** and never carried between runs: it is tw
 observations from the run in front of you, and it stops being true the moment
 either changes.
 
+`--window-advisory` is for `/ktkit:chain`, and only for it. There the window is
+guarded by `window_watch.py`, which measures every session and weekly window
+and calls a wind-down at a threshold, so a forecast here would only stop a run
+that still has room. With the flag, the ceiling is a hard cap -- `STOP` once
+spent reaches `--budget`, not once a step like the last one *might* pass it --
+and the lookahead, `BUDGET-UNREACHABLE` and `--quota-gate` are printed as notes.
+`spec-recon` does not pass it and keeps every rule above.
+
 Stdlib only, Python 3.9.
 """
 import argparse
@@ -212,6 +220,9 @@ def main(argv=None):
                     help="also stop when the session window is at or above PCT")
     ap.add_argument("--safety", type=float, default=SAFETY,
                     help="margin on the last step's cost (default %.1f)" % SAFETY)
+    ap.add_argument("--window-advisory", action="store_true",
+                    help="chain: stop only on the spent ceiling; window and "
+                         "lookahead reasons become notes")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
 
@@ -270,7 +281,12 @@ def main(argv=None):
         reasons.append("%.0f%% of the window left, and a step like the last one "
                        "took %.0f%%" % (headroom, step_pct))
 
-    verdict = "STOP" if reasons else "GO"
+    notes = []
+    if a.window_advisory:
+        # Only the measured ceiling stops; every forecast is reported, not obeyed.
+        hard = [r for r in reasons if r.startswith("the ceiling is spent")]
+        notes = [r for r in reasons if r not in hard]
+        reasons = hard
 
     verdict = "STOP" if reasons else "GO"     # set after every reason is known
     out = {"verdict": verdict, "budget_unreachable": unreachable, "step": a.step, "spent": spent, "budget": a.budget,
@@ -281,7 +297,8 @@ def main(argv=None):
            "tokens_per_window_percent": int(per_pct) if per_pct else None,
            "rate_from_step": from_step,
            "window_allows_about": int(affordable) if affordable else None,
-           "resets_in_minutes": resets, "quota_note": note, "reasons": reasons}
+           "resets_in_minutes": resets, "quota_note": note, "reasons": reasons,
+           "notes": notes}
 
     if a.json:
         print(json.dumps(out, indent=2))
@@ -316,7 +333,9 @@ def main(argv=None):
             print("  ⚠️ %d agent(s) reported no usage: the spend above is a floor" % missing)
         for r in reasons:
             print("  ⛔ %s" % r)
-        if unreachable:
+        for r in notes:
+            print("  ℹ️ %s   <- a note, not a stop (--window-advisory)" % r)
+        if unreachable and not a.window_advisory:
             print("")
             print("  BUDGET-UNREACHABLE. Re-run with a ceiling this window can hold:")
             print("      --budget %d" % int(affordable))
@@ -330,7 +349,10 @@ def main(argv=None):
             print("  Everything finished so far is on disk. Nothing in flight is lost.")
             if resets:
                 print("  The window resets in %.0f minutes." % resets)
-            print("  Resume:  ktkit:spec-recon --resume %s --budget <new>" % a.base)
+            if a.window_advisory:
+                print("  Resume:  /ktkit:chain <input> --resume --budget <new>")
+            else:
+                print("  Resume:  ktkit:spec-recon --resume %s --budget <new>" % a.base)
     return 1 if verdict == "STOP" else 0
 
 

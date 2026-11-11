@@ -60,8 +60,11 @@ task with a body built from the run's own files, and open the PR through `/ktkit
 # start over; the old run directory is renamed, never deleted
 /ktkit:chain requirement.md --fresh
 
-# put a ceiling on the run; it stops at a step boundary, never mid-step
+# a hard ceiling on measured spend; reaching it winds the run down and pauses it
 /ktkit:chain requirement.md --budget 400000
+
+# wind down earlier than the default 96% of any session or weekly window
+/ktkit:chain requirement.md --execute --wind-down 90
 ```
 
 ## Flags
@@ -79,8 +82,8 @@ task with a body built from the run's own files, and open the PR through `/ktkit
 | `--lang en\|ja` | `en` | With `--full`: the PR's language. Commits are always English. |
 | `--resume` | — | Restart at the first step marked `missing` or `partial`. Rows marked `complete` are never re-run: their ID allocations are cited downstream. |
 | `--fresh` | — | Start at step 00. Deletes nothing — the old run directory is renamed `<base>.<timestamp>/`. |
-| `--budget <token>` | **asked, never assumed** | ⭐ Ceiling for the run, checked at every phase boundary against `cost.jsonl` — what agents actually reported. Omit it and step 00 stops for your answer: nothing has measured this skill yet, so it will not pick a number for you. |
-| `--budget-execute <n>` | what A–C cost | A separate ceiling for phase D, whose cost tracks the size of a change rather than the number of questions. ⛔ If the remainder is under that figure, phase D does not start — a half-changed repository is worse than an unchanged one. |
+| `--budget <token>` | none | Optional hard ceiling on what agents reported in `cost.jsonl`. Reaching it — not being forecast to reach it — runs the wind-down. Without it the window watch alone guards the run. |
+| `--wind-down <pct>` | `96` | Any session or weekly window at this percentage — read every 100 s — stops new work: agents finish the sub-step in hand, `--full` commits what passed, `checkpoint.md` is written and the run pauses. The last 4% are the room for that. |
 | `--contract` *(on `deviation.py`)* | — | Marks a divergence that changes what the spec **promises** — an acceptance criterion, an API shape, a dropped requirement. It becomes a gate at step 06 rather than syncing on its own. |
 | `--ledger-scope run\|dir` | `run` | `dir` also reads sibling runs' ledgers in the same `prompts/<rel>/` and reports a match as **`FOREIGN`, exit 2** — a lead for a resolver, never a conclusion. |
 | `--rounds N` | `2` | Self-clarify rounds per phase. |
@@ -92,6 +95,7 @@ Four files land beside the ledger, and every figure in them is what an agent rep
 ```
 cost.jsonl · cost.md         what each phase and each agent cost
 budget.jsonl                 the gate's verdict at every boundary
+checkpoint.md                every milestone of every agent, stamped to the minute, and the run's status
 dispatch.jsonl · dispatch.md what each agent was sent, against what it spent
 lookup.jsonl                 every ledger lookup, and what it saved
 ```
@@ -112,14 +116,25 @@ comes from the repository (`preflight --groups testcmd` says which file states i
 does, the chain asks **once** and records the answer. ⛔ It never guesses `npm test`: a green from
 the wrong command is worse than no gate.
 
-`quota.py --gate 80` runs before anything is spent; `budget.py` decides `GO` or `STOP` after every
-phase. On `STOP` the run stops **at a boundary** — and a boundary here is worth more than in a
-reconnaissance run, because each phase ends on a *complete artifact*: stopping after phase B leaves
-you a finished spec, not half an evidence set.
+### ⭐ Where it stops — measured, never forecast
 
-⛔ **It will not choose a ceiling for you.** `ktkit:spec-recon` defaults to 4,000,000 because it
-measured 453,571 tokens per agent; this skill has a different shape and no measurement yet, so
-step 00 prints what a comparable run cost and waits.
+`window_watch.py` runs in the background for the whole run and reads every session and weekly window
+every 100 seconds. Nothing stops while all of them are under `--wind-down` (96%). The first one to
+reach it trips the run into **wind-down**:
+
+1. nothing new is dispatched;
+2. each agent in flight finishes the sub-step it is in, marks it in `checkpoint.md`, and returns;
+3. with `--full`, every task that passed its gate is committed; a task still running is not, and its
+   last milestone and touched files are in the checkpoint;
+4. the run writes `paused` into the checkpoint and the manifest, and prints the resume line.
+
+`checkpoint.md` is **one file per run** — a section per agent, a line per sub-step, each stamped
+`YYYY-MM-DD HH:MM` — and it is written as each sub-step finishes, not at the end. A window that runs
+out mid-wind-down loses at most the sub-step in flight. `--resume` continues each task from its last
+milestone.
+
+⛔ No phase is refused on a forecast. An earlier gate would not start phase D because the window left,
+converted to tokens, was less than phases A–C had cost — with 44% of the session unspent.
 
 ### What the ledger lookup saved
 
@@ -205,7 +220,7 @@ stops, the manifest says at which step and why.
 | Anti-pattern | Why |
 | ------------ | --- |
 | Treat a `FOREIGN` row as an answer | It is a lead. Last week's conclusion may be stale, and a wrong `HIT` is worse than a `MISS` — the chain cites an answer to a question nobody asked now and stops looking. |
-| Start `--execute` on the last of the budget | Phase D costs by the size of the change. Out of budget mid-implementation leaves the repository half-changed. |
+| Delete or hand-edit `checkpoint.md` between a pause and `--resume` | It is where each task restarts. A missing milestone re-runs a sub-step; a wrong one skips it. |
 | Delete the run directory to "start clean" | IDs are re-minted from 001 and every citation in the old artifacts silently repoints. Use `--fresh`. |
 | Pass `--execute` on the first run of an unfamiliar requirement | Read the spec first. The flag is off by default for that reason. |
 | Run `--full` from `dev` or `main` and expect a branch to appear | Step 00 stops. Check out the feature branch first — the chain never creates one. |
