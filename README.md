@@ -831,6 +831,15 @@ Trên UAT, xem trang /settings/billing hiển thị đúng plan "Pro" chưa. Th�
 
 The page is opened, read and captured. **Save is not clicked**: the report says it was skipped because the environment is read-only and that a write has to be done by hand, outside the skill. Before every click it reads the target's label; anything that looks like a write (save, delete, submit, approve, upload… in English, Japanese and Vietnamese, plus your repository's own `write_action_hints`) is skipped, and anything ambiguous counts as a write. At the end every non-GET request outside the login endpoints is listed in red at the top of the report. The `auditor` account is SSO, so the skill opens the login page and waits for you to sign in.
 
+**Just look, save nothing.**
+
+```text
+Xem nhanh trang /orders trên local có load được không, khỏi chụp.
+/ktkit:probe --mode local --no-evidence
+```
+
+No evidence question, no screenshots, no saved JSON, no `report.md`. The answer comes in chat with each conclusion marked `(no evidence)`. The ledger is still written to `.claude/claude/probe-live/<yyyymmdd>/probe-<slug>/ledger.md`, because cleanup reads it to know what this run started. Saying "khỏi chụp" without the flag does not turn evidence off.
+
 **Keep it open to look at by hand.**
 
 ```text
@@ -1022,6 +1031,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 ```
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
+
+### Upgrading to 6.7.3 — probe can run without evidence
+
+`/ktkit:probe --no-evidence` skips the evidence question, screenshots, saved JSON and the report file; conclusions come in chat marked `(no evidence)`. The ledger is still kept for cleanup. Without the flag nothing changes.
 
 ### Upgrading to 6.7.2 — probe picks the first account of a shared role and derives a blank start_cmds
 

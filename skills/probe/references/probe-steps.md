@@ -23,6 +23,10 @@ that already has files continues the numbering.
 
 ## Ledger
 
+Under `--no-evidence` there is no evidence folder; the ledger alone goes to
+`<repo>/.claude/claude/probe-live/<yyyymmdd>/probe-<slug>/ledger.md`, first line
+`evidence: none (--no-evidence)`.
+
 `<evidence>/ledger.md`. The first line is the evidence path. Then one row per thing touched, appended
 **before** it is started:
 

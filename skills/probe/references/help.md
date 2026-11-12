@@ -6,7 +6,7 @@ saving a screenshot and the API JSON for every step. **Where** and **with what**
 repository, `<repo>/.claude/claude/docs/probe-live/info.md`; **what** comes from the conversation.
 
 ```
-/ktkit:probe [--mode <name>] [--no-cleanup] [<info-file>]
+/ktkit:probe [--mode <name>] [--no-cleanup] [--no-evidence] [<info-file>]
 /ktkit:probe init
 /ktkit:probe cleanup <ledger>
 ```
@@ -16,6 +16,7 @@ repository, `<repo>/.claude/claude/docs/probe-live/info.md`; **what** comes from
 | `--mode <name>` | the `# mode:` to use; never defaulted — named in the session, or asked |
 | `--cleanup` | the default: ask once at the end, then close, kill and stop what this run started |
 | `--no-cleanup` | leave everything running; print a hand-over table with the stop commands |
+| `--no-evidence` | probe without screenshots or saved JSON; conclusions in chat marked `(no evidence)`; the ledger is still kept for cleanup |
 | `init` | scaffold the info file for this repository |
 | `cleanup <ledger>` | clean up what an earlier `--no-cleanup` run kept |
 
@@ -28,6 +29,9 @@ repository, `<repo>/.claude/claude/docs/probe-live/info.md`; **what** comes from
 # UAT with two accounts — read-only, whatever the request says
 /ktkit:probe --mode uat
 
+# just look, save nothing: no evidence question, no screenshots
+/ktkit:probe --mode local --no-evidence
+
 # keep Chrome and the services up to look at by hand afterwards
 /ktkit:probe --mode local --no-cleanup
 ```
@@ -39,7 +43,7 @@ repository, `<repo>/.claude/claude/docs/probe-live/info.md`; **what** comes from
 - **Only `env_class: dev` may change state.** Every other environment is read-only; a write button is
   not clicked even when asked.
 - **A new isolated Chrome context per account**, and a server that must run with `--isolated`.
-- **It asks where evidence goes** before anything starts.
+- **It asks where evidence goes** before anything starts — unless `--no-evidence` says to save none.
 - **It only stops what its ledger says it started.** What was already running is reused, never killed.
 
 ## Do not
