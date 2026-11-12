@@ -11,6 +11,7 @@
   C8  an account named in the session that matches nothing lists the known ones
   C9  --default-path is <repo>/.claude/claude/docs/probe-live/info.md
   C10 a mode or account heading at the wrong level fails, never folds in
+  C11 a role shared by several accounts resolves to the first, never a stop
 
 Run:  python3 skills/probe/tests/test_check_info.py
 """
@@ -162,6 +163,30 @@ def test_c8_unknown_account():
     check("C8 lists the known accounts", "owner (admin)" in out and "member" in out, out)
     rc, out = run(GOOD, "--mode", "local", "--needs", "account:admin")
     check("C8 a role resolves to its account", rc == 0, out)
+
+
+def test_c11_shared_role_takes_first():
+    text = GOOD.replace("#### account: member", """#### account: user-1
+- role: user
+- login_method: password
+- user: 1
+- password: %s
+- can_write: yes
+
+#### account: user-2
+- role: user
+- login_method: password
+- user: 2
+- password: %s
+- can_write: yes
+
+#### account: member""" % (SECRET, SECRET), 1)
+    rc, out = run(text, "--mode", "local", "--needs", "account:user")
+    check("C11 shared role passes", rc == 0, out)
+    check("C11 the first account is picked", "user -> user-1" in out, out)
+    rc, out = run(text, "--mode", "local", "--needs", "account:user,account:user")
+    check("C11 the same role twice gets two accounts",
+          rc == 0 and "user -> user-2" in out, out)
 
 
 def test_c9_default_path():

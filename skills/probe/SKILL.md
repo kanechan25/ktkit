@@ -35,7 +35,7 @@ still a default run; the closing question offers `giữ lại` for that.
 ## Hard rules
 
 1. **Nothing starts before the three preflight tiers pass.** No process, container, Chrome context,
-   evidence folder or `start_cmds` until tier 1, 2 and 3 are all PASS. Before that, only reads. Tiers
+   evidence folder or start command until tier 1, 2 and 3 are all PASS. Before that, only reads. Tiers
    run cheapest first; a failing tier reports **all** of its own gaps at once and the later tiers do
    not run — a later tier's gap surfacing on the rerun is the price of not paying for it twice.
 2. **Every environment but `dev` is read-only. No exception, no unlock, no "but the operator asked".**
@@ -78,7 +78,7 @@ list_console_messages, get_console_message`. Which prefixes exist is measured in
 
    | The probe needs | When | `--needs` item |
    | --------------- | ---- | -------------- |
-   | an account | the requirement names a label or role, else `default_account` | `account:<label-or-role>` |
+   | an account | the requirement names a label or role, else `default_account` | `account:<label-or-role>` — a role shared by several accounts is the first in the file; the same role twice is two different accounts |
    | the database | it compares the screen with stored data, checks a record, "is it in the DB" | `db` |
    | an API | it compares JSON from a service | `api:<service>` |
    | swagger | it says so | `swagger` |
@@ -119,8 +119,17 @@ Isolation is this skill's own job: it passes `isolatedContext` itself and never 
 
 - **B3** `kind: remote` ⇒ `curl -sI <fe_url>` returns a status (not DNS failure or timeout).
 - **B5** `host-local`/`docker-local` ⇒ `lsof -iTCP:<port> -sTCP:LISTEN` for each port in `ports`. Held ⇒
-  record the holder as `PRE-EXISTING`. Held by something unknown that `start_cmds` needs ⇒ report,
-  never kill. Free, and no `start_cmds` can start it ⇒ FAIL now, not in P5.
+  record the holder as `PRE-EXISTING`. Held by something unknown that the start command needs ⇒
+  report, never kill. Free ⇒ resolve how to start it (below); nothing in the repository starts it ⇒
+  ask one question now, not in P5.
+- **Start command.** `start_cmds` filled ⇒ use it. Absent or a placeholder ⇒ **work it out from the
+  repository, do not stop**: run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/probe/scripts/init_scan.py"`, read the repository's own
+  `CLAUDE.md`/`AGENTS.md`/`README`, and match each free port to the script, project or target that
+  opens it (a `--port`/`-p` flag, a `launchSettings.json` URL, a config naming the port, a doc saying
+  "FE on 3100"). The package manager is the lockfile's (`pnpm-lock.yaml` ⇒ `pnpm`, `yarn.lock` ⇒
+  `yarn`, `package-lock.json` ⇒ `npm`), run in the directory that holds that `package.json`. Every
+  derived command carries the `file:line` it came from and is shown in the "will probe" table; a port
+  no source ties to a command is the only thing asked, in one question for all of them.
 - **B8** the database, only when `db` is needed: read-only connection and `select 1`, print the DB name
   and the read-only state, never the connection string. A database that `start_cmds` itself brings up
   is checked statically here and connected to right after it is up (B8b), before anything else starts;
@@ -155,7 +164,8 @@ No answer ⇒ nothing starts. The chosen path is the first line of `ledger.md` i
 
 ### P5 — Start what is missing
 
-Only what B5 found absent, only with that mode's `start_cmds`. A container only when
+Only what B5 found absent, only with the command resolved in P3 — `start_cmds`, or the one derived
+from the repository with its source. A container only when
 `kind: docker-local`; a `host-local` mode never gets one, not even "just for the database" — report
 what is missing instead. Processes started here are not tied to this session: they outlive it unless
 P9 stops them.
@@ -236,6 +246,8 @@ and measure exactly as P9. `PRE-EXISTING` rows are never touched.
 | "They said ok rồi, cảm ơn — that means done, clean up" | That answers nothing. Ask the cleanup question. |
 | "`docker stop` then `rm` and drop the volume, to be tidy" | `stop` only, by ledger name. |
 | "While they fill in the DB string, I'll start the backend" | Tier 1 failed ⇒ nothing starts. |
+| "Two accounts have role `user`, so I can't choose" | Either serves: take the first in the file and say which. |
+| "`start_cmds` is blank, so I can't start the FE" | The repository says how it runs: derive it, cite the line, start it. |
 | "cứ làm đi covers it; the scratchpad holds nothing important" | Always ask where evidence goes. |
 | "Report the first gap; the next run will show the next" | One table, every gap, once. |
 | "This port is probably mine" | Not in the ledger ⇒ not yours. |

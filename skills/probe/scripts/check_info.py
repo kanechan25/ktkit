@@ -183,8 +183,9 @@ def where(path, line, note=""):
 
 
 def check(path, mode, needs):
-    """(errors, warnings). Each error is (what, why, where)."""
-    errors, warnings = [], []
+    """(errors, warnings, picked). Each error is (what, why, where); each pick
+    is (wanted, account label, how many accounts matched)."""
+    errors, warnings, picked = [], [], []
 
     def need_key(section, key, why, label=None):
         what = ("account[%s].%s" % (label, key)) if label else key
@@ -229,6 +230,7 @@ def check(path, mode, needs):
     wanted = list(needs["accounts"])
     if not wanted and mode.filled("default_account"):
         wanted = [mode.get("default_account")]
+    used = set()
     for label in wanted:
         hits = find_account(mode, label)
         if not hits:
@@ -238,12 +240,13 @@ def check(path, mode, needs):
                            "the probe needs it; known: %s" % known,
                            where(path, mode.line, "no matching label or role")))
             continue
-        if len(hits) > 1:
-            errors.append(("account[%s]" % label,
-                           "role matches %d accounts; name one by label"
-                           % len(hits), where(path, hits[0].line)))
-            continue
-        acc = hits[0]
+        # Several accounts share the role: any of them serves, so take the
+        # first in file order -- the next one when the probe asks for the same
+        # role twice, so two logins get two different accounts.
+        acc = next((a for a in hits if a.name not in used), hits[0])
+        used.add(acc.name)
+        if acc.name != label:
+            picked.append((label, acc.name, len(hits)))
         for key in acc.duplicates:
             errors.append(("account[%s].%s" % (acc.name, key[0]),
                            "declared twice", where(path, key[1])))
@@ -286,7 +289,7 @@ def check(path, mode, needs):
                                  "service not listed" if line else "no api_urls key")))
     if needs["swagger"]:
         need_key(mode, "swagger_url", "the probe reads swagger")
-    return errors, warnings
+    return errors, warnings, picked
 
 
 def tracked_by_git(path):
@@ -375,7 +378,7 @@ def main(argv):
         print("unknown --needs item(s): %s" % ", ".join(bad), file=sys.stderr)
         return 2
 
-    errors, warnings = check(path, mode, needs)
+    errors, warnings, picked = check(path, mode, needs)
     protected = mode.get("env_class") != "dev"
     print("Tier 1 -- info file (mode: %s)   file: %s" % (mode.name, path))
     print("B1 file + mode ....... PASS")
@@ -385,6 +388,10 @@ def main(argv):
     if tracked_by_git(path):
         print("!! RED: git tracks this file and it holds inline secrets. "
               "Untrack it or add it to .gitignore.")
+    for wanted, label, count in picked:
+        print("account .............. %s -> %s%s" % (
+            wanted, label, " (first free of %d with that role)" % count
+            if count > 1 else ""))
     for w in warnings:
         print("warn  %s" % w)
     if errors:

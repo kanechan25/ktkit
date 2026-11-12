@@ -22,7 +22,7 @@ behind a symlink that points outside the repository is not tracked, and that is 
 | `risk` | always | `free` (only with `env_class: dev`) · `read-only` (mandatory otherwise) |
 | `api_urls` | when the probe compares an API | `name=url, name=url` |
 | `swagger_url` | when the probe reads it | |
-| `start_cmds` | local kinds, when something may need starting | each command and the port it opens |
+| `start_cmds` | optional | each command and the port it opens. Absent ⇒ the probe derives it from the repository (scripts, docs, lockfile) and cites the line |
 | `ports` | local kinds | the ports to check before starting; used to find what is already running |
 | `stop_cmds` | optional | the repository's own stop command for what `start_cmds` started; cleanup prefers it |
 | `docker_compose` | optional | the repository's start wrapper; never a volume-removing command |
@@ -43,7 +43,7 @@ never a stop.
 
 | Key | Required | Meaning |
 | --- | -------- | ------- |
-| `role` | always | business role; the session may name an account by label or by role |
+| `role` | always | business role; the session may name an account by label or by role. A role several accounts share resolves to the first in the file |
 | `login_method` | always | `password` · `sso` · `none` |
 | `can_write` | always | `yes` · `no`. Every account of a non-`dev` mode must say `no` |
 | `login_url` | optional | otherwise found from `fe_url` with `take_snapshot` |
