@@ -1023,6 +1023,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 6.7.2 — probe picks the first account of a shared role and derives a blank start_cmds
+
+`/ktkit:probe` no longer stops when several accounts of a mode share the role the probe needs: it logs in with the first in the file, and with the next one when the same role is needed twice. `start_cmds` is now optional — left blank, the start command for each free port is worked out from the repository and shown with the line it came from. No change to the info file is needed.
+
 ### Upgrading to 6.7.1 — a paused chain run resumes by itself
 
 A `/ktkit:chain` run paused at wind-down now starts `window_watch.py --await-reset` in the background. It sleeps until the full window resets, reads again, and once every session and weekly window is under `--wind-down`, sets the checkpoint back to `running` and wakes the lead, which continues from each task's last milestone without asking. The session has to stay open; a closed one resumes with the `Resume:` line `checkpoint.py latest` prints.
