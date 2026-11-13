@@ -55,6 +55,8 @@ still a default run; the closing question offers `giữ lại` for that.
    volume removal, or a compose-wide command.
 7. **No secret leaves the info file.** No password, connection string or recipe key value in chat,
    ledger, report, screenshot or saved JSON. A snapshot showing a password value is not evidence.
+   This rule is about what is *written out*, not about using the value: reading the info file with
+   the Read tool and passing a password to `fill` is exactly what the operator stored it for (P6).
 8. **Every conclusion points at an evidence file.** Input screen, result screen, API JSON — numbered by
    step. No evidence ⇒ the conclusion is worthless. Under `--no-evidence` there is none by choice: every
    conclusion says `(no evidence)`, and nothing claims it was saved.
@@ -187,6 +189,19 @@ account's values; no recipe ⇒ read the form with `take_snapshot` and use `user
 unsure. `sso` ⇒ stop and wait for the human named in `sso_note`. Credentials come from the info file
 only — never search elsewhere.
 
+**Getting the values.** `check_info.py` never prints a secret, so the values are read from the info
+file itself, with the **Read tool** — not `cat`, `sed`, `grep` or a Python one-liner through Bash. Read
+the account's `#### account:` section, take each `{key}` the recipe names, and pass it straight into
+`fill`/`fill_form`/`type_text`. A `login_method: password` account whose keys check_info passed is logged
+in by the skill, end to end, without the operator:
+
+- never ask the operator to type a password into the Chrome window when the info file holds it;
+- never ask the operator to add a Bash permission to read the info file — the Read tool is the way in;
+- the Read tool itself is denied ⇒ say exactly that, quote the denial, and ask the operator to allow
+  `Read(<info-file path>)` once. That is the only login question a `password` account may produce;
+- after login, `take_snapshot`: still on the login form or an error shown ⇒ report that the stored
+  credentials were rejected (never the values), stop that account, go on with the others.
+
 ### P7 — Probe, with evidence per step
 
 `--no-evidence` ⇒ no `take_screenshot` and no saved JSON. `take_snapshot` and `get_network_request`
@@ -256,6 +271,8 @@ and measure exactly as P9. `PRE-EXISTING` rows are never touched.
 | "They said ok rồi, cảm ơn — that means done, clean up" | That answers nothing. Ask the cleanup question. |
 | "`docker stop` then `rm` and drop the volume, to be tidy" | `stop` only, by ledger name. |
 | "While they fill in the DB string, I'll start the backend" | Tier 1 failed ⇒ nothing starts. |
+| "Rule 7 says no secret leaves the file, so the operator types the password" | Rule 7 covers chat, ledger, report and evidence. `fill` with the value from the info file is the intended use. |
+| "Bash can't read info.md, so ask for a Bash permission" | Read the file with the Read tool. Bash was never the way to the secrets. |
 | "Two accounts have role `user`, so I can't choose" | Either serves: take the first in the file and say which. |
 | "`start_cmds` is blank, so I can't start the FE" | The repository says how it runs: derive it, cite the line, start it. |
 | "cứ làm đi covers it; the scratchpad holds nothing important" | Always ask where evidence goes. |
