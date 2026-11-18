@@ -1032,6 +1032,10 @@ ls ~/.claude/plugins/cache/ktkit/ktkit/     # one directory per installed versio
 
 Old versions are kept beside the new one, and the one in use is recorded in `~/.claude/plugins/installed_plugins.json`.
 
+### Upgrading to 6.8.0 — chain gates no longer wait unless --confirm is passed
+
+**Behaviour change for `/ktkit:chain`.** Its approval gates — step 03's open questions, step 05's plan, analyze and blast-radius stops, step 06's contract-level deviation and step 07's converge cap — no longer stop by default. Each writes its block with the defaults applied under *Auto-accepted gates* in the step file and `manifest.md`, closes its ledger rows as `auto-accepted: no --confirm`, and the run continues; `pr-context.md` lists those rows apart from what a user decided. Pass `--confirm` to get the old behaviour, every gate stopping through `/ktkit:confirm-with-me`. Hard stops are unchanged. `/ktkit:feat-req-execute` run directly still waits at every gate.
+
 ### Upgrading to 6.7.3 — probe can run without evidence
 
 `/ktkit:probe --no-evidence` skips the evidence question, screenshots, saved JSON and the report file; conclusions come in chat marked `(no evidence)`. The ledger is still kept for cleanup. Without the flag nothing changes.
