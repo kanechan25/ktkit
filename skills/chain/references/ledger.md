@@ -26,7 +26,7 @@ provenance rather than refused: crashing a `--resume` on an older run would be w
 the rows would silently re-open questions somebody settled.
 | `Tier` | `T1` `T2` `T3` `T3.5` `T4`, per `/ktkit:escalation-ladder`. |
 | `Conclusion` | What was settled. `OPEN` means the row reached T4 and is waiting on the user. Only a T4 row may be `OPEN`. |
-| `Evidence` | `path:line` for anything the repository settled. For a T4 row the user answered, say so: `user answered at the gate`. |
+| `Evidence` | `path:line` for anything the repository settled. For a T4 row the user answered, say so: `user answered at the gate`. A T4 row closed on its default by a run without `--confirm` says `auto-accepted: no --confirm` — never the user's phrase. |
 | `Falsifier` | **Mandatory for T3.5.** What observation would prove the chosen reading wrong. A T3.5 row without one is a guess wearing a label, and `ledger.py` refuses to write it. |
 | `Phase` | `A` `B` `C` `D` — which phase settled it. Answers "when did we learn this". |
 

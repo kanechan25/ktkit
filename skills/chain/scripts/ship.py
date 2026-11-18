@@ -283,6 +283,9 @@ def do_done(a):
 # ---------------------------------------------------------------- context
 
 NOT_RECORDED = "- not recorded"
+# Evidence a chain run without --confirm writes when it closes a T4 row on its
+# default. Such a row was never put to anybody, so it must not read as decided.
+AUTO_ACCEPTED = "auto-accepted"
 
 
 def ledger_rows(base):
@@ -324,12 +327,17 @@ def do_context(a):
 
     current = ledger.latest(ledger_rows(a.base))
     t4 = [r for r in current.values() if r["tier"] == "T4"]
-    decided = [r for r in t4 if r["conclusion"] != ledger.OPEN]
+    closed = [r for r in t4 if r["conclusion"] != ledger.OPEN]
+    auto = [r for r in closed if AUTO_ACCEPTED in r["evidence"]]
+    decided = [r for r in closed if r not in auto]
     still_open = [r for r in t4 if r["conclusion"] == ledger.OPEN]
     assumed = [r for r in current.values() if r["tier"] == "T3.5"]
     out += ["", "## Decided by the user at a gate", ""]
     out += ["- %s %s -> %s" % (r["id"], r["question"], r["conclusion"]) for r in decided] \
         or [NOT_RECORDED]
+    out += ["", "## Defaults auto-accepted (run without --confirm)", ""]
+    out += ["- %s %s -> %s" % (r["id"], r["question"], r["conclusion"]) for r in auto] \
+        or ["- none"]
     out += ["", "## Still open", ""]
     out += ["- %s %s" % (r["id"], r["question"]) for r in still_open] or ["- none"]
     out += ["", "## Assumptions with evidence", ""]

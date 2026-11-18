@@ -1,7 +1,7 @@
 ---
 name: chain
 description: "Run a requirement through analysis, spec and plan as one closed loop instead of four hand-typed commands. Takes a requirement file or a described request, routes it to one of four lanes -- BUG, CR, NR or TRIVIAL -- runs the analysis skill, then resolves the open questions that analysis deliberately did not ask -- dispatching resolver subagents and recording every answer in an append-only ledger the later phases read instead of re-deriving. Produces the same artifacts the skills always produced, at the same paths. Stops only for what a resolver cannot settle and being wrong would be expensive. Implementation is off unless --execute is passed. --full goes further: implementation, one commit per task with a body built from the run's own files, then a pull request through /ktkit:create-pr with the run's context handed over. Trigger on /ktkit:chain <file>, or when the user wants a requirement carried to a reviewed spec without driving each step."
-argument-hint: "<requirement.md | described request> [--bug|--cr|--nr|--trivial] [--feature] [--to A|B|C] [--plan yes|no] [--execute] [--full] [--pr-to <branch>] [--draft] [--lang en|ja] [--resume | --fresh] [--budget <token>] [--wind-down <pct>] [--ledger-scope run|dir] [--rounds N]"
+argument-hint: "<requirement.md | described request> [--bug|--cr|--nr|--trivial] [--feature] [--to A|B|C] [--plan yes|no] [--execute] [--full] [--confirm] [--pr-to <branch>] [--draft] [--lang en|ja] [--resume | --fresh] [--budget <token>] [--wind-down <pct>] [--ledger-scope run|dir] [--rounds N]"
 ---
 
 # chain — one requirement in, a reviewed spec out
@@ -34,6 +34,7 @@ phase never re-asks it, and a single place where the run stops.
     [--plan yes|no]       skip the question at step 00
     [--execute]           run phase D as well. Default OFF.
     [--full]              --execute, then a commit per task and a PR. Default OFF.
+    [--confirm]           stop at every gate through /ktkit:confirm-with-me. Default OFF
     [--pr-to <branch>]    with --full: the PR's target. Default dev, else develop
     [--draft]             with --full: open the PR as a draft
     [--lang en|ja]        with --full: the PR's language. Default en
@@ -50,6 +51,7 @@ phase never re-asks it, and a single place where the run stops.
 | `--bug` / `--cr` / `--nr` / `--trivial` | **Names the lane outright**, and nothing overrides it — not the frontmatter, not the wording of the request. Use it whenever you already know, which is most of the time. Passing two of them is an error, not a preference. `--feature` is an alias for `--nr`. |
 | `--trivial` | The only lane with no analysis and no spec, so it is the only one where a wrong call produces a change nobody reviewed. It is **never** inferred — not from the frontmatter, not from the size of the diff — and its four entry conditions are all required, not weighed: see `references/lanes.md`. It also requires `--execute`: without it the lane has nothing to run, and the chain stops rather than writing an empty trace. |
 | `--full` | Everything `--execute` does, then step 05 **commits each task** the moment it passes its review, and steps 08–09 hand the run to `/ktkit:create-pr`. ⛔ Refuses a run that stops early (`--to A` or `--to B`): there is nothing to commit. Checked at step 00 before anything is spent — see item 5 there. |
+| `--confirm` | **Off by default, and off means no gate in the run stops.** Each gate's block is still written — every row with its default applied and its recommendation — into the step file and `manifest.md`, its T4 rows are closed in the ledger with the evidence `auto-accepted: no --confirm`, and the run carries on with the defaults. With `--confirm`, every gate in *The gate* below stops through `/ktkit:confirm-with-me`. ⛔ It covers only stops that ask for approval. A hard stop — preflight exit 1, the `--full` branch gate, a deviation lint failure, a third failed bug-fix attempt — has no default to accept and stops either way, and step 00's routing questions are not gates. |
 | `--pr-to` / `--draft` / `--lang` | Passed through to `/ktkit:create-pr` as `--to`, `--draft` and `--lang`. `--pr-to` is not `--to`: that one names the phase the chain stops after. |
 | `--budget` | **Optional hard ceiling**, in tokens, on what agents actually reported in `cost.jsonl`. Not asked for and not invented: without it there is no token ceiling and the window watch alone guards the run. With it, the run winds down once measured spend **reaches** the ceiling — never because a step like the last one *might* pass it. |
 | `--wind-down` | The window percentage at which the run stops starting work, finishes what is in flight, writes its checkpoint and pauses. Default **96**: the last 4% are the room for that. Watched every 100 s across the session window and every weekly window — whichever reaches it first. See *Cost* below. |
@@ -209,6 +211,10 @@ Ask whatever of 2–5 is still open as **one block**, once, with the defaults fi
 separate questions. A run that passed a lane flag, `--resume`/`--fresh` and `--plan` asks nothing at
 all and goes straight to 01.
 
+Write the gate mode to `<chain-dir>/gates` — `confirm` with `--confirm`, `auto` without it — so the
+execute skill at 05 and a later `--resume` read the same answer. A `--resume` that passes
+`--confirm` rewrites it; one that does not keeps what the file says.
+
 Record the lane **and how it was decided** in `steps/00-route.md` — `flag`, `frontmatter`, or
 `asked`. When the artifacts later turn out to be the wrong kind, that one word says whether the
 chain guessed or was told. Then initialise `resolved.md` and `manifest.md`.
@@ -270,7 +276,8 @@ Run the lane's spec skill, pointed at `A`, and **pass it the ledger path**. That
 ladder — the chain does not run one for it — but the ledger stops it re-asking what step 02 settled.
 
 Its HARD STOP is **conditional here**: `--metric` clean and no OPEN row ⇒ print the ✅ and 🟡 tables
-into `steps/03-spec.md` and continue. Otherwise this is the gate. See below.
+into `steps/03-spec.md` and continue. Otherwise this is the gate. See below — without `--confirm` it
+is written and auto-accepted, and the run continues.
 
 ### 04 — plan
 
@@ -298,9 +305,12 @@ Anything the plan reveals that contradicts the spec is **synced back** — see b
 
 ### 05 — implement
 
-Only with `--execute` (which `--full` implies). Runs the lane's execute skill. Its own STOP conditions stand unchanged: a
-`/speckit-analyze` CRITICAL finding and a HIGH/CRITICAL blast radius are gates, always. They are
-"expensive if wrong", which is the definition of T4.
+Only with `--execute` (which `--full` implies). Runs the lane's execute skill, with the run
+directory. Its approval stops — the plan, a `/speckit-analyze` CRITICAL or HIGH finding, a
+HIGH/CRITICAL blast radius — are gates. They are "expensive if wrong", which is the definition of T4.
+With `--confirm` each one stops; without it the skill reads `auto` from `<chain-dir>/gates`, applies
+the gate's recommendation, records it under *Auto-accepted gates* in `steps/05-implement.md`, and
+continues.
 
 **TRIVIAL has no execute skill.** It runs `superpowers:test-driven-development` directly against the
 one file, under the ceiling in `references/lanes.md`: a failing test first, then the change, then
@@ -533,8 +543,11 @@ the same file is neither read nor overwritten.
 Implementation detail syncs on its own. A change to what the spec **promises** does not: an
 acceptance criterion, an API shape, a dropped requirement. Somebody is integrating against those.
 
-⇒ Any row marked `--contract` stops the run and goes through **`/ktkit:confirm-with-me`** before it
-is written. ⛔ "It could not be done" is not "it did not need doing".
+⇒ With `--confirm`, any row marked `--contract` stops the run and goes through
+**`/ktkit:confirm-with-me`** before it is written. Without it the row is written into the block and
+also listed under *Auto-accepted gates* in `steps/06-syncback.md` and `manifest.md`, so a promise that
+changed is visible in one place rather than buried in a table. ⛔ "It could not be done" is not "it
+did not need doing" — the row still says which.
 
 ⚠️ This is a **third** gate, and it does not count against the two below: it is not a question, it
 is confirmation of a change that has already happened.
@@ -580,9 +593,12 @@ At the cap:
 1. ⛔ **Append nothing.** The convergence section from round 2 stands as the record.
 2. Write the reason into `manifest.md`: which gaps survived both rounds, what was appended each
    time, and which reading of the spec each gap implies.
-3. Escalate to the user through **`/ktkit:confirm-with-me`**, naming the spec section you believe is
-   wrong or ambiguous. This is the same third-gate exemption the contract-level deviation has: it is
-   a report of something that happened, not a question about what to do next.
+3. With `--confirm`, escalate to the user through **`/ktkit:confirm-with-me`**, naming the spec
+   section you believe is wrong or ambiguous. This is the same third-gate exemption the
+   contract-level deviation has: it is a report of something that happened, not a question about
+   what to do next. Without `--confirm`, name that section in `manifest.md` under *Auto-accepted
+   gates* and continue: the surviving gaps stay open, and `--full` carries them into
+   `pr-context.md`.
 
 Record the round count in the manifest as it goes. A run that shows `converge round 1 clean` cost one
 call; one that reaches the cap silently, with nothing saying it did, is how a loop becomes a spiral.
@@ -637,12 +653,18 @@ the same reason: the work is finished, and what is asked is which side of a merg
 Format is `/ktkit:escalation-ladder`'s three tables: ⛔ CẦN CHỐT (≤3 rows, each with a default that
 is **already applied** and a recommendation), ✅ ĐÃ TỰ CHỐT, 🟡 GIẢ ĐỊNH CÓ BẰNG CHỨNG.
 
-Post it by invoking **`/ktkit:confirm-with-me`** explicitly. ⛔ Do not rely on the literal marker
-firing: the rule that arms it comes from this plugin's SessionStart hook, and a run must not depend
-on a hook having been read.
+**What happens next depends on `--confirm`** (read it from `<chain-dir>/gates`):
 
-Silence accepts the defaults — that is what makes a default worth writing. A reply that does not
-address the gate is not an answer; re-post it.
+| Mode | The gate |
+| ---- | -------- |
+| `auto` — the default | Write the block into the step file and `manifest.md` under *Auto-accepted gates*, close each T4 row in the ledger with the default as its conclusion and `auto-accepted: no --confirm` as its evidence, and continue. ⛔ Do not post it to the user and do not wait. |
+| `confirm` — `--confirm` | Post it by invoking **`/ktkit:confirm-with-me`** explicitly. ⛔ Do not rely on the literal marker firing: the rule that arms it comes from this plugin's SessionStart hook, and a run must not depend on a hook having been read. |
+
+In `confirm` mode silence accepts the defaults — that is what makes a default worth writing. A reply
+that does not address the gate is not an answer; re-post it.
+
+⛔ **An auto-accepted row is not a user decision**, and nothing downstream may call it one: its
+evidence says `auto-accepted`, and `ship.py context` lists it apart from what a user decided.
 
 ## The manifest
 
@@ -830,6 +852,8 @@ the only evidence for whether `--threshold` sits where it should.
 - Carry a phase's findings forward in conversation instead of in its step file.
 - Re-run a step the manifest marks `complete`.
 - Open a gate for something a resolver was never asked.
+- Wait on a gate without `--confirm`, or skip `/ktkit:confirm-with-me` with it.
+- Record an auto-accepted row as `user answered at the gate`.
 - Report a `self_resolve_ratio` that was asserted rather than recomputed.
 - Continue past a speckit FAIL at step 00 by writing the artifacts some other way.
 - Run phase D without `--execute` or `--full`.

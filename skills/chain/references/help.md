@@ -54,6 +54,9 @@ task with a body built from the run's own files, and open the PR through `/ktkit
 # the same, into a named target, as a Japanese draft
 /ktkit:chain requirement.md --full --pr-to release/2.4 --draft --lang ja
 
+# stop at every gate and wait for you, instead of carrying on with the defaults
+/ktkit:chain requirement.md --execute --confirm
+
 # pick up a run that was interrupted, without re-minting IDs
 /ktkit:chain requirement.md --resume
 
@@ -77,6 +80,7 @@ task with a body built from the run's own files, and open the PR through `/ktkit
 | `--plan yes\|no` | asked at step 00 | Answers the plan question up front instead of being asked. |
 | `--execute` | **off** | Runs phase D — the change itself. Off by default on purpose. Nothing is committed. |
 | `--full` | **off** | `--execute`, then one commit per task the moment it passes review, then `/ktkit:create-pr` with the run's context. Checked at step 00 before anything is spent: on `dev`/`develop`/the default branch, a dirty tree or a detached HEAD is a stop — ⛔ the chain never creates a branch for you. |
+| `--confirm` | **off** | Every gate — step 03's open questions, step 05's plan, analyze and blast-radius stops, step 06's contract-level deviation, step 07's converge cap — stops through `/ktkit:confirm-with-me` and waits for you. Off, none of them waits: each writes its block with the defaults applied under *Auto-accepted gates* in the step file and `manifest.md`, and the run continues. Hard stops — preflight, the `--full` branch gate, a deviation lint failure — stop either way. |
 | `--pr-to <branch>` | `dev`, else `develop` | With `--full`: the PR's target. Not `--to`, which names the phase to stop after. |
 | `--draft` | — | With `--full`: open the PR as a draft. |
 | `--lang en\|ja` | `en` | With `--full`: the PR's language. Commits are always English. |
@@ -84,7 +88,7 @@ task with a body built from the run's own files, and open the PR through `/ktkit
 | `--fresh` | — | Start at step 00. Deletes nothing — the old run directory is renamed `<base>.<timestamp>/`. |
 | `--budget <token>` | none | Optional hard ceiling on what agents reported in `cost.jsonl`. Reaching it — not being forecast to reach it — runs the wind-down. Without it the window watch alone guards the run. |
 | `--wind-down <pct>` | `96` | Any session or weekly window at this percentage — read every 100 s — stops new work: agents finish the sub-step in hand, `--full` commits what passed, `checkpoint.md` is written and the run pauses. The last 4% are the room for that. |
-| `--contract` *(on `deviation.py`)* | — | Marks a divergence that changes what the spec **promises** — an acceptance criterion, an API shape, a dropped requirement. It becomes a gate at step 06 rather than syncing on its own. |
+| `--contract` *(on `deviation.py`)* | — | Marks a divergence that changes what the spec **promises** — an acceptance criterion, an API shape, a dropped requirement. It becomes a gate at step 06 rather than syncing on its own — one that waits only with `--confirm`. |
 | `--ledger-scope run\|dir` | `run` | `dir` also reads sibling runs' ledgers in the same `prompts/<rel>/` and reports a match as **`FOREIGN`, exit 2** — a lead for a resolver, never a conclusion. |
 | `--rounds N` | `2` | Self-clarify rounds per phase. |
 
@@ -186,7 +190,7 @@ Three things the lint refuses, and each is a stop rather than a warning:
 | nothing recorded at all | Silence is not "nothing diverged". Say `deviation.py none` and it is stated, with when. |
 
 **A contract-level change is a gate**, not a sync: mark it `--contract` and step 06 stops for
-`confirm-with-me`. ⛔ "It could not be done" is not "it did not need doing" — that substitution, made
+`confirm-with-me` with `--confirm`, or lists it under *Auto-accepted gates* without. ⛔ "It could not be done" is not "it did not need doing" — that substitution, made
 quietly, is how a requirement disappears without anyone deciding to drop it.
 
 ## What you get
@@ -215,8 +219,10 @@ stopped — it is the index, and `--resume` reads the same file.
 ## Where it stops
 
 A question reaches you only when a resolver could not settle it **and** being wrong would be
-expensive. Everything else is answered from the repository and written to the ledger. If the run
-stops, the manifest says at which step and why.
+expensive — and, by default, not even then: without `--confirm` the gate applies its defaults, writes
+them under *Auto-accepted gates* in `manifest.md`, and carries on. With `--confirm` it stops and
+waits. Everything else is answered from the repository and written to the ledger. If the run stops,
+the manifest says at which step and why.
 
 ## Do not
 

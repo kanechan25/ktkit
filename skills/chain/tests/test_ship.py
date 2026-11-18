@@ -30,6 +30,8 @@ a branch.
   D2  another run's commit for the same task id is not this one
   X1  context lists done tasks, user decisions, open rows, T3.5 assumptions, deviations
   X2  context says when nothing was recorded rather than dropping the section
+  X3  a T4 row closed without --confirm is listed as auto-accepted, never as a
+      user decision
 
 Run:  python3 skills/chain/tests/test_ship.py
 """
@@ -159,7 +161,8 @@ def chain_dir():
           "| Q01 | soft or hard delete for archived exports | T4 | soft delete, kept 30 days | user answered at the gate | — | B | t | h |\n"
           "| Q02 | which encoding the CSV uses | T3.5 | UTF-8 with BOM | docs/csv.md:4 | a consumer that rejects a BOM | A | t | h |\n"
           "| Q03 | who approves a bulk export | T4 | OPEN | — | — | B | t | h |\n"
-          "| Q04 | where the export module lives | T1 | src/export.py | src/export.py:1 | — | A | t | h |\n")
+          "| Q04 | where the export module lives | T1 | src/export.py | src/export.py:1 | — | A | t | h |\n"
+          "| Q05 | max rows per export | T4 | 100k, the default | auto-accepted: no --confirm | — | B | t | h |\n")
     write(os.path.join(base, "manifest.md"),
           "| Step | File | Status | Consumed by |\n| ---- | ---- | ------ | ----------- |\n"
           "| 05 | steps/05-implement.md | complete | 06 |\n"
@@ -284,6 +287,10 @@ def test_context():
     check("X1 repo-settled T1 rows are left out", "where the export module lives" not in out, out)
     check("X1 deviations, both", "returns 201" in out and "log to a file" in out, out)
     check("X1 manifest status carried", "round 1 clean" in out, out)
+    user = out[out.index("## Decided by the user"):out.index("## Defaults auto-accepted")]
+    auto = out[out.index("## Defaults auto-accepted"):out.index("## Still open")]
+    check("X3 auto-accepted row under its own heading", "max rows per export" in auto, out)
+    check("X3 and not under the user's decisions", "max rows per export" not in user, out)
     empty = tempfile.mkdtemp()
     rc, out, err = run("context", "--base", empty, "--lane", "BUG")
     check("X2 empty run says not recorded", rc == 0 and out.count("not recorded") >= 3, out + err)

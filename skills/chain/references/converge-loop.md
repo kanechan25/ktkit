@@ -57,7 +57,9 @@ At the cap, in this order:
 1. ⛔ **Append nothing.** Round 2's convergence section stands as the record of where it stopped.
 2. Write into `manifest.md`: which gaps survived both rounds, what each round appended, and — the
    part only this run can supply — which reading of the spec each surviving gap implies.
-3. Escalate through `/ktkit:confirm-with-me`, naming the spec section believed wrong or ambiguous.
+3. With `--confirm`, escalate through `/ktkit:confirm-with-me`, naming the spec section believed
+   wrong or ambiguous. Without it, name that section in `manifest.md` under *Auto-accepted gates*
+   and continue — the gaps stay open and `--full` carries them into `pr-context.md`.
 
 That escalation does **not** count against the run's two-question budget, for the same reason a
 contract-level deviation does not: it reports something that happened rather than asking what to do.

@@ -30,6 +30,20 @@ Continue the SDD pipeline from the approved spec. Skip investigation and design 
 
 **Prerequisite**: A spec file exists under `.claude/claude/specs/` — flat (`feat-*.spec.md`) or nested in a mirrored sub-folder (`.claude/claude/specs/<rel-dir>/<name>.spec.md`) — and has been reviewed/approved by the user. Search recursively (`.claude/claude/specs/**/*.spec.md`); do NOT assume a flat folder or a `feat-` prefix.
 
+## Gate mode — whether an approval stop waits for the user
+
+`/ktkit:chain` writes its gate mode to `<run-dir>/gates`. Read it once, before STEP 6.
+
+| `<run-dir>/gates` | Every approval stop below |
+| ----------------- | ------------------------- |
+| `auto` — chain run without `--confirm` | Apply the recommendation, write the stop's block under *Auto-accepted gates* in `<run-dir>/steps/05-implement.md`, and continue. ⛔ Do not ask and do not wait. |
+| `confirm`, absent, or no `<run-dir>` (a direct run) | Stop and wait for the user, as written. |
+
+The approval stops are the STEP 6 plan gate, a `/speckit-analyze` CRITICAL or HIGH finding, a
+HIGH/CRITICAL `gitnexus_impact`, an incomplete checklist at `/speckit-implement`, and the converge
+cap. ⛔ Nothing else changes: a preflight failure, a legacy spec, a failing build and a deviation lint
+failure stop in either mode, because there is no default to accept.
+
 ## ⚠️ FORMAT GATE (Soft Gate — applies to all steps below)
 
 Before writing any code change, check:
@@ -275,7 +289,7 @@ Writes **`$SPECIFY_FEATURE_DIRECTORY/plan.md`** — beside the spec, inside the 
 
 Then run `/speckit-tasks` to produce **`$SPECIFY_FEATURE_DIRECTORY/tasks.md`** — STEP 6.5 cannot run without it.
 
-**HARD GATE**: Present plan to user. Do NOT proceed to STEP 7 until confirmed. If Risk Level is HIGH/CRITICAL → require explicit approval.
+**HARD GATE**: Present plan to user. Do NOT proceed to STEP 7 until confirmed. If Risk Level is HIGH/CRITICAL → require explicit approval. Under `gates` = `auto`, see *Gate mode*.
 
 ---
 
@@ -293,6 +307,7 @@ After plan and tasks are generated, invoke `/speckit-analyze` to validate consis
 Action by severity:
 - **CRITICAL** → STOP. Must resolve before STEP 7. Do not proceed without explicit user sign-off.
 - **HIGH** → Present to user, require explicit approval to proceed.
+- Under `gates` = `auto`: resolve each CRITICAL and HIGH finding by its recommendation, record it, and proceed — see *Gate mode*.
 - **MEDIUM / LOW** → Proceed, record issues in implementation report.
 
 ---
@@ -305,7 +320,7 @@ Action by severity:
 gitnexus_impact({target: "<symbol>", direction: "upstream"})
 ```
 - LOW/MEDIUM → proceed
-- HIGH/CRITICAL → STOP, report to user (plan is file-level; impact is symbol-level — different granularity, different risk)
+- HIGH/CRITICAL → STOP, report to user (plan is file-level; impact is symbol-level — different granularity, different risk). Under `gates` = `auto`, record it and proceed — see *Gate mode*.
 
 Call `/speckit-implement` to execute the task plan:
 - Reads `tasks.md` phase-by-phase (Setup → Tests → Core → Integration → Polish)
@@ -439,7 +454,8 @@ spec is wrong or ambiguous enough that each pass reads it differently. Appending
 to chase a target that moves every time it is reached.
 
 At the cap: ⛔ **append nothing**, record in the report which gaps survived both rounds and what each
-round appended, and take the spec section you believe is wrong to the user. Report the round count
+round appended, and take the spec section you believe is wrong to the user — or, under `gates` =
+`auto`, name it in the report and continue. Report the round count
 either way — a run that converged clean on round 1 and one that hit the cap silently look identical
 otherwise.
 
